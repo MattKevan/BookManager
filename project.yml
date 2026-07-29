@@ -1,0 +1,100 @@
+name: BookManager
+options:
+  bundleIdPrefix: com.mattkevan
+  deploymentTarget:
+    macOS: "26.0"
+  createIntermediateGroups: true
+
+configs:
+  Debug: debug
+  Release: release
+
+packages:
+  Automerge:
+    url: https://github.com/automerge/automerge-swift.git
+    exactVersion: 0.7.2
+  GRDB:
+    url: https://github.com/groue/GRDB.swift.git
+    exactVersion: 7.11.1
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    MACOSX_DEPLOYMENT_TARGET: "26.0"
+
+targets:
+  BookManagerCore:
+    type: framework
+    platform: macOS
+    sources:
+      - BookManagerCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mattkevan.BookManagerCore
+        GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - package: Automerge
+      - package: GRDB
+
+  BookManager:
+    type: application
+    platform: macOS
+    sources:
+      - BookManager
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mattkevan.BookManager
+        PRODUCT_NAME: BookManager
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_ENTITLEMENTS: Config/BookManager.entitlements
+        CODE_SIGN_STYLE: Automatic
+        INFOPLIST_KEY_CFBundleDisplayName: Book Manager
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
+    dependencies:
+      - target: BookManagerCore
+
+  BookManagerCoreTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - BookManagerCoreTests
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - target: BookManagerCore
+
+  BookManagerUITests:
+    type: bundle.ui-testing
+    platform: macOS
+    sources:
+      - BookManagerUITests
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - target: BookManager
+
+schemes:
+  BookManager:
+    build:
+      targets:
+        BookManager: all
+        BookManagerCore: all
+        BookManagerCoreTests: [test]
+        BookManagerUITests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      gatherCoverageData: true
+      targets:
+        - BookManagerCoreTests
+        - BookManagerUITests
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
