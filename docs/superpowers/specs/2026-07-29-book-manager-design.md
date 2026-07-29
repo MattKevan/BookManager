@@ -42,6 +42,27 @@ The synchronization design must not prevent a later shared-network library mode,
 - A sandboxed application using security-scoped bookmarks for persistent access to user-selected folders.
 - Local disks, external disks, iCloud Drive folders, and mounted network volumes.
 
+## Dependency Decisions
+
+Version 1 uses three third-party Swift Package Manager dependencies:
+
+- **Automerge Swift 0.7 compatible minor:** MIT-licensed CRDT documents and encoded changes.
+- **GRDB.swift 7 compatible minor:** MIT-licensed SQLite access, migrations, FTS5, and observation.
+- **ZIPFoundation 0.9 compatible minor:** MIT-licensed ZIP entry access for EPUB metadata and covers.
+
+The implementation plan pins exact tested versions in `Package.resolved`. Major-version updates require an explicit migration and compatibility review.
+
+Apple frameworks provide the remaining platform services:
+
+- Foundation and `XMLParser` for OPF metadata
+- PDFKit for PDF metadata
+- QuickLookThumbnailing and ImageIO for thumbnails and cover processing
+- CryptoKit for SHA-256 content hashes
+- UniformTypeIdentifiers for format detection
+- `NSFileCoordinator`, `NSFilePresenter`, and security-scoped bookmarks for coordinated external-folder access
+
+Readium Swift Toolkit is not used in version 1 because its current Swift package targets iOS and links UIKit rather than providing a native macOS package. Calibre's Python implementation and DjVuLibre are not embedded because their GPL licensing and runtime footprints are unnecessary for the selected management-only scope. DJVU files are managed as opaque formats with filename-derived metadata when no system metadata is available.
+
 ## Product Experience
 
 ### Main Window
@@ -125,7 +146,7 @@ An exact duplicate is never copied silently. A likely duplicate is never merged 
 The Calibre import wizard:
 
 1. Selects a Calibre library folder containing `metadata.db`.
-2. Opens the database read-only and validates the expected schema.
+2. Opens the database read-only through GRDB and validates the expected schema.
 3. Displays book and format counts before copying.
 4. Allows all books or a subset to be selected.
 5. Copies files and covers through the normal staging pipeline.
@@ -150,15 +171,17 @@ The importer maps:
 
 Calibre custom columns and unsupported source values are stored in a namespaced raw metadata payload. Annotations and last-read positions are preserved in that raw payload when present, but version 1 does not display or edit them.
 
+The importer also parses each book's automatically maintained `metadata.opf` with Foundation `XMLParser`. The database remains authoritative for the current import, while OPF supplies a standards-based cross-check and a fallback for recoverable database inconsistencies. Versioned schema adapters isolate Calibre database changes rather than spreading table knowledge through the importer.
+
 The supplied acceptance library uses Calibre database schema `user_version` 26 and contains 13 books and 13 format records. It is a read-only acceptance fixture and is not copied into the repository.
 
 ## Architecture
 
 ### Selected Approach
 
-The synchronized authority is a portable CRDT operation log stored inside the library. A shared SQLite database is not used as the source of truth because iCloud file conflicts and network filesystem locking make multi-writer database access unsafe.
+The synchronized authority is a portable log of immutable Automerge encoded changes stored inside the library. A shared SQLite database is not used as the source of truth because iCloud file conflicts and network filesystem locking make multi-writer database access unsafe.
 
-Each Mac builds a private SQLite catalogue from the operation log. The catalogue provides fast queries, sorting, filtering, and full-text search. It can be deleted and rebuilt without losing library data.
+Each Mac applies those changes through an Automerge-backed domain adapter and builds a private GRDB SQLite catalogue. The catalogue stores materialized records, FTS5 search data, seen change hashes, and cached Automerge document snapshots and heads. It can be deleted and rebuilt without losing library data.
 
 CloudKit is not required. The library remains an ordinary portable folder and the synchronization transport remains replaceable.
 
@@ -183,25 +206,28 @@ Provides the single high-level mutation API for:
 - Deleting and restoring books
 - Importing books
 
-Every mutation becomes an operation before derived state or files are changed.
+Every mutation becomes an Automerge change before derived state or files are changed.
 
 #### CRDT Engine
 
-Contains pure, platform-neutral Swift value types and reducers. It has no dependency on SwiftUI, SQLite, security-scoped bookmarks, or filesystem observation.
+Contains platform-neutral Swift domain models and an adapter over Automerge Swift. Each book is an independent Automerge document, which bounds load, rebuild, and merge work. Library-level records such as saved collections use a separate library document.
 
-#### Operation Store
+The adapter maps domain mutations to Automerge changes, applies encoded changes, exposes merged domain values, and enforces Book Manager's HLC newest-wins policy. It has no dependency on SwiftUI, SQLite, security-scoped bookmarks, or filesystem observation.
 
-Validates and atomically writes immutable operation files. It enumerates unseen operations and quarantines malformed data.
+#### Change Store
+
+Validates and atomically writes immutable Automerge change files. It enumerates unseen changes, retries changes whose causal dependencies have not arrived, and quarantines malformed data.
 
 #### Local Catalogue
 
-Provides a protocol-backed SQLite implementation for:
+Provides a protocol-backed GRDB SQLite implementation for:
 
 - Materialized book records
 - Search
 - Sorting
 - Facets for authors, series, tags, and formats
-- Seen-operation tracking
+- Seen-change tracking
+- Cached Automerge snapshots and document heads
 - Diagnostics
 
 The catalogue is stored in Application Support rather than in the synchronized library.
@@ -220,7 +246,7 @@ Owns:
 
 #### Sync Monitor
 
-Observes changes in the selected library, ingests unseen operations, drains the local outbox, and periodically performs a full reconciliation to cover missed filesystem events.
+Observes changes in the selected library, ingests unseen Automerge changes, drains the local outbox, and periodically performs a full reconciliation to cover missed filesystem events.
 
 #### Import Services
 
@@ -230,7 +256,10 @@ Separate services handle:
 - Content hashing
 - Duplicate detection
 - Ordinary imports
-- Read-only Calibre database mapping
+- Read-only Calibre database mapping through GRDB
+- Calibre and generated OPF parsing through Foundation `XMLParser`
+- EPUB package and cover extraction through ZIPFoundation
+- PDF metadata extraction through PDFKit
 
 ## Library Layout
 
@@ -250,9 +279,14 @@ My Library/
 │       └── metadata.opf
 └── .bookmanager/
     ├── library.json
-    ├── operations/
-    │   └── <device-uuid>/
-    │       └── <operation-id>.json
+    ├── changes/
+    │   ├── books/
+    │   │   └── <book-uuid>/
+    │   │       └── <device-uuid>/
+    │   │           └── <clock>-<change-hash>.amchange
+    │   └── library/
+    │       └── <device-uuid>/
+    │           └── <clock>-<change-hash>.amchange
     ├── transactions/
     ├── trash/
     ├── recovery/
@@ -263,7 +297,7 @@ My Library/
 
 Each book has a permanent UUID. The eight-character short ID in its folder name is derived from that UUID and prevents collisions without exposing a mutable numeric database identifier.
 
-`metadata.opf` is a generated, portable projection of the merged metadata. It is not the synchronization authority.
+`metadata.opf` is a generated, portable projection of the merged metadata. It is not the synchronization authority. Complete Automerge document snapshots are cached in the machine-local GRDB catalogue; mutable shared snapshots are not written into the library folder.
 
 The app normalizes forbidden characters, reserved names, trailing whitespace, and path length consistently. A deterministic truncation rule preserves the short ID.
 
@@ -276,53 +310,61 @@ Book Manager/
 ├── device.json
 ├── libraries.json
 ├── Indexes/<library-uuid>.sqlite
-└── Outbox/<library-uuid>/<operation-id>.json
+└── Outbox/<library-uuid>/
+    ├── books/<book-uuid>/<clock>-<change-hash>.amchange
+    └── library/<clock>-<change-hash>.amchange
 ```
 
 - `device.json` contains the installation's device UUID and logical clock state.
 - `libraries.json` contains recent-library identities and security-scoped bookmarks.
-- `Indexes` contains rebuildable local catalogues.
-- `Outbox` durably holds metadata operations created while a library folder is unavailable.
+- `Indexes` contains rebuildable local catalogues and cached Automerge document snapshots.
+- `Outbox` durably holds encoded changes created while a library folder is unavailable.
 
 Book contents are never placed in Application Support.
 
 ## CRDT and Synchronization Model
 
-### Operation Identity and Clock
+### Change Identity and Clock
 
-Every operation contains:
+Every domain mutation creates one Automerge commit and one encoded change file. The Automerge change graph supplies:
+
+- A content-derived change hash
+- Actor identity
+- Causal dependencies
+- Deduplication
+- Deterministic merge behavior
+
+The Book Manager document schema additionally contains:
 
 - Schema version
-- Unique operation UUID
 - Library UUID
-- Book UUID when book-scoped
-- Device UUID
-- Hybrid logical clock timestamp
-- Operation kind
-- Typed payload
-- Optional content hash references
+- Permanent book UUID
+- Per-field device entries
+- Hybrid logical clock values
+- Mutation UUIDs for transaction correlation
+- Content-hash references for covers and formats
 
 The hybrid logical clock consists of physical time, a logical counter, and device UUID tie-breaking. This provides deterministic ordering without trusting wall-clock time alone.
 
-Operation filenames are unique and immutable. Writers create a temporary file, validate it, and rename it to its final name. Different devices never append to the same file.
+Change filenames are unique and immutable. Writers call Automerge's incremental-change encoding after each logical mutation, write a temporary file, validate it by applying it to a test document state, and rename it to its final name. Different devices never append to or replace the same change file.
 
 ### Merge Rules
 
-- Scalar fields use last-write-wins registers.
-- Ordered authors use a last-write-wins ordered value so display order is preserved.
-- Ordered languages use a last-write-wins ordered value.
-- Tags use an observed-remove set.
-- Identifiers use independent last-write-wins values keyed by identifier type.
-- Each ebook format uses a last-write-wins value keyed by normalized format.
-- The cover uses a last-write-wins value.
-- Unsupported Calibre metadata uses a last-write-wins namespaced payload.
-- Deletion uses a tombstone.
+- Scalar fields use an Automerge map of device entries carrying value and HLC; the domain adapter selects the greatest HLC.
+- Ordered authors use the same register representation with an ordered value, preserving display order.
+- Ordered languages use the same register representation with an ordered value.
+- Tags use per-tag Automerge maps of device add/remove HLC values. A tag is present when its greatest add clock is newer than its greatest remove clock.
+- Identifiers use independent register maps keyed by identifier type.
+- Each ebook format uses a register map keyed by normalized format.
+- The cover uses a register map.
+- Unsupported Calibre metadata uses a namespaced register map.
+- Deletion uses an HLC tombstone register.
 
-Concurrent changes to different fields survive. When two devices change the same field, the operation with the newest hybrid logical clock wins.
+Concurrent changes to different fields survive. When two devices change the same field, the value with the newest hybrid logical clock wins.
 
 When a cover or format replacement loses a merge, its file is retained in recovery until the user removes it. A stale replica cannot resurrect a tombstoned book.
 
-Merge must be commutative, associative, and idempotent. Processing the same operation multiple times has no effect after its first application.
+The Automerge change merge is commutative, associative, and idempotent. The domain adapter's HLC resolution must preserve those properties. Processing the same encoded change multiple times has no effect after its first application.
 
 ### Derived Files and Paths
 
@@ -334,7 +376,7 @@ Author/Title (short-id)/Title - Author.extension
 
 Metadata edits may therefore require a folder or filename move. The filesystem coordinator records a transaction before moving anything, applies moves, regenerates `metadata.opf`, and marks the transaction complete.
 
-Two devices can temporarily produce stale or duplicate paths while disconnected. After merging operations, both calculate the same canonical path. Extra folders are matched by book UUID and moved to recovery.
+Two devices can temporarily produce stale or duplicate paths while disconnected. After applying and resolving changes, both calculate the same canonical path. Extra folders are matched by book UUID and moved to recovery.
 
 ### Offline and Reconnection Behavior
 
@@ -349,9 +391,9 @@ When a library is unavailable:
 When the library returns:
 
 1. Security-scoped access is re-established.
-2. Unseen library operations are ingested.
-3. Local outbox operations are written to the library.
-4. All operations are merged.
+2. Unseen library changes are ingested.
+3. Local outbox changes are written to the library.
+4. All causally ready changes are applied and pending changes are retried.
 5. Files and sidecars are reconciled.
 6. The local catalogue and UI are refreshed.
 
@@ -360,8 +402,8 @@ When the library returns:
 A metadata edit follows:
 
 ```text
-SwiftUI → Library Repository → Operation Store or Local Outbox
-        → CRDT Reducer → Filesystem Reconciliation
+SwiftUI → Library Repository → Automerge Domain Adapter
+        → Change Store or Local Outbox → Filesystem Reconciliation
         → Local Catalogue → Observable UI State
 ```
 
@@ -370,11 +412,11 @@ An import follows:
 ```text
 Source Files → Library Staging → Hash and Metadata Extraction
              → Duplicate Review → Library Repository
-             → Create Operation → Canonical Book Folder
+             → Automerge Create Change → Canonical Book Folder
              → Local Catalogue
 ```
 
-No UI view writes operation, catalogue, or book files directly.
+No UI view writes change, catalogue, or book files directly.
 
 ## Reliability and Recovery
 
@@ -383,7 +425,7 @@ No UI view writes operation, catalogue, or book files directly.
 - Mutable file work is staged inside the destination library so same-volume atomic moves can be used when available.
 - Every multi-step mutation has a transaction journal.
 - A launch-time recovery pass completes or rolls back interrupted work.
-- Operation processing is idempotent.
+- Automerge change processing is idempotent.
 - Imports commit one book at a time.
 
 Network filesystems that do not provide atomic rename guarantees use copy, hash verification, and journaled cleanup rather than assuming atomicity.
@@ -392,30 +434,30 @@ Network filesystems that do not provide atomic rename guarantees use copy, hash 
 
 A diagnostics screen lists:
 
-- Pending outbox operations
+- Pending outbox changes
 - Unavailable format files
 - Import failures
-- Malformed or unsupported operations
+- Malformed, unsupported, or dependency-blocked changes
 - Quarantined data
 - Recovery folders
 - Interrupted transactions
 - Index health and rebuild status
 
-Malformed operations are quarantined rather than blocking healthy books. Missing format files remain visible as repairable catalogue issues.
+Malformed or permanently unsatisfied changes are quarantined rather than blocking healthy books. Missing format files remain visible as repairable catalogue issues.
 
 ### Delete and Restore
 
 Deleting a book:
 
-1. Writes a tombstone operation.
+1. Writes an Automerge tombstone change.
 2. Moves its canonical folder to `.bookmanager/trash`.
 3. Removes it from normal catalogue results.
 
-Restore writes a newer restore operation and returns the folder to its current canonical path. Emptying library trash is the only permanent deletion action and requires explicit confirmation.
+Restore writes a newer Automerge restore change and returns the folder to its current canonical path. Emptying library trash is the only permanent deletion action and requires explicit confirmation.
 
 ## Concurrency Model
 
-Library mutation, operation ingestion, catalogue writes, and filesystem transactions are isolated behind actors. Long-running imports stream results and do not hold the main actor. SwiftUI-observable presentation state is updated on the main actor.
+Library mutation, Automerge change ingestion, catalogue writes, and filesystem transactions are isolated behind actors. Long-running imports stream results and do not hold the main actor. SwiftUI-observable presentation state is updated on the main actor.
 
 Domain models crossing actor boundaries conform to `Sendable`. File and database implementations are hidden behind protocols so deterministic in-memory implementations can be used in tests.
 
@@ -430,7 +472,8 @@ Errors use actionable categories rather than raw system messages:
 - Destination out of space
 - Duplicate book
 - Import partially completed
-- Operation quarantined
+- Change quarantined
+- Change waiting for causal dependency
 - File requires download
 - Recovery required
 
@@ -442,6 +485,9 @@ Non-destructive warnings appear inline or in diagnostics. Blocking failures use 
 
 Tests cover:
 
+- Automerge document creation, save, incremental encoding, and reload
+- Encoded change application with causal dependencies
+- Domain adapter decoding and schema evolution
 - Commutativity, associativity, and idempotence
 - Hybrid logical clock ties and clock skew
 - Concurrent edits to the same field
@@ -450,8 +496,8 @@ Tests cover:
 - Identifier merges
 - Tombstone and restore ordering
 - Concurrent format and cover replacements
-- Duplicate and out-of-order operation delivery
-- Randomized multi-device operation sequences
+- Duplicate and out-of-order change delivery
+- Randomized multi-device change sequences
 
 ### Calibre Import Tests
 
@@ -482,7 +528,7 @@ Tests cover:
 - Missing files
 - Duplicate folders
 - Trash and restore
-- Malformed operation quarantine
+- Malformed change quarantine
 - Complete local-index rebuild
 
 ### Synchronization Tests
@@ -490,8 +536,9 @@ Tests cover:
 Tests simulate:
 
 - Two or more devices editing offline
-- Different operation delivery orders
+- Different change delivery orders
 - Duplicate delivery
+- Temporarily missing causal dependencies
 - Temporary library unavailability
 - Durable outbox restart
 - Reconnection
@@ -530,7 +577,7 @@ Version 1 is complete when:
 5. All 13 source books and 13 source format records are accounted for in the import report.
 6. Core metadata, covers, and format files are mapped correctly, while unsupported data remains preserved.
 7. Users can browse, search, filter, sort, edit, open, reveal, delete, and restore books.
-8. Two simulated Macs converge to identical metadata and paths after offline edits and reordered operation delivery.
+8. Two simulated Macs converge to identical metadata and paths after offline edits and reordered Automerge change delivery.
 9. Same-field concurrent edits resolve deterministically to the newest hybrid logical clock value.
 10. Interrupted mutations recover without silent data loss.
 11. A lost or corrupt local SQLite catalogue can be rebuilt entirely from portable library data.
@@ -540,9 +587,9 @@ Version 1 is complete when:
 
 The design is delivered as four testable vertical slices rather than one large implementation batch:
 
-1. **Library foundation:** create/open libraries, security-scoped access, CRDT operations, local catalogue rebuilding, canonical paths, and a minimal table browser.
+1. **Library foundation:** validate Automerge incremental-change transport and HLC resolution in a focused spike, then create/open libraries, add security-scoped access, persist Automerge changes, rebuild the GRDB catalogue, generate canonical paths, and provide a minimal table browser.
 2. **Management workflows:** ordinary file import, metadata editing, search and facets, cover grid, external opening, trash, restore, and diagnostics.
 3. **Calibre migration:** read-only schema-version-26 mapping, preview and selection, resumable copying, raw metadata preservation, and the import report.
-4. **Multi-Mac hardening:** durable offline outbox, filesystem monitoring, reordered-operation convergence, recovery reconciliation, network-filesystem fallbacks, accessibility completion, and performance acceptance.
+4. **Multi-Mac hardening:** durable offline outbox, filesystem monitoring, reordered-change convergence, recovery reconciliation, network-filesystem fallbacks, accessibility completion, and performance acceptance.
 
-Each slice must leave the app runnable and its completed behavior covered by automated tests. Later slices may extend interfaces created by earlier slices but may not replace the portable operation log or rebuildable local catalogue architecture.
+Each slice must leave the app runnable and its completed behavior covered by automated tests. Later slices may extend interfaces created by earlier slices but may not replace the portable Automerge change log or rebuildable local catalogue architecture.
