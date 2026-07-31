@@ -796,7 +796,7 @@ git commit -m "feat: expand book schema with management fields"
   - `func materialize(bookID: UUID, resolved: ResolvedBook, staged: [StagedFile], cover: Data?) throws -> (path: String, formats: [BookFormatValue])`
   - `func trash(bookID: UUID, relativePath: String) throws`
   - `func restore(bookID: UUID, relativePath: String) throws -> String`
-  - `func rename(bookID: UUID, from oldPath: String, to newPath: String, formats: [BookFormatValue]) throws`
+  - `func rename(bookID: UUID, from oldPath: String, to newPath: String, oldFormats: [BookFormatValue], newFormats: [BookFormatValue]) throws`
   - `func formatFileURL(relativePath: String, filename: String) -> URL`
   - `func bookDirectoryURL(relativePath: String) -> URL`
 
@@ -923,7 +923,7 @@ struct BookFolderTests {
         let newPath = CanonicalPathBuilder.relativeDirectory(
             bookID: bookID, title: "Range: Revised", authors: ["David Epstein"]
         )
-        try await folder.rename(bookID: bookID, from: old.path, to: newPath, formats: [])
+        try await folder.rename(bookID: bookID, from: old.path, to: newPath, oldFormats: [], newFormats: [])
 
         let oldDir = folder.bookDirectoryURL(relativePath: old.path)
         let newDir = folder.bookDirectoryURL(relativePath: newPath)
@@ -1192,7 +1192,8 @@ public actor BookFolder {
         bookID: UUID,
         from oldPath: String,
         to newPath: String,
-        formats: [BookFormatValue]
+        oldFormats: [BookFormatValue],
+        newFormats: [BookFormatValue]
     ) throws {
         guard oldPath != newPath else { return }
         let oldDir = bookDirectoryURL(relativePath: oldPath)
@@ -1203,15 +1204,19 @@ public actor BookFolder {
         let journal = try begin(operation: "rename", bookID: bookID, oldPath: oldPath, newPath: newPath)
         defer { try? end(journal) }
 
-        // Rename format files whose canonical name changed, then move the folder.
-        for format in formats {
-            let oldFile = oldDir.appending(path: format.filename)
-            let newFile = newDir.appending(path: format.filename)
+        // Move the folder first, then rename format files whose canonical name changed.
+        try manager.moveItem(at: oldDir, to: newDir)
+        for old in oldFormats {
+            guard let new = newFormats.first(where: { $0.kind == old.kind }),
+                  new.filename != old.filename else {
+                continue
+            }
+            let oldFile = newDir.appending(path: old.filename)
+            let newFile = newDir.appending(path: new.filename)
             if manager.fileExists(atPath: oldFile.path) && !manager.fileExists(atPath: newFile.path) {
                 try manager.moveItem(at: oldFile, to: newFile)
             }
         }
-        try manager.moveItem(at: oldDir, to: newDir)
     }
 
     public func formatFileURL(relativePath: String, filename: String) -> URL {
@@ -1943,7 +1948,8 @@ enum Fixtures {
             provider: { _, _ in coverPNG }
         )
         try archive.addEntry(
-            with: "OEBPS/chapter.xhtml", type: .file, uncompressedSize: 5,
+            with: "OEBPS/chapter.xhtml", type: .file,
+            uncompressedSize: UInt32(Data("<p/>".utf8).count),
             provider: { _, _ in Data("<p/>".utf8) }
         )
         return url
@@ -3037,7 +3043,10 @@ public actor LibraryRepository: LibraryRepositoryImporting {
                 bookID: id,
                 from: indexed.relativePath,
                 to: newPath,
-                formats: resolved.formats
+                oldFormats: indexed.formats.map {
+                    BookFormatValue(kind: $0.kind, filename: $0.filename, contentHash: $0.contentHash, size: $0.size)
+                },
+                newFormats: resolved.formats
             )
             let directory = folder.bookDirectoryURL(relativePath: newPath)
             try OpfGenerator.opfData(bookID: id, resolved: resolved)
@@ -3642,9 +3651,12 @@ struct ContentView: View {
             }
         }
         .sheet(item: $session.inspectorBook) { book in
-            MetadataEditorView(book: book) { edit in
+            MetadataEditorView(book: book, onSave: { edit in
                 Task { await session.saveEdit(edit, for: book.id) }
-            }
+                session.inspectorBook = nil
+            }, onCancel: {
+                session.inspectorBook = nil
+            })
         }
         .sheet(isPresented: $showDiagnostics) {
             DiagnosticsView()
@@ -4080,6 +4092,7 @@ import SwiftUI
 struct MetadataEditorView: View {
     let book: IndexedBook
     let onSave: (BookEdit) -> Void
+    let onCancel: () -> Void
 
     @State private var title = ""
     @State private var authorsText = ""
@@ -4093,7 +4106,6 @@ struct MetadataEditorView: View {
     @State private var languagesText = ""
     @State private var identifiersText = ""
     @State private var comments = ""
-    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -4125,10 +4137,9 @@ struct MetadataEditorView: View {
             .padding()
             HStack {
                 Spacer()
-                Button("Cancel") { dismiss() }
+                Button("Cancel") { onCancel() }
                 Button("Save") {
                     onSave(collectEdit())
-                    dismiss()
                 }
                 .buttonStyle(.borderedProminent)
             }
