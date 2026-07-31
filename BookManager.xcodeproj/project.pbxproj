@@ -25,6 +25,7 @@
 		7071C6A3153AE657C95AB3AF /* IndexedBook.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18B93C18F17691B633BC2D72 /* IndexedBook.swift */; };
 		74708CC8E6E81471E111097D /* SchemaV2Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16E1EA0FB51BAD838C8A802E /* SchemaV2Tests.swift */; };
 		749A78570335D7AA0AC3C08F /* LibraryBookmarkStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15750DA3DBE4AA0973C9D96E /* LibraryBookmarkStoreTests.swift */; };
+		80BE13BB3F9011EE10E4B2C0 /* OpfGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87B108E9D043C28A0ACA5B55 /* OpfGenerator.swift */; };
 		8148952FF9AF030878F61555 /* AutomergeBookDocumentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0097D35A33C980715FF58C71 /* AutomergeBookDocumentTests.swift */; };
 		831C278B8D9BC7CD1599A1D6 /* LibraryRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A3D22208D73EACF693FC0B7 /* LibraryRepository.swift */; };
 		8EB7D97645D61A20D4C0F898 /* BookManagerCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = EA00130013634EE3D52C9CCF /* BookManagerCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -37,8 +38,10 @@
 		C0330A6A992BC0A8C6BFCC73 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 2F280E3BD3CAFCA30F17AC99 /* GRDB */; };
 		C7BBF02DC45A22F1113E8230 /* CanonicalPathBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF92D8169ACA0A69C106B92F /* CanonicalPathBuilder.swift */; };
 		CCFF152341FBF41AB91B2514 /* LibraryManifest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 319E4E1F20D7F33431107B0C /* LibraryManifest.swift */; };
+		D0A566804E7EB2792EA61B9B /* BookFolder.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3EB714E6E2C57690A730F94 /* BookFolder.swift */; };
 		D71D91C038D0BB6C876154B5 /* LocalCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62FDDA6D5AACAA7BB66B6919 /* LocalCatalog.swift */; };
 		DD60BC9BD9A5F13C69FB3B1D /* AutomergeBookDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6076F102DADAF8E9CB9DEC47 /* AutomergeBookDocument.swift */; };
+		E6EA0292FF2754A8B986793D /* BookFolderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A081C69F8BA6B08E869CAA8D /* BookFolderTests.swift */; };
 		FB334598B1AEAE392B0A20D2 /* LibraryWelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE22DC7A79DA7703CE5EF160 /* LibraryWelcomeView.swift */; };
 /* End PBXBuildFile section */
 
@@ -108,8 +111,10 @@
 		6BA162F96FEA4B520BEAED4B /* LocalCatalogTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalCatalogTests.swift; sourceTree = "<group>"; };
 		73AA6C7CC5DA69B3AD083C22 /* BookValues.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookValues.swift; sourceTree = "<group>"; };
 		877A41E8DB9729E29518A7F2 /* HybridLogicalClock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HybridLogicalClock.swift; sourceTree = "<group>"; };
+		87B108E9D043C28A0ACA5B55 /* OpfGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpfGenerator.swift; sourceTree = "<group>"; };
 		8D80E3D97EA38642A0D352DA /* ScaffoldTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScaffoldTests.swift; sourceTree = "<group>"; };
 		A06A187727B29B451ABE5C75 /* HybridLogicalClockTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HybridLogicalClockTests.swift; sourceTree = "<group>"; };
+		A081C69F8BA6B08E869CAA8D /* BookFolderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookFolderTests.swift; sourceTree = "<group>"; };
 		A230E717F0A049BE946E41FF /* LibrarySession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibrarySession.swift; sourceTree = "<group>"; };
 		A6E24C22DC0D497C119E3503 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		AF92D8169ACA0A69C106B92F /* CanonicalPathBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CanonicalPathBuilder.swift; sourceTree = "<group>"; };
@@ -118,6 +123,7 @@
 		B299D92FE747584FDD46D395 /* BookTableView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookTableView.swift; sourceTree = "<group>"; };
 		B73B13122D2268E5ECE2B45C /* BookManagerUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BookManagerUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		BCEE9E484F2ACD21E4012F92 /* BookManagerCoreTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BookManagerCoreTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C3EB714E6E2C57690A730F94 /* BookFolder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookFolder.swift; sourceTree = "<group>"; };
 		CA4DE265111712DFFE44F5CE /* LibraryStorageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryStorageTests.swift; sourceTree = "<group>"; };
 		EA00130013634EE3D52C9CCF /* BookManagerCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = BookManagerCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		EEFDAE49CAE9FF70035E4F38 /* LibraryLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryLayout.swift; sourceTree = "<group>"; };
@@ -157,11 +163,13 @@
 		2A84F03F839508F6FDC4056A /* Library */ = {
 			isa = PBXGroup;
 			children = (
+				C3EB714E6E2C57690A730F94 /* BookFolder.swift */,
 				AF92D8169ACA0A69C106B92F /* CanonicalPathBuilder.swift */,
 				F788726BC33346C140CF988F /* ChangeStore.swift */,
 				EEFDAE49CAE9FF70035E4F38 /* LibraryLayout.swift */,
 				319E4E1F20D7F33431107B0C /* LibraryManifest.swift */,
 				5A3D22208D73EACF693FC0B7 /* LibraryRepository.swift */,
+				87B108E9D043C28A0ACA5B55 /* OpfGenerator.swift */,
 			);
 			path = Library;
 			sourceTree = "<group>";
@@ -200,6 +208,7 @@
 		46564FDB1DA523DE7D6900D6 /* Library */ = {
 			isa = PBXGroup;
 			children = (
+				A081C69F8BA6B08E869CAA8D /* BookFolderTests.swift */,
 				B087736BE54EC57981680458 /* LibraryRepositoryTests.swift */,
 				CA4DE265111712DFFE44F5CE /* LibraryStorageTests.swift */,
 			);
@@ -450,6 +459,7 @@
 			files = (
 				DD60BC9BD9A5F13C69FB3B1D /* AutomergeBookDocument.swift in Sources */,
 				25DDA9C20029305707541FC9 /* BookDocumentSchema.swift in Sources */,
+				D0A566804E7EB2792EA61B9B /* BookFolder.swift in Sources */,
 				9183F4EC121E5930C3EC68B5 /* BookManagerCore.swift in Sources */,
 				39438DD4434B1AAEB59D16C2 /* BookValues.swift in Sources */,
 				C7BBF02DC45A22F1113E8230 /* CanonicalPathBuilder.swift in Sources */,
@@ -461,6 +471,7 @@
 				CCFF152341FBF41AB91B2514 /* LibraryManifest.swift in Sources */,
 				831C278B8D9BC7CD1599A1D6 /* LibraryRepository.swift in Sources */,
 				D71D91C038D0BB6C876154B5 /* LocalCatalog.swift in Sources */,
+				80BE13BB3F9011EE10E4B2C0 /* OpfGenerator.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -477,6 +488,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				8148952FF9AF030878F61555 /* AutomergeBookDocumentTests.swift in Sources */,
+				E6EA0292FF2754A8B986793D /* BookFolderTests.swift in Sources */,
 				B0A7E25FDC54B9CAE94B1798 /* HybridLogicalClockTests.swift in Sources */,
 				749A78570335D7AA0AC3C08F /* LibraryBookmarkStoreTests.swift in Sources */,
 				983C436D170FBDE137BDBE92 /* LibraryRepositoryTests.swift in Sources */,

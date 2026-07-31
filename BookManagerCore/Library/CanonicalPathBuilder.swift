@@ -20,4 +20,14 @@ public enum CanonicalPathBuilder {
             .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
         return String((result.isEmpty ? "Unknown" : result).prefix(120))
     }
+
+    public static func formatFileName(
+        title: String,
+        authors: [String],
+        kind: String
+    ) -> String {
+        let safeTitle = sanitized(title.isEmpty ? "Unknown" : title)
+        let author = sanitized(authors.first ?? "Unknown")
+        return "\(safeTitle) - \(author).\(kind.lowercased())"
+    }
 }
