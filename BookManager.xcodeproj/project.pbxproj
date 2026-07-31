@@ -8,9 +8,12 @@
 
 /* Begin PBXBuildFile section */
 		050B0C32F9422ED9DE8FBFB8 /* LibrarySession.swift in Sources */ = {isa = PBXBuildFile; fileRef = A230E717F0A049BE946E41FF /* LibrarySession.swift */; };
+		082DEE0D492D2C77CC763261 /* ImportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAA97EB7CDB42EFE46F1706D /* ImportService.swift */; };
+		089BEE925C9BEC5CAAF0D77A /* MetadataExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80FA4E133A75F9A48729A914 /* MetadataExtractor.swift */; };
 		0E7B22D1EA6EB703346AE527 /* BookManagerUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F5B9507D6E9B4C1969F6D12 /* BookManagerUITests.swift */; };
 		1680E06ADD1A537B0869D47F /* Automerge in Frameworks */ = {isa = PBXBuildFile; productRef = E73D1BC292F51DC0789C0A2A /* Automerge */; };
 		183696E853097A577B690223 /* BookTableView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B299D92FE747584FDD46D395 /* BookTableView.swift */; };
+		1EB7D845512F28CEB3309FEB /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = 3818F9695548F67FF6E86321 /* ZIPFoundation */; };
 		25DDA9C20029305707541FC9 /* BookDocumentSchema.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37F9BBB1AC9D128C81F9BE1A /* BookDocumentSchema.swift */; };
 		2AF79754097A6BBA6AF9274A /* LibraryStorageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA4DE265111712DFFE44F5CE /* LibraryStorageTests.swift */; };
 		332A7B733BC508252826E4FF /* BookManagerCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EA00130013634EE3D52C9CCF /* BookManagerCore.framework */; };
@@ -23,17 +26,20 @@
 		4ACDD55DE290A18AF7204E1B /* LibraryBookmarkStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10C0171D18484766BD7A3C27 /* LibraryBookmarkStore.swift */; };
 		614F0F5C1822825B76C51004 /* LibraryLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEFDAE49CAE9FF70035E4F38 /* LibraryLayout.swift */; };
 		7071C6A3153AE657C95AB3AF /* IndexedBook.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18B93C18F17691B633BC2D72 /* IndexedBook.swift */; };
+		7413F3389FB8C25A4F071CC8 /* Fixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08CB9DC449D9806CB41CBEA1 /* Fixtures.swift */; };
 		74708CC8E6E81471E111097D /* SchemaV2Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16E1EA0FB51BAD838C8A802E /* SchemaV2Tests.swift */; };
 		749A78570335D7AA0AC3C08F /* LibraryBookmarkStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15750DA3DBE4AA0973C9D96E /* LibraryBookmarkStoreTests.swift */; };
 		80BE13BB3F9011EE10E4B2C0 /* OpfGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87B108E9D043C28A0ACA5B55 /* OpfGenerator.swift */; };
 		8148952FF9AF030878F61555 /* AutomergeBookDocumentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0097D35A33C980715FF58C71 /* AutomergeBookDocumentTests.swift */; };
 		831C278B8D9BC7CD1599A1D6 /* LibraryRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A3D22208D73EACF693FC0B7 /* LibraryRepository.swift */; };
+		8CF594EDFCC26065337217AC /* ImportServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C658484E2B3B70B7D3858968 /* ImportServiceTests.swift */; };
 		8EB7D97645D61A20D4C0F898 /* BookManagerCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = EA00130013634EE3D52C9CCF /* BookManagerCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		9183F4EC121E5930C3EC68B5 /* BookManagerCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EFBA8EB5B9ADFEB3ACDE0B7 /* BookManagerCore.swift */; };
 		9769ECB6981710022C7B217A /* ScaffoldTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D80E3D97EA38642A0D352DA /* ScaffoldTests.swift */; };
 		983C436D170FBDE137BDBE92 /* LibraryRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B087736BE54EC57981680458 /* LibraryRepositoryTests.swift */; };
 		9D86CAE107CBE6D0D34B7301 /* ChangeStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F788726BC33346C140CF988F /* ChangeStore.swift */; };
 		A0CF78A35D5B9D189902DF1E /* BookManagerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B289E0169E06FC577EDE4155 /* BookManagerApp.swift */; };
+		A2B9362E46338E80EE4993CD /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = 1BE2846B48AD04727891E7C4 /* ZIPFoundation */; };
 		B0A7E25FDC54B9CAE94B1798 /* HybridLogicalClockTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A06A187727B29B451ABE5C75 /* HybridLogicalClockTests.swift */; };
 		B867C92933B7AAAEABB6F6EC /* LocalCatalogV2Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 341FA2B572ABD1C178DBD749 /* LocalCatalogV2Tests.swift */; };
 		C0330A6A992BC0A8C6BFCC73 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 2F280E3BD3CAFCA30F17AC99 /* GRDB */; };
@@ -41,6 +47,7 @@
 		C7BBF02DC45A22F1113E8230 /* CanonicalPathBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF92D8169ACA0A69C106B92F /* CanonicalPathBuilder.swift */; };
 		CCFF152341FBF41AB91B2514 /* LibraryManifest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 319E4E1F20D7F33431107B0C /* LibraryManifest.swift */; };
 		D0A566804E7EB2792EA61B9B /* BookFolder.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3EB714E6E2C57690A730F94 /* BookFolder.swift */; };
+		D5658B0F5AE2B7F1A4FE8AB2 /* MetadataExtractorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E58E824C700C1F72F39EF611 /* MetadataExtractorTests.swift */; };
 		D71D91C038D0BB6C876154B5 /* LocalCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62FDDA6D5AACAA7BB66B6919 /* LocalCatalog.swift */; };
 		DD60BC9BD9A5F13C69FB3B1D /* AutomergeBookDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6076F102DADAF8E9CB9DEC47 /* AutomergeBookDocument.swift */; };
 		E6EA0292FF2754A8B986793D /* BookFolderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A081C69F8BA6B08E869CAA8D /* BookFolderTests.swift */; };
@@ -98,6 +105,7 @@
 
 /* Begin PBXFileReference section */
 		0097D35A33C980715FF58C71 /* AutomergeBookDocumentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutomergeBookDocumentTests.swift; sourceTree = "<group>"; };
+		08CB9DC449D9806CB41CBEA1 /* Fixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Fixtures.swift; sourceTree = "<group>"; };
 		10C0171D18484766BD7A3C27 /* LibraryBookmarkStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryBookmarkStore.swift; sourceTree = "<group>"; };
 		15750DA3DBE4AA0973C9D96E /* LibraryBookmarkStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryBookmarkStoreTests.swift; sourceTree = "<group>"; };
 		16E1EA0FB51BAD838C8A802E /* SchemaV2Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SchemaV2Tests.swift; sourceTree = "<group>"; };
@@ -113,6 +121,7 @@
 		63AD723FE46B91B5A9434459 /* BookManager.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BookManager.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		6BA162F96FEA4B520BEAED4B /* LocalCatalogTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalCatalogTests.swift; sourceTree = "<group>"; };
 		73AA6C7CC5DA69B3AD083C22 /* BookValues.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookValues.swift; sourceTree = "<group>"; };
+		80FA4E133A75F9A48729A914 /* MetadataExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataExtractor.swift; sourceTree = "<group>"; };
 		877A41E8DB9729E29518A7F2 /* HybridLogicalClock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HybridLogicalClock.swift; sourceTree = "<group>"; };
 		87B108E9D043C28A0ACA5B55 /* OpfGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpfGenerator.swift; sourceTree = "<group>"; };
 		8BE40B965D5EDA49E3A144C2 /* JSONCoding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONCoding.swift; sourceTree = "<group>"; };
@@ -128,7 +137,10 @@
 		B73B13122D2268E5ECE2B45C /* BookManagerUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BookManagerUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		BCEE9E484F2ACD21E4012F92 /* BookManagerCoreTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BookManagerCoreTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C3EB714E6E2C57690A730F94 /* BookFolder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookFolder.swift; sourceTree = "<group>"; };
+		C658484E2B3B70B7D3858968 /* ImportServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportServiceTests.swift; sourceTree = "<group>"; };
 		CA4DE265111712DFFE44F5CE /* LibraryStorageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryStorageTests.swift; sourceTree = "<group>"; };
+		CAA97EB7CDB42EFE46F1706D /* ImportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportService.swift; sourceTree = "<group>"; };
+		E58E824C700C1F72F39EF611 /* MetadataExtractorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataExtractorTests.swift; sourceTree = "<group>"; };
 		EA00130013634EE3D52C9CCF /* BookManagerCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = BookManagerCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		EEFDAE49CAE9FF70035E4F38 /* LibraryLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryLayout.swift; sourceTree = "<group>"; };
 		F788726BC33346C140CF988F /* ChangeStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangeStore.swift; sourceTree = "<group>"; };
@@ -141,6 +153,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				332A7B733BC508252826E4FF /* BookManagerCore.framework in Frameworks */,
+				1EB7D845512F28CEB3309FEB /* ZIPFoundation in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -150,6 +163,7 @@
 			files = (
 				1680E06ADD1A537B0869D47F /* Automerge in Frameworks */,
 				C0330A6A992BC0A8C6BFCC73 /* GRDB in Frameworks */,
+				A2B9362E46338E80EE4993CD /* ZIPFoundation in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -278,6 +292,7 @@
 			children = (
 				8D80E3D97EA38642A0D352DA /* ScaffoldTests.swift */,
 				A3F3F4A7C249F5D97BF4ECC9 /* CRDT */,
+				EFE25BE174A14C46990DEC55 /* Import */,
 				46564FDB1DA523DE7D6900D6 /* Library */,
 				92D05E28BCC2184021C8207A /* Persistence */,
 				A279AED195942E6985F09203 /* Security */,
@@ -290,6 +305,7 @@
 			children = (
 				5EFBA8EB5B9ADFEB3ACDE0B7 /* BookManagerCore.swift */,
 				38BFC033B7620DA2FD2B63BC /* CRDT */,
+				C83CC43C3FBA165974FBB7FD /* Import */,
 				2A84F03F839508F6FDC4056A /* Library */,
 				2E1A8CFAACB022E020BCD8F0 /* Persistence */,
 				DF93D02A02E6625709DAF790 /* Security */,
@@ -305,6 +321,15 @@
 				FE22DC7A79DA7703CE5EF160 /* LibraryWelcomeView.swift */,
 			);
 			path = Views;
+			sourceTree = "<group>";
+		};
+		C83CC43C3FBA165974FBB7FD /* Import */ = {
+			isa = PBXGroup;
+			children = (
+				CAA97EB7CDB42EFE46F1706D /* ImportService.swift */,
+				80FA4E133A75F9A48729A914 /* MetadataExtractor.swift */,
+			);
+			path = Import;
 			sourceTree = "<group>";
 		};
 		D4969B27EA279A717E3FEA6F /* Products */ = {
@@ -334,6 +359,16 @@
 			path = Security;
 			sourceTree = "<group>";
 		};
+		EFE25BE174A14C46990DEC55 /* Import */ = {
+			isa = PBXGroup;
+			children = (
+				08CB9DC449D9806CB41CBEA1 /* Fixtures.swift */,
+				C658484E2B3B70B7D3858968 /* ImportServiceTests.swift */,
+				E58E824C700C1F72F39EF611 /* MetadataExtractorTests.swift */,
+			);
+			path = Import;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -352,6 +387,7 @@
 			packageProductDependencies = (
 				E73D1BC292F51DC0789C0A2A /* Automerge */,
 				2F280E3BD3CAFCA30F17AC99 /* GRDB */,
+				1BE2846B48AD04727891E7C4 /* ZIPFoundation */,
 			);
 			productName = BookManagerCore;
 			productReference = EA00130013634EE3D52C9CCF /* BookManagerCore.framework */;
@@ -410,6 +446,7 @@
 			);
 			name = BookManagerCoreTests;
 			packageProductDependencies = (
+				3818F9695548F67FF6E86321 /* ZIPFoundation */,
 			);
 			productName = BookManagerCoreTests;
 			productReference = BCEE9E484F2ACD21E4012F92 /* BookManagerCoreTests.xctest */;
@@ -444,6 +481,7 @@
 			packageReferences = (
 				A0D7C7F521C2750001B7D268 /* XCRemoteSwiftPackageReference "automerge-swift" */,
 				B15CFCE30AD86161C178C8C3 /* XCRemoteSwiftPackageReference "GRDB.swift" */,
+				44635DEC287817240082396B /* XCRemoteSwiftPackageReference "ZIPFoundation" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D4969B27EA279A717E3FEA6F /* Products */;
@@ -471,6 +509,7 @@
 				C7BBF02DC45A22F1113E8230 /* CanonicalPathBuilder.swift in Sources */,
 				9D86CAE107CBE6D0D34B7301 /* ChangeStore.swift in Sources */,
 				409E04ECB1ACF22D0BB109F8 /* HybridLogicalClock.swift in Sources */,
+				082DEE0D492D2C77CC763261 /* ImportService.swift in Sources */,
 				7071C6A3153AE657C95AB3AF /* IndexedBook.swift in Sources */,
 				C1DD8FF26D317007FAE4A118 /* JSONCoding.swift in Sources */,
 				4ACDD55DE290A18AF7204E1B /* LibraryBookmarkStore.swift in Sources */,
@@ -478,6 +517,7 @@
 				CCFF152341FBF41AB91B2514 /* LibraryManifest.swift in Sources */,
 				831C278B8D9BC7CD1599A1D6 /* LibraryRepository.swift in Sources */,
 				D71D91C038D0BB6C876154B5 /* LocalCatalog.swift in Sources */,
+				089BEE925C9BEC5CAAF0D77A /* MetadataExtractor.swift in Sources */,
 				80BE13BB3F9011EE10E4B2C0 /* OpfGenerator.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -496,12 +536,15 @@
 			files = (
 				8148952FF9AF030878F61555 /* AutomergeBookDocumentTests.swift in Sources */,
 				E6EA0292FF2754A8B986793D /* BookFolderTests.swift in Sources */,
+				7413F3389FB8C25A4F071CC8 /* Fixtures.swift in Sources */,
 				B0A7E25FDC54B9CAE94B1798 /* HybridLogicalClockTests.swift in Sources */,
+				8CF594EDFCC26065337217AC /* ImportServiceTests.swift in Sources */,
 				749A78570335D7AA0AC3C08F /* LibraryBookmarkStoreTests.swift in Sources */,
 				983C436D170FBDE137BDBE92 /* LibraryRepositoryTests.swift in Sources */,
 				2AF79754097A6BBA6AF9274A /* LibraryStorageTests.swift in Sources */,
 				3DDAFFF7CA4910DC6D42CFE1 /* LocalCatalogTests.swift in Sources */,
 				B867C92933B7AAAEABB6F6EC /* LocalCatalogV2Tests.swift in Sources */,
+				D5658B0F5AE2B7F1A4FE8AB2 /* MetadataExtractorTests.swift in Sources */,
 				9769ECB6981710022C7B217A /* ScaffoldTests.swift in Sources */,
 				74708CC8E6E81471E111097D /* SchemaV2Tests.swift in Sources */,
 			);
@@ -864,6 +907,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		44635DEC287817240082396B /* XCRemoteSwiftPackageReference "ZIPFoundation" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/weichsel/ZIPFoundation.git";
+			requirement = {
+				kind = exactVersion;
+				version = 0.9.19;
+			};
+		};
 		A0D7C7F521C2750001B7D268 /* XCRemoteSwiftPackageReference "automerge-swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/automerge/automerge-swift.git";
@@ -883,10 +934,20 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		1BE2846B48AD04727891E7C4 /* ZIPFoundation */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 44635DEC287817240082396B /* XCRemoteSwiftPackageReference "ZIPFoundation" */;
+			productName = ZIPFoundation;
+		};
 		2F280E3BD3CAFCA30F17AC99 /* GRDB */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = B15CFCE30AD86161C178C8C3 /* XCRemoteSwiftPackageReference "GRDB.swift" */;
 			productName = GRDB;
+		};
+		3818F9695548F67FF6E86321 /* ZIPFoundation */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 44635DEC287817240082396B /* XCRemoteSwiftPackageReference "ZIPFoundation" */;
+			productName = ZIPFoundation;
 		};
 		E73D1BC292F51DC0789C0A2A /* Automerge */ = {
 			isa = XCSwiftPackageProductDependency;

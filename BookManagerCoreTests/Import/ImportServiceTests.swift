@@ -1,0 +1,73 @@
+import Foundation
+import Testing
+@testable import BookManagerCore
+
+@Suite
+struct ImportServiceTests {
+    private func layout() throws -> LibraryLayout {
+        let root = FileManager.default.temporaryDirectory
+            .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        let layout = LibraryLayout(root: root)
+        try layout.create(manifest: LibraryManifest(id: UUID()))
+        return layout
+    }
+
+    @Test
+    func importsFilesAndReportsDuplicates() async throws {
+        let layout = try layout()
+        let service = ImportService(layout: layout)
+        let repository = MemoryRepository()
+        let epub = try Fixtures.makeEPUB(named: "import-1.epub")
+        let pdf = try Fixtures.makePDF(named: "import-1.pdf")
+
+        let report = try await service.importFiles([epub, pdf], into: repository)
+
+        #expect(report.imported.count == 2)
+        #expect(report.failed.isEmpty)
+        #expect(report.duplicates.isEmpty)
+        #expect(report.items.count == 2)
+    }
+
+    @Test
+    func exactDuplicatesAreSkippedNotSilentlyCopied() async throws {
+        let layout = try layout()
+        let service = ImportService(layout: layout)
+        let repository = MemoryRepository()
+        let epub = try Fixtures.makeEPUB(named: "import-2.epub")
+        let pdf = try Fixtures.makePDF(named: "import-2.pdf")
+
+        _ = try await service.importFiles([epub, pdf], into: repository)
+        let second = try await service.importFiles([epub], into: repository)
+
+        #expect(second.duplicates.count == 1)
+        #expect(second.imported.isEmpty)
+    }
+}
+
+/// Thin protocol eraser so the importer does not depend on the concrete repository actor.
+/// The protocol itself lives in BookManagerCore (ImportService.swift); this test double
+/// conforms to it directly.
+actor MemoryRepository: LibraryRepositoryImporting {
+    private var hashes: [String: UUID] = [:]
+
+    func bookIDs(byFormatHash contentHash: String) async throws -> [UUID] {
+        hashes[contentHash].map { [$0] } ?? []
+    }
+
+    func allBooksForDuplicateCheck() async throws -> [IndexedBook] { [] }
+
+    func createBook(
+        metadata: NewBookMetadata,
+        staged: [BookFolder.StagedFile],
+        cover: Data?
+    ) async throws -> IndexedBook {
+        let id = UUID()
+        for file in staged {
+            hashes[file.contentHash] = id
+        }
+        return IndexedBook(
+            id: id, title: metadata.title, authors: metadata.authors,
+            modifiedMilliseconds: 1, isDeleted: false, snapshot: Data()
+        )
+    }
+}

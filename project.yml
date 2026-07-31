@@ -16,6 +16,9 @@ packages:
   GRDB:
     url: https://github.com/groue/GRDB.swift.git
     exactVersion: 7.11.1
+  ZIPFoundation:
+    url: https://github.com/weichsel/ZIPFoundation.git
+    exactVersion: 0.9.19
 
 settings:
   base:
@@ -36,6 +39,7 @@ targets:
     dependencies:
       - package: Automerge
       - package: GRDB
+      - package: ZIPFoundation
 
   BookManager:
     type: application
@@ -64,6 +68,7 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
     dependencies:
       - target: BookManagerCore
+      - package: ZIPFoundation
 
   BookManagerUITests:
     type: bundle.ui-testing
