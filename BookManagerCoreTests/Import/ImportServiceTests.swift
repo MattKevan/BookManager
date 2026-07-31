@@ -42,6 +42,51 @@ struct ImportServiceTests {
         #expect(second.duplicates.count == 1)
         #expect(second.imported.isEmpty)
     }
+
+    @Test
+    func duplicateImportCleansStaging() async throws {
+        let layout = try layout()
+        let service = ImportService(layout: layout)
+        let repository = MemoryRepository()
+        let epub = try Fixtures.makeEPUB(named: "import-4.epub")
+
+        _ = try await service.importFiles([epub], into: repository)
+        _ = try await service.importFiles([epub], into: repository)
+
+        let staging = layout.controlRoot.appending(path: "staging", directoryHint: .isDirectory)
+        let leftovers = (try? FileManager.default.contentsOfDirectory(at: staging, includingPropertiesForKeys: nil)) ?? []
+        #expect(leftovers.isEmpty)
+    }
+
+    @Test
+    func likelyDuplicateIsHintedOnImportedItem() async throws {
+        let layout = try layout()
+        let service = ImportService(layout: layout)
+        let existingID = UUID()
+        let repository = MemoryRepository(seededBooks: [
+            IndexedBook(
+                id: existingID,
+                title: "Range: Why Generalists Triumph in a Specialized World",
+                authors: ["David Epstein"],
+                modifiedMilliseconds: 1, isDeleted: false, snapshot: Data()
+            )
+        ])
+        let epub = try Fixtures.makeEPUB(named: "import-3.epub")
+
+        let report = try await service.importFiles([epub], into: repository)
+
+        #expect(report.imported.count == 1)
+        let item = try #require(report.imported.first)
+        guard case .imported = item.status else {
+            Issue.record("expected .imported status, got \(item.status)")
+            return
+        }
+        #expect(item.likelyDuplicateOf == existingID)
+
+        // Same bytes again: still an exact duplicate, not a second likely hint.
+        let second = try await service.importFiles([epub], into: repository)
+        #expect(second.duplicates.count == 1)
+    }
 }
 
 /// Thin protocol eraser so the importer does not depend on the concrete repository actor.
@@ -49,12 +94,17 @@ struct ImportServiceTests {
 /// conforms to it directly.
 actor MemoryRepository: LibraryRepositoryImporting {
     private var hashes: [String: UUID] = [:]
+    private var books: [IndexedBook]
+
+    init(seededBooks: [IndexedBook] = []) {
+        books = seededBooks
+    }
 
     func bookIDs(byFormatHash contentHash: String) async throws -> [UUID] {
         hashes[contentHash].map { [$0] } ?? []
     }
 
-    func allBooksForDuplicateCheck() async throws -> [IndexedBook] { [] }
+    func allBooksForDuplicateCheck() async throws -> [IndexedBook] { books }
 
     func createBook(
         metadata: NewBookMetadata,
@@ -65,9 +115,11 @@ actor MemoryRepository: LibraryRepositoryImporting {
         for file in staged {
             hashes[file.contentHash] = id
         }
-        return IndexedBook(
+        let book = IndexedBook(
             id: id, title: metadata.title, authors: metadata.authors,
             modifiedMilliseconds: 1, isDeleted: false, snapshot: Data()
         )
+        books.append(book)
+        return book
     }
 }

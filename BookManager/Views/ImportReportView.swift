@@ -54,6 +54,9 @@ struct ImportReportView: View {
                 Text("Already in library").font(.caption).foregroundStyle(.secondary)
             } else if case let .failed(message) = item.status {
                 Text(message).font(.caption).foregroundStyle(.secondary)
+            } else if item.likelyDuplicateOf != nil {
+                // Never merge silently: surface the likely-duplicate hint.
+                Text("Possible duplicate of an existing book").font(.caption).foregroundStyle(.secondary)
             }
         }
     }

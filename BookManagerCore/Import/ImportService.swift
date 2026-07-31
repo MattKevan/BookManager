@@ -79,12 +79,17 @@ public actor ImportService {
                 let metadata = try MetadataExtractor.extract(from: source, kind: kind)
                 let cover = try MetadataExtractor.extractCover(from: source, kind: kind)
                 let staged = try await folder.stage(from: source)
+                // materialize() consumes the staged copy on success; every other
+                // exit (duplicate, throw) must remove it so the synced
+                // .bookmanager/staging area never leaks files or empty per-import
+                // directories.
+                defer {
+                    try? FileManager.default.removeItem(at: staged.url)
+                    try? FileManager.default.removeItem(at: staged.url.deletingLastPathComponent())
+                }
 
                 let exactMatches = try await repository.bookIDs(byFormatHash: staged.contentHash)
                 if let first = exactMatches.first {
-                    // Exact duplicate: never copy silently, and never leave the
-                    // staged copy behind — clean it up so staging does not leak.
-                    try? FileManager.default.removeItem(at: staged.url)
                     items.append(ImportItem(
                         sourceURL: source, kind: kind,
                         status: .duplicate(matchingBookID: first)

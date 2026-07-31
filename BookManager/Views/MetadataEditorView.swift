@@ -89,8 +89,8 @@ struct MetadataEditorView: View {
         }
         let newSeries = series.trimmingCharacters(in: .whitespacesAndNewlines)
         let seriesEdit: FieldEdit<String> = newSeries.isEmpty ? .clear : .set(newSeries)
-        let newIndex = seriesIndex.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? nil : Double(seriesIndex)
+        let trimmedIndex = seriesIndex.trimmingCharacters(in: .whitespacesAndNewlines)
+        let newIndex = trimmedIndex.isEmpty ? nil : Double(trimmedIndex)
         let indexEdit: FieldEdit<Double> = newSeries.isEmpty ? .keep : (newIndex.map { .set($0) } ?? .clear)
         let ratingEdit: FieldEdit<Int> = rating == 0 ? .clear : .set(rating)
         let publisherEdit: FieldEdit<String> = {
@@ -104,8 +104,9 @@ struct MetadataEditorView: View {
             let value = comments.trimmingCharacters(in: .whitespacesAndNewlines)
             return value.isEmpty ? .clear : .set(value)
         }()
+        let newTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         return BookEdit(
-            title: title == book.title ? nil : title,
+            title: newTitle == book.title ? nil : newTitle,
             authors: splitList(authorsText) == book.authors ? nil : splitList(authorsText),
             series: seriesEdit,
             seriesIndex: indexEdit,

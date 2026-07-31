@@ -110,7 +110,14 @@ final class LibrarySession {
             } else if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 books = try await repository.books()
             } else {
-                books = try await repository.search(searchText)
+                // A malformed FTS5 query (unclosed quote, stray operator) must not
+                // take down the loaded browser: on a search error, show no results
+                // while keeping the library state intact.
+                do {
+                    books = try await repository.search(searchText)
+                } catch {
+                    books = []
+                }
             }
         } catch {
             state = .failed(message: error.localizedDescription)
