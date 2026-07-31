@@ -18,7 +18,13 @@ public struct HybridLogicalClock: Codable, Hashable, Sendable, Comparable {
             physicalMilliseconds = now
             logical = 0
         } else {
-            logical &+= 1
+            let (next, overflow) = logical.addingReportingOverflow(1)
+            if overflow {
+                physicalMilliseconds &+= 1
+                logical = 0
+            } else {
+                logical = next
+            }
         }
         return self
     }
@@ -30,16 +36,22 @@ public struct HybridLogicalClock: Codable, Hashable, Sendable, Comparable {
 
         switch (maximum == physicalMilliseconds, maximum == remote.physicalMilliseconds) {
         case (true, true):
-            logical = max(logical, remote.logical) &+ 1
+            let (next, overflow) = max(logical, remote.logical).addingReportingOverflow(1)
+            logical = overflow ? 0 : next
+            physicalMilliseconds = maximum &+ (overflow ? 1 : 0)
         case (true, false):
-            logical &+= 1
+            let (next, overflow) = logical.addingReportingOverflow(1)
+            logical = overflow ? 0 : next
+            physicalMilliseconds = maximum &+ (overflow ? 1 : 0)
         case (false, true):
-            logical = remote.logical &+ 1
+            let (next, overflow) = remote.logical.addingReportingOverflow(1)
+            logical = overflow ? 0 : next
+            physicalMilliseconds = maximum &+ (overflow ? 1 : 0)
         case (false, false):
             logical = 0
+            physicalMilliseconds = maximum
         }
 
-        physicalMilliseconds = maximum
         return self
     }
 
