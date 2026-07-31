@@ -4491,3 +4491,24 @@ git status --short --branch
 ```
 
 Expected: branch header only.
+
+---
+
+## Slice 2 Completion Notes (merged to main 2026-08-01)
+
+Implemented via subagent-driven development in `.worktrees/management-workflows` (branch `feature/management-workflows`, merged as a fast-forward to `main` at `7107523` + a follow-up signing-config commit). 14 commits; 58 core tests (12 suites) + 1 UI test green on the merged tree.
+
+### Human decisions recorded during the slice
+1. **Cover/format/identifier removal semantics** — `setCover(nil)` clears the whole `covers` map (matching `removeFormat`'s whole-key deletion) + removal-convergence tests added (Task 1 fix round).
+2. **Import staging semantics** — `stage()` keeps `copyItem` (user files are never consumed); Task 2's source-deletion assertion changed to assert the staged copy is consumed; ImportService removes staged files on duplicates and on failure (Task 4).
+3. **UI-layer coverage waiver** — automated app-target (BookManager) coverage waived for Tasks 6-8 UI behavior; all behavior lives in BookManagerCore (fully tested); app layer covered by build + UI launch smoke test + manual verification.
+4. **Sidebar facet selection** routed through `LibrarySession.selectFacet` via a custom Binding (fixes the plan's inert-selection defect; Task 6).
+5. **Final review fixes** — ImportService staging cleanup on failure (defer), `Double(trimmedIndex)` parse + trimmed title compare in MetadataEditorView, search-error isolation in `refreshBooks` (state stays `.loaded`), and `likelyDuplicateOf` surfaced in ImportReportView + tested.
+
+### Deferred items (candidates for Slice 3/4)
+- **Slice 4 (multi-device):** whole-key deletion leaves no tombstones — a stale replica re-adding its cover/format/identifier entry can resurrect the field on merge; Swift Dictionary encodes through Automerge Codable as an alternating key/value list, so concurrent multi-key identifier writes don't deterministically resolve newest-per-type (both replicas always converge).
+- **Slice 4:** `.amchange` filenames for update/delete/restore use a fresh 0-0 clock (digest-sorted filenames) — benign (Automerge applies in any order; LWW clocks live in change payloads), but align with createBook's ticked clocks for consistency.
+- **Hardening:** IndexedBook `init(row:)` fabricates a random UUID for a corrupt row id (plan-mandated) — throw/trap instead; `search()` passes the raw query to FTS5 MATCH (operator chars can throw — session now isolates the error to empty results); `bookIDs(byFormatHash:)` arbitrary order (callers compare as sets).
+- **Coverage gaps:** no test for the v1→v2 catalogue migration path; format facet type untested; update/delete changes never exercised through `rebuildCatalog`; rename()'s per-kind format-file branch untested; `BookFolderError.trashEntryMissing` untested; journal failure path untested.
+- **Known plan-verbatim warts:** OPF staleness on edits that don't change the canonical path (OPF is derived; change store is the source of truth); `closeLibrary()` doesn't reset searchText/missingFiles/viewMode; `try?`-swallowed failures in delete/restore/rebuildIndex give no user feedback; Open/Reveal act on arbitrary `selection.first` for multi-selection; `state = .loaded` precedes `refreshAll()` (empty-state flashes on open); `createBook(title:authors:at:)` ignores `at:`; unsupported-file ImportItem fabricates `.epub` kind; ThumbnailCache keyed by book.id only (stale after cover rewrite); double-tap also toggles selection (single-tap fires first).
+- **UX:** searchText didSet has no debounce/cancellation; MetadataEditorView's cleared-series leaves a stale seriesIndex (`.keep` when series empty); `DiagnosticsView` reloads twice on presentation (harmless); `importURLs`/`diagnosticsPresented` dead state.
