@@ -1,3 +1,4 @@
+import AppKit
 import BookManagerCore
 import Foundation
 import Observation
@@ -5,22 +6,44 @@ import Observation
 @MainActor
 @Observable
 final class LibrarySession {
+    enum ViewMode: String, CaseIterable, Identifiable {
+        case table, grid
+        var id: String { rawValue }
+    }
+
     enum State {
         case welcome
         case loading
-        case loaded(name: String, books: [IndexedBook])
+        case loaded
         case failed(message: String)
     }
 
     private(set) var state: State = .welcome
     private(set) var repository: LibraryRepository?
-    var searchText = "" {
-        didSet { Task { await refresh() } }
-    }
+    var searchText = "" { didSet { Task { await refreshBooks() } } }
+    var viewMode: ViewMode = .table
+    var selection = Set<UUID>()
+    var selectedFacet: FacetSelection?
+
+    private(set) var books: [IndexedBook] = []
+    private(set) var authors: [(value: String, count: Int)] = []
+    private(set) var series: [(value: String, count: Int)] = []
+    private(set) var tags: [(value: String, count: Int)] = []
+    private(set) var formats: [(value: String, count: Int)] = []
+    private(set) var deletedBooks: [IndexedBook] = []
+    private(set) var missingFiles: [(book: IndexedBook, filename: String)] = []
+    var importReport: ImportReport?
+    var inspectorBook: IndexedBook?
+    var diagnosticsPresented = false
 
     private let deviceID: UUID
     private let bookmarks: LibraryBookmarkStore
     private var activeSecurityURL: URL?
+
+    struct FacetSelection: Hashable {
+        let type: FacetType
+        let value: String
+    }
 
     init(
         deviceID: UUID = UUID(),
@@ -30,64 +53,158 @@ final class LibrarySession {
         self.bookmarks = bookmarks
     }
 
-    func createLibrary(at url: URL) async {
-        await activate(url: url, create: true)
-    }
-
-    func openLibrary(at url: URL) async {
-        await activate(url: url, create: false)
-    }
+    func createLibrary(at url: URL) async { await activate(url: url, create: true) }
+    func openLibrary(at url: URL) async { await activate(url: url, create: false) }
 
     func closeLibrary() {
         activeSecurityURL?.stopAccessingSecurityScopedResource()
         activeSecurityURL = nil
         repository = nil
         state = .welcome
+        books = []
+        deletedBooks = []
+        selection = []
+        selectedFacet = nil
+        importReport = nil
+        inspectorBook = nil
     }
 
-    func refresh() async {
-        guard let repository else { return }
-        do {
-            let books = searchText.isEmpty
-                ? try await repository.books()
-                : try await repository.search(searchText)
-            state = .loaded(name: repository.root.lastPathComponent, books: books)
-        } catch {
-            state = .failed(message: error.localizedDescription)
-        }
-    }
+    // MARK: - Activation
 
     private func activate(url: URL, create: Bool) async {
         state = .loading
         let accessed = url.startAccessingSecurityScopedResource()
-
         do {
             let indexes = try Self.indexDirectory()
             let repository: LibraryRepository
             if create {
-                repository = try await .create(
-                    at: url,
-                    indexesDirectory: indexes,
-                    deviceID: deviceID
-                )
+                repository = try await .create(at: url, indexesDirectory: indexes, deviceID: deviceID)
             } else {
-                repository = try await .open(
-                    at: url,
-                    indexesDirectory: indexes,
-                    deviceID: deviceID
-                )
+                repository = try await .open(at: url, indexesDirectory: indexes, deviceID: deviceID)
             }
             try bookmarks.save(url, for: repository.manifest.id)
             activeSecurityURL?.stopAccessingSecurityScopedResource()
             activeSecurityURL = accessed ? url : nil
             self.repository = repository
-            await refresh()
+            state = .loaded
+            await refreshAll()
         } catch {
-            if accessed {
-                url.stopAccessingSecurityScopedResource()
-            }
+            if accessed { url.stopAccessingSecurityScopedResource() }
             state = .failed(message: error.localizedDescription)
         }
+    }
+
+    // MARK: - Loading
+
+    func refreshAll() async {
+        await refreshBooks()
+        await refreshFacets()
+        await refreshDeleted()
+    }
+
+    func refreshBooks() async {
+        guard let repository else { return }
+        do {
+            if let facet = selectedFacet {
+                books = try await repository.books(facetType: facet.type, value: facet.value)
+            } else if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                books = try await repository.books()
+            } else {
+                books = try await repository.search(searchText)
+            }
+        } catch {
+            state = .failed(message: error.localizedDescription)
+        }
+    }
+
+    func refreshFacets() async {
+        guard let repository else { return }
+        authors = (try? await repository.facetCounts(.author)) ?? []
+        series = (try? await repository.facetCounts(.series)) ?? []
+        tags = (try? await repository.facetCounts(.tag)) ?? []
+        formats = (try? await repository.facetCounts(.format)) ?? []
+    }
+
+    func refreshDeleted() async {
+        deletedBooks = (try? await repository?.deletedBooks()) ?? []
+    }
+
+    // MARK: - Facets and search
+
+    func selectFacet(_ facet: FacetSelection?) {
+        selectedFacet = (facet == selectedFacet) ? nil : facet
+        Task { await refreshBooks() }
+    }
+
+    // MARK: - Import
+
+    func importFiles(urls: [URL]) async {
+        guard let repository else { return }
+        let service = ImportService(layout: .init(root: repository.root))
+        do {
+            importReport = try await service.importFiles(urls, into: repository)
+        } catch {
+            importReport = ImportReport(items: [
+                ImportItem(sourceURL: urls.first ?? URL(fileURLWithPath: "/"), kind: .epub, status: .failed(error.localizedDescription))
+            ])
+        }
+        await refreshAll()
+    }
+
+    // MARK: - Editing
+
+    func saveEdit(_ edit: BookEdit, for id: UUID) async {
+        guard let repository else { return }
+        do {
+            let updated = try await repository.updateBook(id: id, edit: edit)
+            inspectorBook = updated
+            await refreshAll()
+        } catch {
+            state = .failed(message: error.localizedDescription)
+        }
+    }
+
+    // MARK: - Delete / restore
+
+    func delete(ids: Set<UUID>) async {
+        guard let repository else { return }
+        for id in ids {
+            _ = try? await repository.deleteBook(id: id)
+        }
+        selection.removeAll()
+        await refreshAll()
+    }
+
+    func restore(id: UUID) async {
+        guard let repository else { return }
+        _ = try? await repository.restoreBook(id: id)
+        await refreshAll()
+    }
+
+    // MARK: - Open / reveal
+
+    func open(id: UUID) async {
+        guard let repository, let url = try? await repository.formatFileURL(id: id) else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    func reveal(id: UUID) async {
+        guard let repository, let url = try? await repository.bookFolderURL(id: id) else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+
+    // MARK: - Diagnostics
+
+    func rebuildIndex() async {
+        guard let repository else { return }
+        _ = try? await repository.rebuildCatalog()
+        await refreshAll()
+    }
+
+    func reloadDiagnostics() async {
+        guard let repository else { return }
+        missingFiles = (try? await repository.missingFormatFiles()) ?? []
+        await refreshDeleted()
     }
 
     private static func indexDirectory() throws -> URL {

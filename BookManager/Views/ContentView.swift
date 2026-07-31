@@ -1,3 +1,4 @@
+import AppKit
 import BookManagerCore
 import SwiftUI
 import UniformTypeIdentifiers
@@ -5,11 +6,12 @@ import UniformTypeIdentifiers
 struct ContentView: View {
     @Bindable var session: LibrarySession
     @State private var pickerPurpose: PickerPurpose?
+    @State private var importURLs: [URL] = []
+    @State private var showImportReport = false
+    @State private var showDiagnostics = false
 
     private enum PickerPurpose: Identifiable {
-        case create
-        case open
-
+        case create, open, addBooks
         var id: Self { self }
     }
 
@@ -22,60 +24,171 @@ struct ContentView: View {
                     openLibrary: { pickerPurpose = .open }
                 )
             case .loading:
-                ProgressView("Opening Library…")
-                    .controlSize(.large)
-            case let .loaded(name, books):
-                NavigationSplitView {
-                    List {
-                        Label("All Books", systemImage: "books.vertical")
-                    }
-                    .listStyle(.sidebar)
-                    .navigationTitle(name)
-                } detail: {
-                    BookTableView(books: books)
-                        .searchable(text: $session.searchText, prompt: "Search books")
-                }
-                .toolbar {
-                    ToolbarItem {
-                        Button("Close Library", systemImage: "xmark.circle") {
-                            session.closeLibrary()
-                        }
-                    }
-                }
+                ProgressView("Opening Library…").controlSize(.large)
+            case .loaded:
+                loadedBody
             case let .failed(message):
                 ContentUnavailableView {
                     Label("Couldn’t Open Library", systemImage: "exclamationmark.triangle")
                 } description: {
                     Text(message)
                 } actions: {
-                    Button("Choose Another Library") {
-                        session.closeLibrary()
-                    }
+                    Button("Choose Another Library") { session.closeLibrary() }
                 }
             }
         }
-        .frame(minWidth: 760, minHeight: 500)
+        .frame(minWidth: 900, minHeight: 560)
         .fileImporter(
             isPresented: Binding(
                 get: { pickerPurpose != nil },
                 set: { if !$0 { pickerPurpose = nil } }
             ),
-            allowedContentTypes: [.folder],
-            allowsMultipleSelection: false
+            allowedContentTypes: pickerPurpose == .addBooks
+                ? [.epub, .pdf, .data]
+                : [.folder],
+            allowsMultipleSelection: true
         ) { result in
             let purpose = pickerPurpose
             pickerPurpose = nil
-            guard case let .success(urls) = result, let url = urls.first else { return }
-            Task {
-                switch purpose {
-                case .create:
-                    await session.createLibrary(at: url)
-                case .open:
-                    await session.openLibrary(at: url)
-                case nil:
-                    break
+            guard case let .success(urls) = result else { return }
+            switch purpose {
+            case .create:
+                Task { await session.createLibrary(at: urls[0]) }
+            case .open:
+                Task { await session.openLibrary(at: urls[0]) }
+            case .addBooks:
+                Task {
+                    await session.importFiles(urls: urls)
+                    showImportReport = session.importReport != nil
+                }
+            case nil:
+                break
+            }
+        }
+        .sheet(isPresented: $showImportReport) {
+            if let report = session.importReport {
+                ImportReportView(report: report) { showImportReport = false }
+            }
+        }
+        .sheet(item: $session.inspectorBook) { book in
+            MetadataEditorView(book: book, onSave: { edit in
+                Task { await session.saveEdit(edit, for: book.id) }
+                session.inspectorBook = nil
+            }, onCancel: {
+                session.inspectorBook = nil
+            })
+        }
+        .sheet(isPresented: $showDiagnostics) {
+            DiagnosticsView()
+        }
+        .onChange(of: showDiagnostics) { _, presented in
+            if presented { Task { await session.reloadDiagnostics() } }
+        }
+        .environment(\.librarySession, session)
+    }
+
+    private var loadedBody: some View {
+        NavigationSplitView {
+            SidebarView(session: session)
+                .navigationTitle(session.repository?.root.lastPathComponent ?? "Library")
+        } detail: {
+            browser
+                .navigationTitle(session.selectedFacet?.value ?? "All Books")
+        }
+        .toolbar {
+            ToolbarItemGroup {
+                Button {
+                    pickerPurpose = .addBooks
+                } label: {
+                    Label("Add Books", systemImage: "plus")
+                }
+                Button {
+                    openSelection()
+                } label: {
+                    Label("Open", systemImage: "book")
+                }
+                .disabled(session.selection.isEmpty)
+                Button {
+                    revealSelection()
+                } label: {
+                    Label("Reveal in Finder", systemImage: "folder")
+                }
+                .disabled(session.selection.isEmpty)
+                Button {
+                    editSelection()
+                } label: {
+                    Label("Edit Metadata", systemImage: "pencil")
+                }
+                .disabled(session.selection.count != 1)
+                Picker("View", selection: $session.viewMode) {
+                    Image(systemName: "list.bullet").tag(LibrarySession.ViewMode.table)
+                    Image(systemName: "square.grid.2x2").tag(LibrarySession.ViewMode.grid)
+                }
+                .pickerStyle(.segmented)
+                .help("Table or cover grid")
+                Button {
+                    showDiagnostics = true
+                } label: {
+                    Label("Diagnostics", systemImage: "wrench.and.screwdriver")
                 }
             }
+        }
+    }
+
+    private var browser: some View {
+        Group {
+            switch session.viewMode {
+            case .table:
+                BookTableView(session: session)
+            case .grid:
+                CoverGridView(session: session)
+            }
+        }
+        .searchable(text: $session.searchText, prompt: "Search books")
+        .onDrop(of: [.fileURL], isTargeted: nil) { providers in
+            handleDrop(providers)
+        }
+    }
+
+    private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
+        Task { @MainActor in
+            var urls: [URL] = []
+            for provider in providers {
+                if let url = await loadURL(from: provider) {
+                    urls.append(url)
+                }
+            }
+            guard !urls.isEmpty else { return }
+            await session.importFiles(urls: urls)
+            showImportReport = session.importReport != nil
+        }
+        return true
+    }
+
+    private func loadURL(from provider: NSItemProvider) async -> URL? {
+        await withCheckedContinuation { continuation in
+            _ = provider.loadTransferable(type: URL.self) { result in
+                continuation.resume(returning: try? result.get())
+            }
+        }
+    }
+
+    private func openSelection() {
+        if let id = session.selection.first {
+            Task { await session.open(id: id) }
+        }
+    }
+
+    private func revealSelection() {
+        if let id = session.selection.first {
+            Task { await session.reveal(id: id) }
+        }
+    }
+
+    private func editSelection() {
+        if let id = session.selection.first,
+           let book = session.books.first(where: { $0.id == id }) {
+            session.inspectorBook = book
         }
     }
 }
