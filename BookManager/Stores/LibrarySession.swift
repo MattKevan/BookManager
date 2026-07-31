@@ -193,6 +193,10 @@ final class LibrarySession {
         NSWorkspace.shared.activateFileViewerSelecting([url])
     }
 
+    var libraryRoot: URL? {
+        repository?.root
+    }
+
     // MARK: - Diagnostics
 
     func rebuildIndex() async {
