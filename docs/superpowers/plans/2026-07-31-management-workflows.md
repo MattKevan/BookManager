@@ -94,6 +94,7 @@ docs/superpowers/specs/2026-07-29-book-manager-design.md  (modify: Slice 2 statu
 Create `BookManagerCoreTests/CRDT/SchemaV2Tests.swift`:
 
 ```swift
+import Automerge
 import Foundation
 import Testing
 @testable import BookManagerCore
