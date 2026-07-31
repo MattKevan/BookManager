@@ -1,8 +1,8 @@
 import Foundation
 
 public actor LibraryRepository {
-    public let manifest: LibraryManifest
-    public let root: URL
+    public nonisolated let manifest: LibraryManifest
+    public nonisolated let root: URL
 
     private let layout: LibraryLayout
     private let changeStore: ChangeStore
