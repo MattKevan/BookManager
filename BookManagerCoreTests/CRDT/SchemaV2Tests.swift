@@ -159,4 +159,102 @@ struct SchemaV2Tests {
         try replica.apply(change)
         #expect(try replica.resolvedBook().identifiers["isbn"] == "9999")
     }
+
+    @Test
+    func coverRemovalConvergesAcrossReplicas() throws {
+        let source = try document()
+        let base = try source.setTitle("Range", clock: .init(physicalMilliseconds: 1_000, nodeID: deviceA))
+        let first = try AutomergeBookDocument.empty(deviceID: deviceA)
+        let second = try AutomergeBookDocument.empty(deviceID: deviceB)
+        try first.apply(base)
+        try second.apply(base)
+
+        let coverA = CoverValue(filename: "a.jpg", contentHash: "aa")
+        let coverB = CoverValue(filename: "b.jpg", contentHash: "bb")
+        let setA = try first.setCover(coverA, clock: .init(physicalMilliseconds: 2_000, nodeID: deviceA))
+        let setB = try second.setCover(coverB, clock: .init(physicalMilliseconds: 2_100, nodeID: deviceB))
+
+        try first.apply(setB)
+        try second.apply(setA)
+        #expect(try first.resolvedBook().cover != nil)
+        #expect(try second.resolvedBook().cover != nil)
+
+        let clear = try first.setCover(nil, clock: .init(physicalMilliseconds: 3_000, nodeID: deviceA))
+        try second.apply(clear)
+
+        #expect(try first.resolvedBook().cover == nil)
+        #expect(try second.resolvedBook().cover == nil)
+    }
+
+    @Test
+    func formatRemovalConvergesAcrossReplicas() throws {
+        let source = try document()
+        let base = try source.setTitle("Range", clock: .init(physicalMilliseconds: 1_000, nodeID: deviceA))
+        let first = try AutomergeBookDocument.empty(deviceID: deviceA)
+        let second = try AutomergeBookDocument.empty(deviceID: deviceB)
+        try first.apply(base)
+        try second.apply(base)
+
+        let older = BookFormatValue(kind: "EPUB", filename: "older.epub", contentHash: "old", size: 1)
+        let newer = BookFormatValue(kind: "EPUB", filename: "newer.epub", contentHash: "new", size: 2)
+        let setA = try first.setFormat(older, clock: .init(physicalMilliseconds: 2_000, nodeID: deviceA))
+        let setB = try second.setFormat(newer, clock: .init(physicalMilliseconds: 2_100, nodeID: deviceB))
+
+        try first.apply(setB)
+        try second.apply(setA)
+        #expect(try first.resolvedBook().formats.count == 1)
+        #expect(try second.resolvedBook().formats.count == 1)
+
+        let remove = try first.removeFormat(kind: "EPUB", clock: .init(physicalMilliseconds: 3_000, nodeID: deviceA))
+        try second.apply(remove)
+
+        #expect(try first.resolvedBook().formats.isEmpty)
+        #expect(try second.resolvedBook().formats.isEmpty)
+    }
+
+    @Test
+    func identifierRemovalConvergesAcrossReplicas() throws {
+        let source = try document()
+        let base = try source.setTitle("Range", clock: .init(physicalMilliseconds: 1_000, nodeID: deviceA))
+        let first = try AutomergeBookDocument.empty(deviceID: deviceA)
+        let second = try AutomergeBookDocument.empty(deviceID: deviceB)
+        try first.apply(base)
+        try second.apply(base)
+
+        let setA = try first.setIdentifiers(
+            ["isbn": "1", "google": "g"],
+            clock: .init(physicalMilliseconds: 2_000, nodeID: deviceA)
+        )
+        let setB = try second.setIdentifiers(
+            ["isbn": "2"],
+            clock: .init(physicalMilliseconds: 2_100, nodeID: deviceB)
+        )
+
+        try first.apply(setB)
+        try second.apply(setA)
+        // Swift dictionaries encode as Automerge lists, so the concurrent-set
+        // winner for a shared type is not guaranteed to be the newest clock
+        // value across processes. What is guaranteed — and what this test
+        // verifies — is that both replicas converge, and that google (touched
+        // only by device A) survives.
+        let mergedA = try first.resolvedBook().identifiers
+        let mergedB = try second.resolvedBook().identifiers
+        #expect(mergedA == mergedB)
+        #expect(mergedA["google"] == "g")
+        #expect(mergedA["isbn"] != nil)
+
+        // Device A clears only the isbn type; the removal loop deletes the
+        // whole isbn key, so the clear converges on both replicas while
+        // google survives.
+        let clear = try first.setIdentifiers(
+            ["google": "g"],
+            clock: .init(physicalMilliseconds: 3_000, nodeID: deviceA)
+        )
+        try second.apply(clear)
+
+        #expect(try first.resolvedBook().identifiers["isbn"] == nil)
+        #expect(try second.resolvedBook().identifiers["isbn"] == nil)
+        #expect(try first.resolvedBook().identifiers["google"] == "g")
+        #expect(try second.resolvedBook().identifiers["google"] == "g")
+    }
 }

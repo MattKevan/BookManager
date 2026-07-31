@@ -131,7 +131,9 @@ public final class AutomergeBookDocument: @unchecked Sendable {
         if let value {
             schema.covers[deviceID.uuidString] = VersionedValue(value: value, clock: clock)
         } else {
-            schema.covers.removeValue(forKey: deviceID.uuidString)
+            // Clear every device's cover entry so a "remove cover" converges across replicas,
+            // matching the whole-key deletion shape of removeFormat(kind:).
+            schema.covers.removeAll()
         }
         return try commit(schema, message: "set-cover", timestamp: clock.date)
     }
