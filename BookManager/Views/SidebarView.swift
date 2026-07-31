@@ -5,7 +5,10 @@ struct SidebarView: View {
     @Bindable var session: LibrarySession
 
     var body: some View {
-        List(selection: $session.selectedFacet) {
+        List(selection: Binding(
+            get: { session.selectedFacet },
+            set: { session.selectFacet($0) }
+        )) {
             Section {
                 Label("All Books", systemImage: "books.vertical")
                     .tag(nil as LibrarySession.FacetSelection?)
