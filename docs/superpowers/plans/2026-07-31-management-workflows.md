@@ -134,6 +134,23 @@ struct SchemaV2Tests {
         #expect(resolved.comments == nil)
     }
 
+    @Test
+    func applyEditProducesChangesAndResolves() throws {
+        let source = try document()
+        let changes = try source.apply(
+            BookEdit(title: "New Title", authors: ["Someone"], tags: ["x"], rating: .set(3)),
+            clock: .init(physicalMilliseconds: 1_000, nodeID: deviceA),
+            date: Date(timeIntervalSince1970: 1)
+        )
+
+        #expect(changes.count == 4)
+        let resolved = try source.resolvedBook()
+        #expect(resolved.title == "New Title")
+        #expect(resolved.authors == ["Someone"])
+        #expect(resolved.tags == ["x"])
+        #expect(resolved.rating == 3)
+    }
+
     private struct V1Shape: Codable {
         var schemaVersion: Int = 1
         var bookID: UUID?
