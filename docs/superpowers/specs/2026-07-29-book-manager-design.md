@@ -593,3 +593,10 @@ The design is delivered as four testable vertical slices rather than one large i
 4. **Multi-Mac hardening:** durable offline outbox, filesystem monitoring, reordered-change convergence, recovery reconciliation, network-filesystem fallbacks, accessibility completion, and performance acceptance.
 
 Each slice must leave the app runnable and its completed behavior covered by automated tests. Later slices may extend interfaces created by earlier slices but may not replace the portable Automerge change log or rebuildable local catalogue architecture.
+
+### Implementation Status
+
+- Slice 1 — Library foundation: implemented and verified
+- Slice 2 — Management workflows: not started
+- Slice 3 — Calibre migration: not started
+- Slice 4 — Multi-Mac hardening: not started
