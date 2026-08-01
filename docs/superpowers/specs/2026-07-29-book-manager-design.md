@@ -598,5 +598,5 @@ Each slice must leave the app runnable and its completed behavior covered by aut
 
 - Slice 1 — Library foundation: implemented and verified
 - Slice 2 — Management workflows: implemented and verified
-- Slice 3 — Calibre migration: not started
+- Slice 3 — Calibre migration: implemented and verified
 - Slice 4 — Multi-Mac hardening: not started
