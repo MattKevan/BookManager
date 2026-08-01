@@ -5,31 +5,18 @@ import UniformTypeIdentifiers
 
 struct ContentView: View {
     @Bindable var session: LibrarySession
-    @State private var pickerPurpose: PickerPurpose?
-    @State private var isPickerPresented = false
     @State private var importURLs: [URL] = []
     @State private var showImportReport = false
     @State private var showDiagnostics = false
     @State private var showCalibreImport = false
-
-    private enum PickerPurpose: Identifiable {
-        case create, open, addBooks, calibre
-        var id: Self { self }
-    }
 
     var body: some View {
         Group {
             switch session.state {
             case .welcome:
                 LibraryWelcomeView(
-                    createLibrary: {
-                        pickerPurpose = .create
-                        isPickerPresented = true
-                    },
-                    openLibrary: {
-                        pickerPurpose = .open
-                        isPickerPresented = true
-                    }
+                    createLibrary: { session.present(.create) },
+                    openLibrary: { session.present(.open) }
                 )
             case .loading:
                 ProgressView("Opening Library…").controlSize(.large)
@@ -47,17 +34,18 @@ struct ContentView: View {
         }
         .frame(minWidth: 900, minHeight: 560)
         .fileImporter(
-            isPresented: $isPickerPresented,
-            allowedContentTypes: pickerPurpose == .addBooks
+            isPresented: $session.isPickerPresented,
+            allowedContentTypes: session.pickerAction == .addBooks
                 ? [.epub, .pdf, .data]
                 : [.folder],
             allowsMultipleSelection: true,
             onCompletion: { result in
                 // NOTE: SwiftUI flips `isPresented` to false (firing the binding's
-                // set) BEFORE onCompletion runs, so the purpose must be read from
-                // `pickerPurpose`, which is only cleared here — never by the binding.
-                let purpose = pickerPurpose
-                pickerPurpose = nil
+                // set) BEFORE onCompletion runs, so the action must be read from
+                // `session.pickerAction`, which is only cleared here — never by the
+                // binding.
+                let purpose = session.pickerAction
+                session.pickerAction = nil
                 guard case let .success(urls) = result else { return }
                 switch purpose {
                 case .create:
@@ -78,7 +66,7 @@ struct ContentView: View {
                     break
                 }
             },
-            onCancellation: { pickerPurpose = nil }
+            onCancellation: { session.pickerAction = nil }
         )
         .sheet(isPresented: $showImportReport) {
             if let report = session.importReport {
@@ -123,8 +111,7 @@ struct ContentView: View {
         .toolbar {
             ToolbarItemGroup {
                 Button {
-                    pickerPurpose = .addBooks
-                    isPickerPresented = true
+                    session.present(.addBooks)
                 } label: {
                     Label("Add Books", systemImage: "plus")
                 }
@@ -158,8 +145,7 @@ struct ContentView: View {
                     Label("Diagnostics", systemImage: "wrench.and.screwdriver")
                 }
                 Button {
-                    pickerPurpose = .calibre
-                    isPickerPresented = true
+                    session.present(.calibre)
                 } label: {
                     Label("Import from Calibre…", systemImage: "tray.and.arrow.down")
                 }

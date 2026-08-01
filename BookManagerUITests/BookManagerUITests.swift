@@ -20,6 +20,7 @@ final class LibraryCreationFlowTests: XCTestCase {
     /// isPresented binding had already cleared — nothing happened).
     func testCreateLibraryTransitionsToBrowser() throws {
         let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing"]
         app.launch()
 
         let create = app.buttons["Create Library"]

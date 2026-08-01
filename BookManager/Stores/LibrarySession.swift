@@ -18,6 +18,22 @@ final class LibrarySession {
         case failed(message: String)
     }
 
+    /// What the file importer should do when it completes.
+    enum PickerAction {
+        case create, open, addBooks, calibre
+    }
+
+    /// Request presented to the file importer (menu, toolbar, or welcome screen).
+    var pickerAction: PickerAction?
+    var isPickerPresented = false
+
+    /// A bookmarked library surfaced in the Open Recent menu.
+    struct RecentLibraryEntry: Identifiable, Equatable {
+        public let id: UUID
+        public let url: URL
+        public var name: String { url.lastPathComponent }
+    }
+
     private(set) var state: State = .welcome
     private(set) var repository: LibraryRepository?
     var searchText = "" {
@@ -74,6 +90,36 @@ final class LibrarySession {
 
     func createLibrary(at url: URL) async { await activate(url: url, create: true) }
     func openLibrary(at url: URL) async { await activate(url: url, create: false) }
+    func openLibrary(at url: URL, fallbackToWelcome: Bool) async {
+        await activate(url: url, create: false, fallbackToWelcome: fallbackToWelcome)
+    }
+
+    /// Asks the file importer to run `action` (from a menu, toolbar, or the
+    /// welcome screen).
+    func present(_ action: PickerAction) {
+        pickerAction = action
+        isPickerPresented = true
+    }
+
+    /// All bookmarked libraries with their resolved URLs, newest first.
+    var recentLibraries: [RecentLibraryEntry] {
+        bookmarks.recentLibraries().compactMap { entry in
+            guard let resolved = try? bookmarks.resolve(entry.id) else { return nil }
+            return RecentLibraryEntry(id: entry.id, url: resolved.url)
+        }
+    }
+
+    /// Opens the most recently used library at launch. Falls back to the
+    /// welcome (open/create) screen when there is no bookmark, it cannot be
+    /// resolved, or the library can no longer be opened.
+    func openMostRecentLibrary() async {
+        guard let id = bookmarks.mostRecentlyOpenedLibraryID(),
+              let resolved = try? bookmarks.resolve(id) else {
+            state = .welcome
+            return
+        }
+        await openLibrary(at: resolved.url, fallbackToWelcome: true)
+    }
 
     func closeLibrary() {
         searchTask?.cancel()
@@ -98,11 +144,13 @@ final class LibrarySession {
         calibreImportReport = nil
         calibreImportInProgress = false
         calibreSourcePath = nil
+        pickerAction = nil
+        isPickerPresented = false
     }
 
     // MARK: - Activation
 
-    private func activate(url: URL, create: Bool) async {
+    private func activate(url: URL, create: Bool, fallbackToWelcome: Bool = false) async {
         state = .loading
         let accessed = url.startAccessingSecurityScopedResource()
         do {
@@ -121,7 +169,15 @@ final class LibrarySession {
             await refreshAll()
         } catch {
             if accessed { url.stopAccessingSecurityScopedResource() }
-            state = .failed(message: error.localizedDescription)
+            if fallbackToWelcome {
+                // Auto-reopen on launch: a missing or unopenable last library
+                // drops back to the open/create screen instead of the failure
+                // screen, with an explanation.
+                lastError = "Couldn’t reopen “\(url.lastPathComponent)”: \(error.localizedDescription)"
+                state = .welcome
+            } else {
+                state = .failed(message: error.localizedDescription)
+            }
         }
     }
 
