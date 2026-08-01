@@ -246,14 +246,14 @@ struct CalibreSchema26: CalibreSchemaAdapting {
             return try Row.fetchAll(
                 db,
                 sql: "SELECT book AS book, value AS value FROM \(table) ORDER BY book, id"
-            ).map { (book: $0["book"] as Int, value: $0["value"] as String?) }
+            ).map { (book: $0["book"] as Int, value: Self.valueString($0["value"]?.databaseValue)) }
         }
         let table = "custom_column_\(column.id)"
         guard try !columns(in: table, db).isEmpty else { return [] }
         return try Row.fetchAll(
             db,
             sql: "SELECT book AS book, value AS value FROM \(table) ORDER BY book"
-        ).map { (book: $0["book"] as Int, value: $0["value"] as String?) }
+        ).map { (book: $0["book"] as Int, value: Self.valueString($0["value"]?.databaseValue)) }
     }
 
     func fetchAnnotations(_ db: Database) throws -> [(book: Int, payload: String)] {
@@ -294,6 +294,22 @@ struct CalibreSchema26: CalibreSchemaAdapting {
     func columns(in table: String, _ db: Database) throws -> Set<String> {
         let rows = try Row.fetchAll(db, sql: "PRAGMA table_info(\(table))")
         return Set(rows.compactMap { $0["name"] as String })
+    }
+
+    private static func valueString(_ value: DatabaseValue?) -> String? {
+        guard let value else { return nil }
+        switch value.storage {
+        case .string(let string):
+            return string
+        case .int64(let int):
+            return String(int)
+        case .double(let double):
+            return String(double)
+        case .blob(let data):
+            return String(decoding: data, as: UTF8.self)
+        case .null:
+            return nil
+        }
     }
 
     /// Groups rows by `book` and encodes each group as a JSON array of

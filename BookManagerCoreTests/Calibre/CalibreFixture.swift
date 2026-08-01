@@ -110,6 +110,8 @@ enum CalibreFixture {
                     normalized BOOL NOT NULL, UNIQUE(label));
                 CREATE TABLE custom_column_1 ( id INTEGER PRIMARY KEY,
                     book INTEGER NOT NULL, value TEXT);
+                CREATE TABLE custom_column_3 ( id INTEGER PRIMARY KEY,
+                    book INTEGER NOT NULL, value INTEGER);
                 CREATE TABLE books_custom_column_2_link ( id INTEGER PRIMARY KEY,
                     book INTEGER NOT NULL, value TEXT, extra TEXT);
                 CREATE TABLE library_id ( id INTEGER PRIMARY KEY, uuid TEXT NOT NULL, UNIQUE(uuid));
@@ -134,7 +136,8 @@ enum CalibreFixture {
                         editable, display, is_multiple, normalized)
                     VALUES
                         (1, 'genre', 'Genre', 'text', 0, 1, '{}', 0, 0),
-                        (2, 'shelves', 'Shelves', 'text', 0, 1, '{}', 1, 0)
+                        (2, 'shelves', 'Shelves', 'text', 0, 1, '{}', 1, 0),
+                        (3, 'priority', 'Priority', 'int', 0, 1, '{}', 0, 0)
                     """
             )
 
@@ -272,6 +275,19 @@ enum CalibreFixture {
                 )
             }
         }
+        if let priority = spec.priority {
+            if priority == priority.rounded() {
+                try db.execute(
+                    sql: "INSERT INTO custom_column_3(book, value) VALUES (?, ?)",
+                    arguments: [spec.id, Int64(priority)]
+                )
+            } else {
+                try db.execute(
+                    sql: "INSERT INTO custom_column_3(book, value) VALUES (?, ?)",
+                    arguments: [spec.id, priority]
+                )
+            }
+        }
         if spec.annotations {
             try db.execute(
                 sql: """
@@ -362,6 +378,7 @@ enum CalibreFixture {
         let lccn: String?
         let genre: String?
         let shelves: [String]?
+        let priority: Double?
         let annotations: Bool
         let lastRead: Bool
         let opfTitle: String?
@@ -399,6 +416,7 @@ enum CalibreFixture {
                 lccn: "2018049465",
                 genre: "science",
                 shelves: ["read", "favorites"],
+                priority: 3,
                 annotations: true,
                 lastRead: true,
                 opfTitle: nil,
@@ -427,6 +445,7 @@ enum CalibreFixture {
                 lccn: nil,
                 genre: nil,
                 shelves: nil,
+                priority: nil,
                 annotations: false,
                 lastRead: false,
                 opfTitle: nil,
@@ -455,6 +474,7 @@ enum CalibreFixture {
                 lccn: nil,
                 genre: nil,
                 shelves: nil,
+                priority: 2.5,
                 annotations: false,
                 lastRead: false,
                 opfTitle: nil,
@@ -483,6 +503,7 @@ enum CalibreFixture {
                 lccn: nil,
                 genre: nil,
                 shelves: nil,
+                priority: nil,
                 annotations: false,
                 lastRead: false,
                 opfTitle: nil,
@@ -512,6 +533,7 @@ enum CalibreFixture {
                 lccn: nil,
                 genre: nil,
                 shelves: nil,
+                priority: nil,
                 annotations: false,
                 lastRead: false,
                 opfTitle: "Fallback Title",
@@ -541,6 +563,7 @@ enum CalibreFixture {
                 lccn: nil,
                 genre: nil,
                 shelves: nil,
+                priority: nil,
                 annotations: false,
                 lastRead: false,
                 opfTitle: nil,
@@ -569,6 +592,7 @@ enum CalibreFixture {
                 lccn: nil,
                 genre: nil,
                 shelves: nil,
+                priority: nil,
                 annotations: false,
                 lastRead: false,
                 opfTitle: nil,
@@ -597,6 +621,7 @@ enum CalibreFixture {
                 lccn: nil,
                 genre: nil,
                 shelves: nil,
+                priority: nil,
                 annotations: false,
                 lastRead: false,
                 opfTitle: nil,
@@ -625,6 +650,7 @@ enum CalibreFixture {
                 lccn: nil,
                 genre: "mystery",
                 shelves: nil,
+                priority: nil,
                 annotations: false,
                 lastRead: false,
                 opfTitle: nil,
@@ -653,6 +679,7 @@ enum CalibreFixture {
                 lccn: nil,
                 genre: nil,
                 shelves: nil,
+                priority: nil,
                 annotations: false,
                 lastRead: false,
                 opfTitle: nil,
@@ -681,6 +708,7 @@ enum CalibreFixture {
                 lccn: nil,
                 genre: nil,
                 shelves: nil,
+                priority: nil,
                 annotations: false,
                 lastRead: false,
                 opfTitle: nil,
@@ -709,6 +737,7 @@ enum CalibreFixture {
                 lccn: nil,
                 genre: nil,
                 shelves: nil,
+                priority: nil,
                 annotations: false,
                 lastRead: false,
                 opfTitle: nil,
@@ -737,6 +766,7 @@ enum CalibreFixture {
                 lccn: nil,
                 genre: nil,
                 shelves: nil,
+                priority: nil,
                 annotations: false,
                 lastRead: false,
                 opfTitle: nil,

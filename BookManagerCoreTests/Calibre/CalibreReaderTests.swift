@@ -57,7 +57,19 @@ struct CalibreReaderTests {
         #expect(record.comments == "<p>Great book</p>")
         #expect(record.rawMetadata["calibre.custom.genre"] == "science")
         #expect(record.rawMetadata["calibre.custom.shelves"] == #"["read","favorites"]"#)
+        // INTEGER-storage numeric custom column decodes without trapping.
+        #expect(record.rawMetadata["calibre.custom.priority"] == "3")
         #expect(record.opfPath == "metadata.opf")
+    }
+
+    @Test
+    func numericCustomColumnsDecodeWithoutCrash() throws {
+        // Regression: GRDB's strict `as String?` cast traps on non-string
+        // storage classes. A REAL (fractional) value must decode losslessly.
+        let library = try makeLibrary()
+        let record = try book(3, from: library)
+
+        #expect(record.rawMetadata["calibre.custom.priority"] == "2.5")
     }
 
     @Test
