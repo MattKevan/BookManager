@@ -86,6 +86,7 @@ final class LibrarySession {
     ) {
         self.deviceID = deviceID
         self.bookmarks = bookmarks
+        recentLibraries = Self.resolveRecents(bookmarks)
     }
 
     func createLibrary(at url: URL) async { await activate(url: url, create: true) }
@@ -101,8 +102,12 @@ final class LibrarySession {
         isPickerPresented = true
     }
 
-    /// All bookmarked libraries with their resolved URLs, newest first.
-    var recentLibraries: [RecentLibraryEntry] {
+    /// Bookmarked libraries with their resolved URLs, newest first. Stored so
+    /// the Open Recent menu observes refreshes; updated whenever a library is
+    /// opened or closed.
+    private(set) var recentLibraries: [RecentLibraryEntry]
+
+    private static func resolveRecents(_ bookmarks: LibraryBookmarkStore) -> [RecentLibraryEntry] {
         bookmarks.recentLibraries().compactMap { entry in
             guard let resolved = try? bookmarks.resolve(entry.id) else { return nil }
             return RecentLibraryEntry(id: entry.id, url: resolved.url)
@@ -111,8 +116,10 @@ final class LibrarySession {
 
     /// Opens the most recently used library at launch. Falls back to the
     /// welcome (open/create) screen when there is no bookmark, it cannot be
-    /// resolved, or the library can no longer be opened.
+    /// resolved, or the library can no longer be opened. No-op when a library
+    /// is already loaded (e.g. the window reappeared mid-session).
     func openMostRecentLibrary() async {
+        guard repository == nil else { return }
         guard let id = bookmarks.mostRecentlyOpenedLibraryID(),
               let resolved = try? bookmarks.resolve(id) else {
             state = .welcome
@@ -146,6 +153,7 @@ final class LibrarySession {
         calibreSourcePath = nil
         pickerAction = nil
         isPickerPresented = false
+        recentLibraries = Self.resolveRecents(bookmarks)
     }
 
     // MARK: - Activation
@@ -162,6 +170,7 @@ final class LibrarySession {
                 repository = try await .open(at: url, indexesDirectory: indexes, deviceID: deviceID)
             }
             try bookmarks.save(url, for: repository.manifest.id)
+            recentLibraries = Self.resolveRecents(bookmarks)
             activeSecurityURL?.stopAccessingSecurityScopedResource()
             activeSecurityURL = accessed ? url : nil
             self.repository = repository
