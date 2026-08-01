@@ -29,9 +29,9 @@ final class LibrarySession {
 
     /// A bookmarked library surfaced in the Open Recent menu.
     struct RecentLibraryEntry: Identifiable, Equatable {
-        public let id: UUID
-        public let url: URL
-        public var name: String { url.lastPathComponent }
+        let id: UUID
+        let url: URL
+        var name: String { url.lastPathComponent }
     }
 
     private(set) var state: State = .welcome

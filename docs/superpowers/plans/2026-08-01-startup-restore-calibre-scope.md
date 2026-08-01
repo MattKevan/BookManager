@@ -46,7 +46,7 @@ Execution decision: use this worktree as the execution workspace. Task 1 (Calibr
 
 Root cause: `selectCalibreLibrary` reads the user's Calibre folder (snapshot copy of `metadata.db` + later per-book format copies during import) without `startAccessingSecurityScopedResource()`, so the sandbox denies the reads. The working open/create path (`activate`) does start the scope — that is the control case proving the fix.
 
-- [ ] **Step 1: Add the scope-holding property and helpers**
+- [x] **Step 1: Add the scope-holding property and helpers**
 
 In `BookManager/Stores/LibrarySession.swift`, next to `private var activeSecurityURL: URL?`, add:
 
@@ -63,7 +63,7 @@ private func stopCalibreAccess() {
 }
 ```
 
-- [ ] **Step 2: Start the scope in `selectCalibreLibrary` before opening, and release it on every path that never shows the wizard**
+- [x] **Step 2: Start the scope in `selectCalibreLibrary` before opening, and release it on every path that never shows the wizard**
 
 Replace the current `selectCalibreLibrary(at:)` body:
 
@@ -110,7 +110,7 @@ Replace the current `selectCalibreLibrary(at:)` body:
     }
 ```
 
-- [ ] **Step 3: Release the scope once the import completes reading the source**
+- [x] **Step 3: Release the scope once the import completes reading the source**
 
 In `importCalibre()`, inside the `do` block immediately after `calibreImportReport = try await service.importBooks(...)` succeeds, add:
 
@@ -122,7 +122,7 @@ In `importCalibre()`, inside the `do` block immediately after `calibreImportRepo
 
 Release on success only: when `importBooks` throws, `calibreImportReport` stays nil, the wizard remains interactive with the summary shown, and a retry re-reads the source — the scope must still be held then. The failure path is cleaned up by `cancelCalibreImport()` on wizard disappear (Step 4) or `closeLibrary()`.
 
-- [ ] **Step 4: Add `cancelCalibreImport()` and wire `closeLibrary()`**
+- [x] **Step 4: Add `cancelCalibreImport()` and wire `closeLibrary()`**
 
 Add to `LibrarySession`:
 
@@ -149,7 +149,7 @@ In `closeLibrary()`, next to the existing `activeSecurityURL` stop, add:
 
 (Keep the existing inline `calibre*` resets in `closeLibrary()`; they are now redundant with `cancelCalibreImport()` but harmless — do not bundle a refactor.)
 
-- [ ] **Step 5: Release the scope when the wizard sheet disappears**
+- [x] **Step 5: Release the scope when the wizard sheet disappears**
 
 In `BookManager/Views/CalibreImportView.swift`, attach to the root `VStack` (the one with `frame(minWidth:minHeight:)`):
 
@@ -157,7 +157,7 @@ In `BookManager/Views/CalibreImportView.swift`, attach to the root `VStack` (the
         .onDisappear { session.cancelCalibreImport() }
 ```
 
-- [ ] **Step 6: Build and verify the fix manually**
+- [x] **Step 6: Build and verify the fix manually**
 
 Run: `./script/build_and_run.sh`
 
@@ -169,7 +169,7 @@ Expected:
 4. Import all books; the report shows them imported with no permission-style `.failed` rows, and the books exist in the library.
 5. Cancel the wizard; then re-open it and repeat steps 2–4 (scope must not leak: repeated open/cancel cycles stay stable).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add BookManager/Stores/LibrarySession.swift BookManager/Views/CalibreImportView.swift
@@ -192,7 +192,7 @@ git commit -m "fix: hold security-scoped access on the Calibre source library du
 - Consumes: `LibraryBookmarkStore.resolve(_:)` (existing), `LibrarySession.openLibrary(at:)` (existing).
 - Produces: `LibraryBookmarkStore.lastOpenedLibraryID: UUID?` (get/set, persisted under `"lastOpenedLibraryID"`), `LibraryBookmarkStore.resolveLastOpened() -> URL?`, `LibrarySession.restoreLastOpened() async`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `BookManagerCoreTests/Security/LibraryBookmarkStoreTests.swift`:
 
@@ -244,7 +244,7 @@ Append to `BookManagerCoreTests/Security/LibraryBookmarkStoreTests.swift`:
     }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run:
 
@@ -254,7 +254,7 @@ xcodebuild -project BookManager.xcodeproj -scheme BookManager -destination 'plat
 
 Expected: FAIL — `LibraryBookmarkStore` has no member `lastOpenedLibraryID` / `resolveLastOpened`.
 
-- [ ] **Step 3: Implement the persistence in `LibraryBookmarkStore`**
+- [x] **Step 3: Implement the persistence in `LibraryBookmarkStore`**
 
 In `BookManagerCore/Security/LibraryBookmarkStore.swift`, add the key and the two members:
 
@@ -288,11 +288,11 @@ public struct LibraryBookmarkStore: @unchecked Sendable {
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Same command as Step 2. Expected: PASS (all three new tests + the existing one).
 
-- [ ] **Step 5: Persist the marker on every successful open**
+- [x] **Step 5: Persist the marker on every successful open**
 
 In `BookManager/Stores/LibrarySession.swift`, inside `activate(url:create:)`, in the success path right after the existing `try bookmarks.save(url, for: repository.manifest.id)`, add:
 
@@ -300,7 +300,7 @@ In `BookManager/Stores/LibrarySession.swift`, inside `activate(url:create:)`, in
             bookmarks.lastOpenedLibraryID = repository.manifest.id
 ```
 
-- [ ] **Step 6: Add `restoreLastOpened()` to the session**
+- [x] **Step 6: Add `restoreLastOpened()` to the session**
 
 Add to `LibrarySession` (place after `openLibrary(at:)`):
 
@@ -317,7 +317,7 @@ Add to `LibrarySession` (place after `openLibrary(at:)`):
 
 Note: `openLibrary(at:)` → `activate` already starts the security scope on the resolved bookmark URL, validates the manifest, and rebuilds the catalog; a corrupt-but-present library lands in the existing `.failed` UI (Decision D2).
 
-- [ ] **Step 7: Trigger the restore at launch**
+- [x] **Step 7: Trigger the restore at launch**
 
 In `BookManager/App/BookManagerApp.swift`:
 
@@ -328,7 +328,7 @@ In `BookManager/App/BookManagerApp.swift`:
         }
 ```
 
-- [ ] **Step 8: Full test suite + manual verification**
+- [x] **Step 8: Full test suite + manual verification**
 
 Run all tests:
 
@@ -346,7 +346,7 @@ Manual (via `./script/build_and_run.sh`):
 4. Quit, move the library folder to the Trash, relaunch → welcome screen, no error alert.
 5. Open/create another library, quit, relaunch → that library reopens (marker follows the most recent open).
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add BookManagerCore/Security/LibraryBookmarkStore.swift \
