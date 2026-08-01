@@ -117,8 +117,13 @@ public actor FolderReconciler {
             }
         }
         // 2. Short-ID name scan (canonical folder names embed the id prefix).
+        // Never discover or re-fork our own conflict copies — they embed the
+        // same prefix and would be forked again on the next pass if the
+        // content-mismatch branch fires (unbounded folder growth).
         let shortID = String(book.id.uuidString.prefix(8)).lowercased()
         for url in await bookFolderCandidates() where !isExcluded(url) {
+            if url.lastPathComponent.localizedCaseInsensitiveContains(" (conflict ")
+                { continue }
             if url.lastPathComponent.localizedCaseInsensitiveContains(shortID) {
                 return url
             }

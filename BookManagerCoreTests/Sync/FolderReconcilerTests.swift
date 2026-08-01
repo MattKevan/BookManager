@@ -208,4 +208,29 @@ struct FolderReconcilerTests {
         let trashDir = h.layout.trashRoot.appending(path: book.id.uuidString, directoryHint: .isDirectory)
         #expect(FileManager.default.fileExists(atPath: trashDir.path))
     }
+
+    @Test
+    func conflictCopiesAreNeverDiscovered() async throws {
+        // Regression: a conflict-copy sibling embeds the book's short id and
+        // would be found by the discovery scan when the canonical folder is
+        // gone — re-forked again on the next pass (unbounded folder growth).
+        // The scan must never adopt, rename, or re-fork conflict copies.
+        let h = try await Harness()
+        let book = try await h.createBook(title: "Loop")
+        let canonical = CanonicalPathBuilder.relativeDirectory(
+            bookID: book.id, title: book.title, authors: book.authors
+        )
+        try FileManager.default.removeItem(at: h.folderURL(canonical))
+        let shortID = String(book.id.uuidString.prefix(8)).lowercased()
+        let conflictURL = h.folderURL(canonical + " (conflict \(shortID))")
+        try FileManager.default.createDirectory(at: conflictURL, withIntermediateDirectories: true)
+
+        let report = try await h.reconciler().reconcile()
+
+        #expect(report.missingFolders == [book.id])
+        #expect(report.conflictCopies.isEmpty)
+        #expect(report.renamed.isEmpty)
+        // The conflict copy is preserved untouched.
+        #expect(FileManager.default.fileExists(atPath: conflictURL.path))
+    }
 }
