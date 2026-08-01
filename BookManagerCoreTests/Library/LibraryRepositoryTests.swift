@@ -186,4 +186,34 @@ struct LibraryRepositoryV2Tests {
         #expect(books[0].tags == ["science"])
         #expect(try await rebuilt.facetCounts(.series).first?.value == "Studies")
     }
+
+    @Test
+    func updateAndDeleteSurviveCatalogRebuild() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        let firstIndexes = FileManager.default.temporaryDirectory
+            .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        let secondIndexes = FileManager.default.temporaryDirectory
+            .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        let repository = try await LibraryRepository.create(at: root, indexesDirectory: firstIndexes, deviceID: UUID())
+        let book = try await repository.createBook(
+            metadata: NewBookMetadata(title: "Range", authors: ["David Epstein"], tags: ["science"]),
+            staged: [], cover: nil
+        )
+        _ = try await repository.updateBook(id: book.id, edit: BookEdit(title: "Range: Revised", tags: ["science", "sport"]))
+
+        // Rebuild from the change store into a fresh catalogue.
+        let rebuilt = try await LibraryRepository.open(at: root, indexesDirectory: secondIndexes, deviceID: UUID())
+        let updated = try await rebuilt.books().first
+        #expect(updated?.title == "Range: Revised")
+        #expect(updated?.tags == ["science", "sport"])
+
+        // Delete, then rebuild again — the tombstone must survive too.
+        try await rebuilt.deleteBook(id: book.id)
+        let thirdIndexes = FileManager.default.temporaryDirectory
+            .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        let rebuiltAgain = try await LibraryRepository.open(at: root, indexesDirectory: thirdIndexes, deviceID: UUID())
+        #expect(try await rebuiltAgain.books().isEmpty)
+        #expect(try await rebuiltAgain.deletedBooks().map(\.id) == [book.id])
+    }
 }

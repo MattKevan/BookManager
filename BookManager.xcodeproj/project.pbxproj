@@ -13,7 +13,7 @@
 		0E7B22D1EA6EB703346AE527 /* BookManagerUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F5B9507D6E9B4C1969F6D12 /* BookManagerUITests.swift */; };
 		1680E06ADD1A537B0869D47F /* Automerge in Frameworks */ = {isa = PBXBuildFile; productRef = E73D1BC292F51DC0789C0A2A /* Automerge */; };
 		183696E853097A577B690223 /* BookTableView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B299D92FE747584FDD46D395 /* BookTableView.swift */; };
-		1EB7D845512F28CEB3309FEB /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = 3818F9695548F67FF6E86321 /* ZIPFoundation */; };
+		1EB7D845512F28CEB3309FEB /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 770243B41284AFCA8EC2E14D /* GRDB */; };
 		25DDA9C20029305707541FC9 /* BookDocumentSchema.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37F9BBB1AC9D128C81F9BE1A /* BookDocumentSchema.swift */; };
 		2AF79754097A6BBA6AF9274A /* LibraryStorageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA4DE265111712DFFE44F5CE /* LibraryStorageTests.swift */; };
 		332A7B733BC508252826E4FF /* BookManagerCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EA00130013634EE3D52C9CCF /* BookManagerCore.framework */; };
@@ -26,6 +26,7 @@
 		460DEA70A0F96B23762F0A45 /* BookManagerCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = EA00130013634EE3D52C9CCF /* BookManagerCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		4ACDD55DE290A18AF7204E1B /* LibraryBookmarkStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10C0171D18484766BD7A3C27 /* LibraryBookmarkStore.swift */; };
 		614F0F5C1822825B76C51004 /* LibraryLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEFDAE49CAE9FF70035E4F38 /* LibraryLayout.swift */; };
+		620DE3A55974B7D0A1F0DE51 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = 3818F9695548F67FF6E86321 /* ZIPFoundation */; };
 		6CFD9DA7BA4FEED223E643F0 /* MetadataEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D71CFB152C85ECD05FAEE34F /* MetadataEditorView.swift */; };
 		7071C6A3153AE657C95AB3AF /* IndexedBook.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18B93C18F17691B633BC2D72 /* IndexedBook.swift */; };
 		7413F3389FB8C25A4F071CC8 /* Fixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08CB9DC449D9806CB41CBEA1 /* Fixtures.swift */; };
@@ -165,7 +166,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				332A7B733BC508252826E4FF /* BookManagerCore.framework in Frameworks */,
-				1EB7D845512F28CEB3309FEB /* ZIPFoundation in Frameworks */,
+				1EB7D845512F28CEB3309FEB /* GRDB in Frameworks */,
+				620DE3A55974B7D0A1F0DE51 /* ZIPFoundation in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -464,6 +466,7 @@
 			);
 			name = BookManagerCoreTests;
 			packageProductDependencies = (
+				770243B41284AFCA8EC2E14D /* GRDB */,
 				3818F9695548F67FF6E86321 /* ZIPFoundation */,
 			);
 			productName = BookManagerCoreTests;
@@ -766,7 +769,6 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Config/BookManager.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = N7J3BYZ94H;
 				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Book Manager";
@@ -803,7 +805,6 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Config/BookManager.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = N7J3BYZ94H;
 				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Book Manager";
@@ -974,6 +975,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 44635DEC287817240082396B /* XCRemoteSwiftPackageReference "ZIPFoundation" */;
 			productName = ZIPFoundation;
+		};
+		770243B41284AFCA8EC2E14D /* GRDB */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B15CFCE30AD86161C178C8C3 /* XCRemoteSwiftPackageReference "GRDB.swift" */;
+			productName = GRDB;
 		};
 		E73D1BC292F51DC0789C0A2A /* Automerge */ = {
 			isa = XCSwiftPackageProductDependency;

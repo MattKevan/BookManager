@@ -164,6 +164,16 @@ public actor BookFolder {
         layout.trashRoot.appending(path: bookID.uuidString, directoryHint: .isDirectory)
     }
 
+    /// Journal entries left behind by interrupted mutations — the read-only
+    /// surface diagnostics use to surface incomplete operations.
+    public func pendingJournalEntries() throws -> [URL] {
+        guard manager.fileExists(atPath: layout.transactionsRoot.path) else { return [] }
+        return try manager.contentsOfDirectory(
+            at: layout.transactionsRoot,
+            includingPropertiesForKeys: nil
+        ).filter { $0.pathExtension == "json" }
+    }
+
     private func begin(operation: String, bookID: UUID, oldPath: String?, newPath: String?) throws -> URL {
         try manager.createDirectory(at: layout.transactionsRoot, withIntermediateDirectories: true)
         let entry = JournalEntry(operation: operation, bookID: bookID, oldPath: oldPath, newPath: newPath)

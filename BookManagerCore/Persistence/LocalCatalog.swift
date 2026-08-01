@@ -157,7 +157,7 @@ public actor LocalCatalog {
         try database.read { db in
             try String.fetchAll(
                 db,
-                sql: "SELECT bookID FROM bookFormatHash WHERE contentHash = ?",
+                sql: "SELECT bookID FROM bookFormatHash WHERE contentHash = ? ORDER BY bookID",
                 arguments: [contentHash]
             ).compactMap { UUID(uuidString: $0) }
         }

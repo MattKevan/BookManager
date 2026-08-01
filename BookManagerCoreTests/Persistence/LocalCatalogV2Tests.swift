@@ -1,4 +1,5 @@
 import Foundation
+import GRDB
 import Testing
 @testable import BookManagerCore
 
@@ -102,5 +103,70 @@ struct LocalCatalogV2Tests {
         #expect(try await catalog.bookIDs(byFormatHash: "h2") == [id])
         #expect(try await catalog.bookIDs(byFormatHash: "h1").isEmpty)
         #expect(try await catalog.allBooks().first?.formats.first?.kind == "PDF")
+    }
+
+    @Test
+    func formatFacetCountsAndFilters() async throws {
+        let catalog = try catalog()
+        try await catalog.upsert(book(title: "A", formats: [
+            BookFormatRecord(kind: "EPUB", filename: "a.epub", contentHash: "h1", size: 1)
+        ]))
+        try await catalog.upsert(book(id: UUID(), title: "B", formats: [
+            BookFormatRecord(kind: "PDF", filename: "b.pdf", contentHash: "h2", size: 2),
+            BookFormatRecord(kind: "EPUB", filename: "b.epub", contentHash: "h3", size: 3)
+        ]))
+
+        let counts = try await catalog.facetCounts(.format)
+        #expect(counts.first { $0.value == "EPUB" }?.count == 2)
+        #expect(counts.first { $0.value == "PDF" }?.count == 1)
+        #expect(try await catalog.books(facetType: .format, value: "PDF").map(\.title) == ["B"])
+    }
+
+    @Test
+    func v1DatabaseUpgradesToV2Schema() async throws {
+        // Build a genuine slice-1 database exactly as createV1Schema did — book
+        // table + FTS5 bookSearch + the migrator's bookkeeping row — insert a
+        // v1-shaped row, then reopen through LocalCatalog. The v2 migration must
+        // run cleanly. The v1 row itself is deliberately dropped by that
+        // migration: the catalogue is disposable and is rebuilt from the change
+        // store, so the assertion is that the upgrade runs and the v2 schema is
+        // live, not that v1 data survives.
+        let databaseURL = FileManager.default.temporaryDirectory
+            .appending(path: "\(UUID().uuidString).sqlite")
+        let v1 = try DatabaseQueue(path: databaseURL.path)
+        try await v1.write { db in
+            try db.execute(sql: "CREATE TABLE grdb_migrations (identifier TEXT NOT NULL PRIMARY KEY)")
+            try db.execute(sql: "INSERT INTO grdb_migrations(identifier) VALUES ('createBookIndex')")
+            try db.create(table: "book") { table in
+                table.column("id", .text).primaryKey()
+                table.column("title", .text).notNull()
+                table.column("authors", .text).notNull()
+                table.column("modifiedMilliseconds", .integer).notNull()
+                table.column("isDeleted", .boolean).notNull()
+                table.column("snapshot", .blob).notNull()
+            }
+            try db.create(virtualTable: "bookSearch", using: FTS5()) { table in
+                table.column("bookID").notIndexed()
+                table.column("title")
+                table.column("authors")
+                table.tokenizer = .unicode61()
+            }
+            try db.execute(
+                sql: "INSERT INTO book(id, title, authors, modifiedMilliseconds, isDeleted, snapshot) VALUES (?, ?, ?, ?, ?, ?)",
+                arguments: [UUID().uuidString, "Old", "[\"A\"]", 1_000, false, Data([9])]
+            )
+        }
+        try v1.close()
+
+        let catalog = try LocalCatalog(databaseURL: databaseURL)
+        #expect(try await catalog.allBooks().isEmpty)
+
+        // The v2 schema is live: upsert and read back a v2 book.
+        try await catalog.upsert(book(title: "New"))
+        let after = try await catalog.allBooks()
+        #expect(after.count == 1)
+        #expect(after[0].title == "New")
+        #expect(after[0].tags.isEmpty)
+        #expect(after[0].formats.isEmpty)
     }
 }

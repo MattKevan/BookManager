@@ -68,6 +68,7 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
     dependencies:
       - target: BookManagerCore
+      - package: GRDB
       - package: ZIPFoundation
 
   BookManagerUITests:

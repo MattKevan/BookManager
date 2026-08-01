@@ -203,10 +203,12 @@ public actor LibraryRepository: LibraryRepositoryImporting {
                 },
                 newFormats: resolved.formats
             )
-            let directory = await folder.bookDirectoryURL(relativePath: newPath)
-            try OpfGenerator.opfData(bookID: id, resolved: resolved)
-                .write(to: directory.appending(path: "metadata.opf"), options: .atomic)
         }
+        // metadata.opf is a derived sidecar of the resolved metadata: keep it in
+        // sync on every successful edit, not only when the canonical path moves.
+        let directory = await folder.bookDirectoryURL(relativePath: newPath)
+        try OpfGenerator.opfData(bookID: id, resolved: resolved)
+            .write(to: directory.appending(path: "metadata.opf"), options: .atomic)
         let updated = try makeIndexedBook(document, relativePath: newPath)
         try await catalog.upsert(updated)
         return updated

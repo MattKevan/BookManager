@@ -152,6 +152,93 @@ struct BookFolderTests {
         #expect(layout.transactionsRoot.children.isEmpty)
     }
 
+    @Test
+    func renameRenamesFormatFilesWhoseCanonicalNameChanged() async throws {
+        let (_, layout) = try makeLayout()
+        let folder = BookFolder(layout: layout)
+        let bookID = UUID()
+        let resolved = ResolvedBook(
+            id: bookID, title: "Range", authors: ["David Epstein"],
+            series: nil, seriesIndex: nil, tags: [], rating: nil, publisher: nil,
+            publicationDate: nil, addedDate: nil, languages: [], identifiers: [:],
+            comments: nil, formats: [], cover: nil, isDeleted: false,
+            modifiedClock: HybridLogicalClock(physicalMilliseconds: 1, nodeID: UUID())
+        )
+        let source = FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).epub")
+        try Data("rename-me".utf8).write(to: source)
+        let materialized = try await folder.materialize(
+            bookID: bookID, resolved: resolved,
+            staged: [try await folder.stage(from: source)], cover: nil
+        )
+        let oldFormat = materialized.formats[0]
+
+        let retitled = ResolvedBook(
+            id: bookID, title: "Range: Revised", authors: ["David Epstein"],
+            series: nil, seriesIndex: nil, tags: [], rating: nil, publisher: nil,
+            publicationDate: nil, addedDate: nil, languages: [], identifiers: [:],
+            comments: nil, formats: [], cover: nil, isDeleted: false,
+            modifiedClock: HybridLogicalClock(physicalMilliseconds: 2, nodeID: UUID())
+        )
+        let newFormat = BookFormatValue(
+            kind: "EPUB",
+            filename: CanonicalPathBuilder.formatFileName(
+                title: "Range: Revised", authors: ["David Epstein"], kind: "EPUB"
+            ),
+            contentHash: oldFormat.contentHash, size: oldFormat.size
+        )
+        let newPath = CanonicalPathBuilder.relativeDirectory(
+            bookID: bookID, title: "Range: Revised", authors: ["David Epstein"]
+        )
+        try await folder.rename(
+            bookID: bookID,
+            from: materialized.path, to: newPath,
+            oldFormats: [oldFormat], newFormats: [newFormat]
+        )
+
+        let dir = await folder.bookDirectoryURL(relativePath: newPath)
+        #expect(FileManager.default.fileExists(atPath: dir.appending(path: newFormat.filename).path))
+        #expect(!FileManager.default.fileExists(atPath: dir.appending(path: oldFormat.filename).path))
+        #expect(layout.transactionsRoot.children.isEmpty)
+    }
+
+    @Test
+    func restoreWithoutTrashEntryThrows() async throws {
+        let (_, layout) = try makeLayout()
+        let folder = BookFolder(layout: layout)
+        let bookID = UUID()
+        await #expect(throws: BookFolderError.trashEntryMissing(bookID)) {
+            _ = try await folder.restore(bookID: bookID, relativePath: "A/B (12345678)")
+        }
+    }
+
+    @Test
+    func interruptedMutationLeavesJournalEntry() async throws {
+        let (_, layout) = try makeLayout()
+        let folder = BookFolder(layout: layout)
+        let bookID = UUID()
+        let resolved = ResolvedBook(
+            id: bookID, title: "Range", authors: ["David Epstein"],
+            series: nil, seriesIndex: nil, tags: [], rating: nil, publisher: nil,
+            publicationDate: nil, addedDate: nil, languages: [], identifiers: [:],
+            comments: nil, formats: [], cover: nil, isDeleted: false,
+            modifiedClock: HybridLogicalClock(physicalMilliseconds: 1, nodeID: UUID())
+        )
+        let materialized = try await folder.materialize(bookID: bookID, resolved: resolved, staged: [], cover: nil)
+        let target = await folder.bookDirectoryURL(relativePath: materialized.path)
+
+        // Simulate an interrupted mutation: a journal entry left behind without
+        // its completion (the actor's begin/end normally pair and clean up).
+        try FileManager.default.createDirectory(at: layout.transactionsRoot, withIntermediateDirectories: true)
+        let journalURL = layout.transactionsRoot.appending(path: "\(UUID().uuidString).json")
+        let entry = #"{"operation":"trash","bookID":"\(bookID.uuidString)","oldPath":"\(materialized.path)"}"#
+        try Data(entry.utf8).write(to: journalURL)
+
+        // The interrupted operation is visible to diagnostics...
+        #expect(try await folder.pendingJournalEntries().count == 1)
+        // ...and the book folder itself was never moved.
+        #expect(FileManager.default.fileExists(atPath: target.path))
+    }
+
     private static func jpegFixture() throws -> Data {
         // 1x1 red JPEG produced via ImageIO.
         let colorSpace = CGColorSpaceCreateDeviceRGB()

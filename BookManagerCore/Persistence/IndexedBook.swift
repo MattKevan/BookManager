@@ -103,7 +103,14 @@ public struct IndexedBook: Identifiable, Equatable, Sendable {
 
 extension IndexedBook: FetchableRecord {
     public init(row: Row) {
-        id = UUID(uuidString: row["id"] as String) ?? UUID()
+        // The catalogue is disposable and rebuildable from the change store, so a
+        // corrupt row id is a broken build, not a recoverable condition. Fail
+        // loudly rather than silently fabricating a random identity (which would
+        // corrupt lookups and updates for the book).
+        guard let id = UUID(uuidString: row["id"] as String) else {
+            fatalError("Corrupt catalogue row: unparseable book id '\(row["id"] as String)'")
+        }
+        self.id = id
         title = row["title"] as String
         authors = (try? JSONCoding.decode([String].self, from: row["authors"] as String?)) ?? []
         series = row["series"] as String?
