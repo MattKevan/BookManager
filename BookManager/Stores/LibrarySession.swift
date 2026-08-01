@@ -20,7 +20,17 @@ final class LibrarySession {
 
     private(set) var state: State = .welcome
     private(set) var repository: LibraryRepository?
-    var searchText = "" { didSet { Task { await refreshBooks() } } }
+    var searchText = "" {
+        didSet {
+            searchTask?.cancel()
+            searchTask = Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(200))
+                guard !Task.isCancelled else { return }
+                await refreshBooks()
+            }
+        }
+    }
+    var lastError: String?
     var viewMode: ViewMode = .table
     var selection = Set<UUID>()
     var selectedFacet: FacetSelection?
@@ -39,6 +49,7 @@ final class LibrarySession {
     private let deviceID: UUID
     private let bookmarks: LibraryBookmarkStore
     private var activeSecurityURL: URL?
+    private var searchTask: Task<Void, Never>?
 
     struct FacetSelection: Hashable {
         let type: FacetType
@@ -57,6 +68,8 @@ final class LibrarySession {
     func openLibrary(at url: URL) async { await activate(url: url, create: false) }
 
     func closeLibrary() {
+        searchTask?.cancel()
+        searchTask = nil
         activeSecurityURL?.stopAccessingSecurityScopedResource()
         activeSecurityURL = nil
         repository = nil
@@ -65,8 +78,12 @@ final class LibrarySession {
         deletedBooks = []
         selection = []
         selectedFacet = nil
+        searchText = ""
+        missingFiles = []
+        viewMode = .table
         importReport = nil
         inspectorBook = nil
+        lastError = nil
     }
 
     // MARK: - Activation
@@ -176,7 +193,11 @@ final class LibrarySession {
     func delete(ids: Set<UUID>) async {
         guard let repository else { return }
         for id in ids {
-            _ = try? await repository.deleteBook(id: id)
+            do {
+                try await repository.deleteBook(id: id)
+            } catch {
+                lastError = error.localizedDescription
+            }
         }
         selection.removeAll()
         await refreshAll()
@@ -184,20 +205,34 @@ final class LibrarySession {
 
     func restore(id: UUID) async {
         guard let repository else { return }
-        _ = try? await repository.restoreBook(id: id)
+        do {
+            _ = try await repository.restoreBook(id: id)
+        } catch {
+            lastError = error.localizedDescription
+        }
         await refreshAll()
     }
 
     // MARK: - Open / reveal
 
     func open(id: UUID) async {
-        guard let repository, let url = try? await repository.formatFileURL(id: id) else { return }
-        NSWorkspace.shared.open(url)
+        guard let repository else { return }
+        do {
+            guard let url = try await repository.formatFileURL(id: id) else { return }
+            NSWorkspace.shared.open(url)
+        } catch {
+            lastError = error.localizedDescription
+        }
     }
 
     func reveal(id: UUID) async {
-        guard let repository, let url = try? await repository.bookFolderURL(id: id) else { return }
-        NSWorkspace.shared.activateFileViewerSelecting([url])
+        guard let repository else { return }
+        do {
+            guard let url = try await repository.bookFolderURL(id: id) else { return }
+            NSWorkspace.shared.activateFileViewerSelecting([url])
+        } catch {
+            lastError = error.localizedDescription
+        }
     }
 
     var libraryRoot: URL? {
@@ -208,7 +243,11 @@ final class LibrarySession {
 
     func rebuildIndex() async {
         guard let repository else { return }
-        _ = try? await repository.rebuildCatalog()
+        do {
+            try await repository.rebuildCatalog()
+        } catch {
+            lastError = error.localizedDescription
+        }
         await refreshAll()
     }
 

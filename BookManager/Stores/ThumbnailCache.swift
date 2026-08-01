@@ -7,10 +7,11 @@ import QuickLookThumbnailing
 final class ThumbnailCache {
     static let shared = ThumbnailCache()
 
-    private var memory: [UUID: NSImage] = [:]
+    private var memory: [String: NSImage] = [:]
 
     func thumbnail(for book: IndexedBook, repository: LibraryRepository?) async -> NSImage? {
-        if let cached = memory[book.id] { return cached }
+        let key = cacheKey(for: book)
+        if let cached = memory[key] { return cached }
 
         // Prefer the materialized cover file.
         if let repository, !book.relativePath.isEmpty, book.coverHash != nil {
@@ -18,7 +19,7 @@ final class ThumbnailCache {
                 .appending(path: book.relativePath, directoryHint: .isDirectory)
                 .appending(path: "cover.jpg")
             if let image = NSImage(contentsOf: coverURL) {
-                memory[book.id] = image
+                memory[key] = image
                 return image
             }
         }
@@ -39,12 +40,19 @@ final class ThumbnailCache {
             }
         }
         if let image {
-            memory[book.id] = image
+            memory[key] = image
         }
         return image
     }
 
+    private func cacheKey(for book: IndexedBook) -> String {
+        "\(book.id.uuidString)|\(book.coverHash ?? "")|\(book.formats.first?.contentHash ?? "")"
+    }
+
     func remove(_ id: UUID) {
-        memory.removeValue(forKey: id)
+        let prefix = "\(id.uuidString)|"
+        for key in memory.keys where key.hasPrefix(prefix) {
+            memory.removeValue(forKey: key)
+        }
     }
 }

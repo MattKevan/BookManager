@@ -90,8 +90,15 @@ struct ContentView: View {
         .sheet(isPresented: $showDiagnostics) {
             DiagnosticsView()
         }
-        .onChange(of: showDiagnostics) { _, presented in
-            if presented { Task { await session.reloadDiagnostics() } }
+        .alert(
+            "Something went wrong",
+            isPresented: Binding(
+                get: { session.lastError != nil },
+                set: { if !$0 { session.lastError = nil } }
+            )
+        ) {
+        } message: {
+            Text(session.lastError ?? "")
         }
         .environment(\.librarySession, session)
     }

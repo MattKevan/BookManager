@@ -91,7 +91,7 @@ struct MetadataEditorView: View {
         let seriesEdit: FieldEdit<String> = newSeries.isEmpty ? .clear : .set(newSeries)
         let trimmedIndex = seriesIndex.trimmingCharacters(in: .whitespacesAndNewlines)
         let newIndex = trimmedIndex.isEmpty ? nil : Double(trimmedIndex)
-        let indexEdit: FieldEdit<Double> = newSeries.isEmpty ? .keep : (newIndex.map { .set($0) } ?? .clear)
+        let indexEdit: FieldEdit<Double> = newSeries.isEmpty ? .clear : (newIndex.map { .set($0) } ?? .clear)
         let ratingEdit: FieldEdit<Int> = rating == 0 ? .clear : .set(rating)
         let publisherEdit: FieldEdit<String> = {
             let value = publisher.trimmingCharacters(in: .whitespacesAndNewlines)
