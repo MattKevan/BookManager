@@ -40,6 +40,7 @@ public struct NewBookMetadata: Sendable {
     public var rating: Int?
     public var publisher: String?
     public var publicationDate: Date?
+    public var addedDate: Date?
     public var languages: [String]
     public var identifiers: [String: String]
     public var comments: String?
@@ -54,6 +55,7 @@ public struct NewBookMetadata: Sendable {
         rating: Int? = nil,
         publisher: String? = nil,
         publicationDate: Date? = nil,
+        addedDate: Date? = nil,
         languages: [String] = [],
         identifiers: [String: String] = [:],
         comments: String? = nil,
@@ -67,6 +69,7 @@ public struct NewBookMetadata: Sendable {
         self.rating = rating
         self.publisher = publisher
         self.publicationDate = publicationDate
+        self.addedDate = addedDate
         self.languages = languages
         self.identifiers = identifiers
         self.comments = comments

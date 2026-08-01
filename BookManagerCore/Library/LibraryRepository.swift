@@ -146,7 +146,11 @@ public actor LibraryRepository: LibraryRepositoryImporting {
         if let publicationDate = metadata.publicationDate {
             try await write(document.setPublicationDate(publicationDate, clock: current.tick()), clock: current)
         }
-        try await write(document.setAddedDate(.now, clock: current.tick()), clock: current)
+        if let addedDate = metadata.addedDate {
+            try await write(document.setAddedDate(addedDate, clock: current.tick()), clock: current)
+        } else {
+            try await write(document.setAddedDate(.now, clock: current.tick()), clock: current)
+        }
         if !metadata.languages.isEmpty {
             try await write(document.setLanguages(metadata.languages, clock: current.tick()), clock: current)
         }
