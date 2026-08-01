@@ -13,7 +13,7 @@
 
 ## Requirements (Slice 4a — sync core)
 
-1. **Durable offline outbox.** When the library folder is unreachable, metadata edits queue locally and survive restart; the local catalog stays browsable; the UI shows a pending-sync indicator.
+1. **Read-only when offline; transient failures queue (approved amendment 2026-08-01).** When the library folder is *known* unreachable (probe fails at open/activation), the library stays browsable from the local catalog but **editing is disabled** with a clear “Library unavailable — read-only” state — books can't load offline anyway, so offline edits add no value and would diverge canonical folder paths (the path-divergence finding from Task 5's review, routed to 4b). A write that fails *mid-session* because the library became unreachable (NAS hiccup, cloud pause) is **staged to the durable outbox and drained on the next sync** — never silently lost. The UI shows “Library unavailable — read-only” or the pending count.
 2. **Ingest unseen changes.** On open/event, diff the library change store against a local record of applied change fingerprints; apply unseen changes (causally-ready with retry); quarantine malformed changes instead of crashing; ingest is idempotent (re-applying is safe).
 3. **Convergence.** Two simulated Macs editing offline and syncing through a shared root converge to identical metadata (acceptance 8) with same-field edits resolving by newest HLC (acceptance 9).
 4. **Reconnection sequence.** Re-establish security-scoped access → ingest unseen → drain outbox into the library change store → re-apply → refresh catalog/UI.
@@ -34,7 +34,7 @@
 
 ### BookManager (app)
 
-- `LibrarySession` gains: `pendingSyncCount` (outbox size) surfaced as a small status indicator (toolbar/sidebar); `syncStatus` state ("synced" / "pending N changes" / "library unreachable"); reconnection is triggered on window activate + a manual "Sync Now" affordance (the always-on monitor is 4b).
+- `LibrarySession` gains: `pendingSyncCount` (outbox size) surfaced as a small status indicator (toolbar/sidebar); `isLibraryUnavailable` (read-only state, set by a lightweight reachability probe — the library root directory must be readable); `syncStatus` state ("synced" / "N pending" / "library unavailable"); reconnection is triggered on window activate (`reconnectIfNeeded()` = refresh availability + `syncNow`) plus a manual "Sync Now" affordance (the always-on monitor is 4b). `saveEdit` blocks edits while `isLibraryUnavailable` (clear message); a write failure while online routes to the transient outbox path.
 
 ## Data flow
 
@@ -61,7 +61,7 @@ Edit (online): session → repository → change store (as today) → catalog up
 
 - [ ] Two simulated Macs converge to identical metadata and canonical paths after offline edits + reordered change delivery (acceptance 8).
 - [ ] Same-field concurrent edits resolve deterministically to the newest HLC value on both Macs (acceptance 9).
-- [ ] Edits made while the library is unreachable queue to a durable outbox that survives restart; on reconnection the library converges and the pending indicator clears.
+- [ ] Edits are blocked with a clear message while the library is known unreachable (read-only); a transient mid-session write failure is staged to the outbox and drained on reconnection with nothing lost.
 - [ ] A corrupt change file quarantines (ingest never crashes) and appears in diagnostics.
 - [ ] Cloud folder reads never surface placeholder bytes as content: `ensureDownloaded` is called before library-file reads on ubiquitous roots.
 - [ ] Core suite green (104 + new sync tests); no change-store format change.
