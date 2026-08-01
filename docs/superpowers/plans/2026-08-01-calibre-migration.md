@@ -473,3 +473,21 @@ git status --short --branch
 ```
 
 Expected: branch header only.
+
+---
+
+## Slice 3 Completion Notes (merged to main 2026-08-01)
+
+Implemented via subagent-driven development in `.worktrees/calibre-migration` (branch `feature/calibre-migration`, fast-forward merged to `main` at `31886a8`). 6 commits; 82 core tests (14 suites) + 2 UI tests green on the merged tree; ANALYZE + CLEAN SUCCEEDED.
+
+### Human decisions recorded during the slice
+1. **Raw metadata lives in the CRDT** (per-device LWW register holding a JSON string of namespaced values) + `raw_metadata.json` sidecar at materialize; catalogue deliberately does not store it (UI never displays it; rebuilds derive from the change store).
+2. **Book-level duplicate semantics** for Calibre import: any exact-duplicate format hash → the whole book reports `.duplicate`, nothing copied (documented deviation from Slice 2's per-file granularity).
+3. **`NewBookMetadata.addedDate`** added (default nil; `writeChanges` honors it, else `.now`) so Calibre timestamps carry through — Slice 2 behavior unchanged.
+4. **Final-review follow-ups parked** (non-blocking): drop `importBooks`'s vestigial `throws`; offload `selectCalibreLibrary`'s reader load off the MainActor (brief freeze on large libraries).
+
+### Deferred items (candidates for later slices)
+- **Hardening:** blob-cover temp file leaks on cover-staging error paths (one-line `defer removeItem`); progress record's `selection` field can go stale on resume (informational); resume keyed by source-path hash only — a replaced library at the same path with colliding calibreIDs would silently skip (a content fingerprint in the progress record would harden); `summary()` fetches every book row and `titles` is never displayed (dead data + double scan); `bookCount` protocol requirement is dead code; `fetchCustomValues` guards only table existence not the `value` column (composite columns could throw); `CalibreOPFParser` ignores the XML parse result; legacy `lang` languages branch orders by `item_order` without checking the column exists.
+- **Known gaps:** `books_plugin_data` (Calibre plugin payloads) not preserved — not in the plan's annotations/last-read list; author `sort` mapped but Calibre `author_sort` conventions unused; `calibreImportProgress: Double?` plan field replaced by an indeterminate ProgressView (service reports only at completion).
+- **UX (flagged for manual acceptance):** the `lastError` alert may not present above the wizard sheet on macOS — dissolved in practice because `importBooks` never throws (per-book failures render in the sheet's report); still worth a click-through.
+- **Manual acceptance (human, pending):** import the real 13-book v26 Calibre library via the wizard; verify 13 books / 13 formats, source `metadata.db` mtime + SHA-256 unchanged, resume across a mid-import quit, and the wizard error paths.
