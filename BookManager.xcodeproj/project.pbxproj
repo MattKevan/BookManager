@@ -70,12 +70,14 @@
 		CB4C2B0FABFAB738F11A1BAC /* LibraryRootCapabilities.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49CF48B554295CF4D9801062 /* LibraryRootCapabilities.swift */; };
 		CCFF152341FBF41AB91B2514 /* LibraryManifest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 319E4E1F20D7F33431107B0C /* LibraryManifest.swift */; };
 		CD372D5D26ACA6955A952064 /* CoverGridView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 922F216A8DB77886FEE7AC6E /* CoverGridView.swift */; };
+		CF48364CE47026AEE1274504 /* FolderReconcilerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8633065E1E28A56C11EAF21A /* FolderReconcilerTests.swift */; };
 		D0A566804E7EB2792EA61B9B /* BookFolder.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3EB714E6E2C57690A730F94 /* BookFolder.swift */; };
 		D3D0C78B0CF3FB3B24076660 /* OfflineBookEdit.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC99822D51C0AD9570DC7085 /* OfflineBookEdit.swift */; };
 		D5658B0F5AE2B7F1A4FE8AB2 /* MetadataExtractorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E58E824C700C1F72F39EF611 /* MetadataExtractorTests.swift */; };
 		D62398DF22CF74C237F60AED /* ThumbnailCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8F482AB5AA370AD5457130D /* ThumbnailCache.swift */; };
 		D6C1B3B2C636694F81452B78 /* DiagnosticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AB6243EDA7B5EAFD4AB27C9 /* DiagnosticsView.swift */; };
 		D71D91C038D0BB6C876154B5 /* LocalCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62FDDA6D5AACAA7BB66B6919 /* LocalCatalog.swift */; };
+		D937949FDF9C4CFAE6CBF872 /* FolderReconciler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E5DE14BC9F4468F2E6D4B2E /* FolderReconciler.swift */; };
 		DD60BC9BD9A5F13C69FB3B1D /* AutomergeBookDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6076F102DADAF8E9CB9DEC47 /* AutomergeBookDocument.swift */; };
 		E6EA0292FF2754A8B986793D /* BookFolderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A081C69F8BA6B08E869CAA8D /* BookFolderTests.swift */; };
 		ED61E5B5D5B32139023D5B41 /* IndexedBookFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82B109E8EE3954F2A2256AB3 /* IndexedBookFactory.swift */; };
@@ -169,11 +171,13 @@
 		6BA162F96FEA4B520BEAED4B /* LocalCatalogTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalCatalogTests.swift; sourceTree = "<group>"; };
 		73AA6C7CC5DA69B3AD083C22 /* BookValues.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookValues.swift; sourceTree = "<group>"; };
 		768C45F6FF1C77FFEA249DA5 /* ImportReportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportReportView.swift; sourceTree = "<group>"; };
+		7E5DE14BC9F4468F2E6D4B2E /* FolderReconciler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderReconciler.swift; sourceTree = "<group>"; };
 		802704BFE3CB300D0F43F579 /* CalibreReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalibreReader.swift; sourceTree = "<group>"; };
 		80FA4E133A75F9A48729A914 /* MetadataExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataExtractor.swift; sourceTree = "<group>"; };
 		82B109E8EE3954F2A2256AB3 /* IndexedBookFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IndexedBookFactory.swift; sourceTree = "<group>"; };
 		831A8F5A9C65AC141D9489A3 /* Outbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Outbox.swift; sourceTree = "<group>"; };
 		85DFE90B2620F49E3523D712 /* CalibreRawPresenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalibreRawPresenter.swift; sourceTree = "<group>"; };
+		8633065E1E28A56C11EAF21A /* FolderReconcilerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderReconcilerTests.swift; sourceTree = "<group>"; };
 		877A41E8DB9729E29518A7F2 /* HybridLogicalClock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HybridLogicalClock.swift; sourceTree = "<group>"; };
 		87B108E9D043C28A0ACA5B55 /* OpfGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpfGenerator.swift; sourceTree = "<group>"; };
 		8AB6243EDA7B5EAFD4AB27C9 /* DiagnosticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticsView.swift; sourceTree = "<group>"; };
@@ -248,6 +252,7 @@
 			isa = PBXGroup;
 			children = (
 				306742D667B7DFBDDFB9FAF8 /* ConvergenceTests.swift */,
+				8633065E1E28A56C11EAF21A /* FolderReconcilerTests.swift */,
 				DF714235D6DA039272631C7E /* LibraryRootCapabilitiesTests.swift */,
 				E828C0124F1B0E570B6BB023 /* OfflineBookEditTests.swift */,
 				08E88890969521523F616EA1 /* OutboxTests.swift */,
@@ -356,6 +361,7 @@
 		75D5D4AF4DB8C5B106A0E311 /* Sync */ = {
 			isa = PBXGroup;
 			children = (
+				7E5DE14BC9F4468F2E6D4B2E /* FolderReconciler.swift */,
 				49CF48B554295CF4D9801062 /* LibraryRootCapabilities.swift */,
 				AC99822D51C0AD9570DC7085 /* OfflineBookEdit.swift */,
 				831A8F5A9C65AC141D9489A3 /* Outbox.swift */,
@@ -661,6 +667,7 @@
 				FDAC49512A213E35BD2BC563 /* CalibreSchema.swift in Sources */,
 				C7BBF02DC45A22F1113E8230 /* CanonicalPathBuilder.swift in Sources */,
 				9D86CAE107CBE6D0D34B7301 /* ChangeStore.swift in Sources */,
+				D937949FDF9C4CFAE6CBF872 /* FolderReconciler.swift in Sources */,
 				A62EF23E76E0C17875AEB31E /* GridSelectionSemantics.swift in Sources */,
 				409E04ECB1ACF22D0BB109F8 /* HybridLogicalClock.swift in Sources */,
 				082DEE0D492D2C77CC763261 /* ImportService.swift in Sources */,
@@ -702,6 +709,7 @@
 				330F88F83159D6D8E5F2E908 /* CalibreReaderTests.swift in Sources */,
 				73BD2D163C0196607DA35916 /* ConvergenceTests.swift in Sources */,
 				7413F3389FB8C25A4F071CC8 /* Fixtures.swift in Sources */,
+				CF48364CE47026AEE1274504 /* FolderReconcilerTests.swift in Sources */,
 				B7A5203046D0B8362189BF97 /* GridSelectionSemanticsTests.swift in Sources */,
 				B0A7E25FDC54B9CAE94B1798 /* HybridLogicalClockTests.swift in Sources */,
 				8CF594EDFCC26065337217AC /* ImportServiceTests.swift in Sources */,

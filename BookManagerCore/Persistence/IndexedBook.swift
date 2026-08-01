@@ -105,6 +105,24 @@ public struct IndexedBook: Identifiable, Equatable, Sendable {
     public var addedDate: Date? {
         addedMilliseconds.map { Date(timeIntervalSince1970: TimeInterval($0) / 1_000) }
     }
+
+    /// A copy with `relativePath` replaced (used by the reconciler after a
+    /// journaled folder move). All other fields, including the snapshot and the
+    /// raw metadata payload, are preserved.
+    public func repointing(to path: String) -> IndexedBook {
+        IndexedBook(
+            id: id, title: title, authors: authors, series: series,
+            seriesIndex: seriesIndex, tags: tags, rating: rating,
+            publisher: publisher,
+            publicationMilliseconds: publicationMilliseconds,
+            addedMilliseconds: addedMilliseconds, languages: languages,
+            identifiers: identifiers, comments: comments,
+            rawMetadata: rawMetadata, formats: formats,
+            coverHash: coverHash, relativePath: path,
+            modifiedMilliseconds: modifiedMilliseconds,
+            isDeleted: isDeleted, snapshot: snapshot
+        )
+    }
 }
 
 extension IndexedBook: FetchableRecord {

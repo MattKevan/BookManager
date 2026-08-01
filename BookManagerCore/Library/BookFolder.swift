@@ -171,6 +171,31 @@ public actor BookFolder {
         layout.trashRoot.appending(path: bookID.uuidString, directoryHint: .isDirectory)
     }
 
+    /// Moves a book's folder to a `(conflict <id-prefix>)` sibling when the
+    /// canonical path is taken by different content. Journaled; never deletes.
+    public func forkConflict(bookID: UUID, relativePath: String) throws -> URL {
+        let source = bookDirectoryURL(relativePath: relativePath)
+        guard manager.fileExists(atPath: source.path) else {
+            throw BookFolderError.folderMissingForFork(bookID)
+        }
+        let parent = source.deletingLastPathComponent()
+        let name = source.lastPathComponent
+        let prefix = bookID.uuidString.prefix(8)
+        let destination = parent.appending(path: "\(name) (conflict \(prefix))", directoryHint: .isDirectory)
+        var target = destination
+        var counter = 2
+        while manager.fileExists(atPath: target.path) {
+            target = parent.appending(
+                path: "\(name) (conflict \(prefix) \(counter))", directoryHint: .isDirectory
+            )
+            counter += 1
+        }
+        let journal = try begin(operation: "forkConflict", bookID: bookID, oldPath: relativePath, newPath: nil)
+        defer { try? end(journal) }
+        try manager.moveItem(at: source, to: target)
+        return target
+    }
+
     /// Journal entries left behind by interrupted mutations — the read-only
     /// surface diagnostics use to surface incomplete operations.
     public func pendingJournalEntries() throws -> [URL] {
@@ -197,4 +222,5 @@ public actor BookFolder {
 
 public enum BookFolderError: Error, Equatable {
     case trashEntryMissing(UUID)
+    case folderMissingForFork(UUID)
 }
