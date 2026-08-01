@@ -24,6 +24,14 @@
 
 ---
 
+## Execution Adaptation (found during setup)
+
+An existing isolated worktree `feature/auto-reopen` (`.worktrees/auto-reopen`) already implements Task 2's feature — two unreviewed commits (`2afdd09` feat, `916d267` fix) on top of the same main commit the plan was written against. Its design is recency-based (`LibraryBookmarkStore.save(_:for:at:)` + `recentLibraries()` + `mostRecentlyOpenedLibraryID()`, tested) rather than the single-marker API sketched below; it also adds a Library menu (Open Recent, Cmd-O) and a `--ui-testing` launch guard so UI tests start from a deterministic welcome screen.
+
+Execution decision: use this worktree as the execution workspace. Task 1 (Calibre security scope — new work, not present anywhere) is implemented per this plan on top of the branch. Task 2's requirements (reopen last-opened at launch; welcome when missing) are met by the existing commits, so Task 2 executes as a **review of the existing commits against this plan's Task 2 requirements** plus a fix loop on any findings — not a re-implementation. The existing choices map onto the Decisions section as: D1 kept (close does not clear recency), D2 implemented as welcome-with-explanation (better than the failure screen for the launch case), D3 not implemented (stale recency entries are kept and simply fail to reopen — acceptable for a recency list; out of scope for the user's requirement). The scratch UI-test file left in the worktree working tree is discarded.
+
+---
+
 ### Task 1: Hold security-scoped access for the Calibre source library
 
 **Files:**
