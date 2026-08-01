@@ -48,6 +48,7 @@ final class LibrarySession {
     }
     var lastError: String?
     var viewMode: ViewMode = .table
+    var inspectorPresented = false
     var selection = Set<UUID>()
     var selectedFacet: FacetSelection?
 
@@ -144,6 +145,7 @@ final class LibrarySession {
         searchText = ""
         missingFiles = []
         viewMode = .table
+        inspectorPresented = false
         importReport = nil
         inspectorBook = nil
         lastError = nil

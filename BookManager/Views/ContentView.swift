@@ -33,6 +33,9 @@ struct ContentView: View {
             }
         }
         .frame(minWidth: 900, minHeight: 560)
+        .onChange(of: session.selection) { _, newValue in
+            if newValue.count == 1 { session.inspectorPresented = true }
+        }
         .fileImporter(
             isPresented: $session.isPickerPresented,
             allowedContentTypes: session.pickerAction == .addBooks
@@ -108,6 +111,9 @@ struct ContentView: View {
             browser
                 .navigationTitle(session.selectedFacet?.value ?? "All Books")
         }
+        .inspector(isPresented: $session.inspectorPresented) {
+            BookInspectorView(session: session)
+        }
         .toolbar {
             ToolbarItemGroup {
                 Button {
@@ -133,6 +139,12 @@ struct ContentView: View {
                     Label("Edit Metadata", systemImage: "pencil")
                 }
                 .disabled(session.selection.count != 1)
+                Button {
+                    session.inspectorPresented.toggle()
+                } label: {
+                    Label("Inspector", systemImage: "sidebar.trailing")
+                }
+                .help("Show or hide the inspector")
                 Picker("View", selection: $session.viewMode) {
                     Image(systemName: "list.bullet").tag(LibrarySession.ViewMode.table)
                     Image(systemName: "square.grid.2x2").tag(LibrarySession.ViewMode.grid)
