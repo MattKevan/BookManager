@@ -182,6 +182,25 @@ struct CalibreReaderTests {
     }
 
     @Test
+    func textDatesDecodeWithoutCrash() throws {
+        // Regression: some tools (e.g. calibre-web) store pubdate/timestamp as
+        // ISO-8601 TEXT ("2019-05-28 00:00:00+00:00") instead of Calibre's
+        // Julian REALs. GRDB's strict `as Double?` cast traps on TEXT storage
+        // ("could not decode Optional<Double>"), crashing the import; the
+        // reader must decode either form.
+        let library = try CalibreFixture.makeTextDateLibrary(named: "text-dates-\(UUID().uuidString)")
+        let reader = try CalibreReader.open(libraryURL: library)
+        defer { try? reader.close() }
+        let records = try reader.books()
+
+        let range = records.first { $0.calibreID == 1 }!
+        // Same hand-computed dates as the julian-storage test: text storage
+        // must resolve to identical instants.
+        #expect(range.publicationDate == Date(timeIntervalSince1970: 1_559_001_600))
+        #expect(range.addedDate == Date(timeIntervalSince1970: 1_705_276_800))
+    }
+
+    @Test
     func opensWALLibraryInReadOnlyDirectory() throws {
         // Calibre's metadata.db is WAL journal mode. A read-only open of a WAL
         // database requires a writable -shm (or writable directory to create

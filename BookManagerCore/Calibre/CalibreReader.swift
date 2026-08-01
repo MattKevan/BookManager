@@ -309,8 +309,8 @@ public final class CalibreReader: Sendable {
             tags: lookups.tags[id] ?? [],
             rating: rating,
             publisher: lookups.publishers[id],
-            publicationDate: Self.date(fromJulian: row["pubdate"] as Double?),
-            addedDate: Self.date(fromJulian: row["timestamp"] as Double?),
+            publicationDate: Self.date(fromDatabaseValue: row["pubdate"]?.databaseValue),
+            addedDate: Self.date(fromDatabaseValue: row["timestamp"]?.databaseValue),
             languages: lookups.languages[id] ?? [],
             identifiers: lookups.identifiers[id] ?? [:],
             comments: lookups.comments[id],
@@ -332,6 +332,58 @@ public final class CalibreReader: Sendable {
     static func date(fromJulian julian: Double?) -> Date? {
         guard let julian, julian > 0 else { return nil }
         return Date(timeIntervalSince1970: (julian - 2_440_587.5) * 86_400)
+    }
+
+    /// Decodes `pubdate`/`timestamp` in whichever storage class the database
+    /// uses. Calibre's own books table stores Julian day numbers (REAL), but
+    /// some tools (e.g. calibre-web) write ISO-8601 text
+    /// ("2019-05-28 00:00:00+00:00") into the same `TIMESTAMP` columns. GRDB's
+    /// typed `as Double?` cast is strict and traps on TEXT storage, so the raw
+    /// storage class must be read and dispatched (see `CalibreSchema`'s
+    /// `valueString` for the same rule).
+    static func date(fromDatabaseValue value: DatabaseValue?) -> Date? {
+        guard let value else { return nil }
+        switch value.storage {
+        case .double(let julian):
+            return date(fromJulian: julian)
+        case .int64(let int):
+            return date(fromJulian: Double(int))
+        case .string(let string):
+            return date(fromText: string)
+        case .blob, .null:
+            return nil
+        }
+    }
+
+    /// Parses ISO-8601 date text in the shape tools like calibre-web write — a
+    /// space separator instead of the ISO 'T' ("2019-05-28 00:00:00+00:00"),
+    /// with or without fractional seconds, `Z` or `+00:00` offsets — and, as a
+    /// fallback, naive UTC "yyyy-MM-dd HH:mm:ss" with no timezone.
+    private static func date(fromText text: String) -> Date? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        var normalized = trimmed
+        if let space = trimmed.firstIndex(of: " "), !trimmed.contains("T") {
+            normalized = trimmed.replacingCharacters(in: space...space, with: "T")
+        }
+        if let date = isoDate(from: normalized, fractionalSeconds: true)
+            ?? isoDate(from: normalized, fractionalSeconds: false) {
+            return date
+        }
+        // Naive "2019-05-28T00:00:00" without a timezone, treated as UTC.
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+        return formatter.date(from: normalized)
+    }
+
+    private static func isoDate(from string: String, fractionalSeconds: Bool) -> Date? {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = fractionalSeconds
+            ? [.withInternetDateTime, .withFractionalSeconds]
+            : [.withInternetDateTime]
+        return formatter.date(from: string)
     }
 }
 

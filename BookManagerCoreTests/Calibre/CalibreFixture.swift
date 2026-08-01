@@ -17,7 +17,7 @@ enum CalibreFixture {
     static let expectedFormatCount = 10
 
     static func makeLibrary(named name: String = "fixture-library") throws -> URL {
-        try makeLibrary(named: name, userVersion: 26, extraColumns: false)
+        try makeLibrary(named: name, userVersion: 26, extraColumns: false, textDates: false)
     }
 
     /// Variant builder: optionally adds `pages`/`cover BLOB` columns to `books`
@@ -28,17 +28,25 @@ enum CalibreFixture {
         userVersion: Int,
         extraColumns: Bool
     ) throws -> URL {
-        try makeLibrary(named: name, userVersion: userVersion, extraColumns: extraColumns)
+        try makeLibrary(named: name, userVersion: userVersion, extraColumns: extraColumns, textDates: false)
     }
 
-    private static func makeLibrary(named name: String, userVersion: Int, extraColumns: Bool) throws -> URL {
+    /// Variant builder: stores `pubdate`/`timestamp` as ISO-8601 TEXT
+    /// ("2019-05-28 00:00:00+00:00") instead of Julian REALs — the shape some
+    /// tools (e.g. calibre-web) write into the `TIMESTAMP` columns.
+    static func makeTextDateLibrary(named name: String = "text-dates-library") throws -> URL {
+        try makeLibrary(named: name, userVersion: 26, extraColumns: false, textDates: true)
+    }
+
+    private static func makeLibrary(named name: String, userVersion: Int, extraColumns: Bool, textDates: Bool) throws -> URL {
         let root = FileManager.default.temporaryDirectory.appending(path: name, directoryHint: .isDirectory)
         try? FileManager.default.removeItem(at: root)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         try buildDatabase(
             at: root.appending(path: "metadata.db"),
             userVersion: userVersion,
-            extraColumns: extraColumns
+            extraColumns: extraColumns,
+            textDates: textDates
         )
         try writeBookFolders(at: root, extraColumns: extraColumns)
         return root
@@ -46,7 +54,7 @@ enum CalibreFixture {
 
     // MARK: - Database
 
-    private static func buildDatabase(at url: URL, userVersion: Int, extraColumns: Bool) throws {
+    private static func buildDatabase(at url: URL, userVersion: Int, extraColumns: Bool, textDates: Bool) throws {
         let queue = try DatabaseQueue(path: url.path)
         try queue.write { db in
             let booksExtra = extraColumns
@@ -142,15 +150,15 @@ enum CalibreFixture {
             )
 
             for spec in specs(extraColumns: extraColumns) {
-                try insert(spec, db: db)
+                try insert(spec, db: db, textDates: textDates)
             }
         }
         try queue.close()
     }
 
-    private static func insert(_ spec: BookSpec, db: Database) throws {
-        let pubdate = spec.pubdate.map { "\(julian($0))" } ?? "0"
-        let timestamp = spec.addedDate.map { "\(julian($0))" } ?? "0"
+    private static func insert(_ spec: BookSpec, db: Database, textDates: Bool) throws {
+        let pubdate = spec.pubdate.map { textDates ? isoText($0, fractional: false) : "\(julian($0))" } ?? "0"
+        let timestamp = spec.addedDate.map { textDates ? isoText($0, fractional: true) : "\(julian($0))" } ?? "0"
         try db.execute(
             sql: """
                 INSERT INTO books(id, title, sort, timestamp, pubdate, series_index,
@@ -790,6 +798,20 @@ enum CalibreFixture {
 
     static func julian(_ date: Date) -> Double {
         date.timeIntervalSince1970 / 86_400 + 2_440_587.5
+    }
+
+    /// Calibre-Web-style ISO-8601 text dates ("2019-05-28 00:00:00+00:00",
+    /// optionally with a 6-digit fractional second), UTC. The `TIMESTAMP`
+    /// columns' NUMERIC affinity leaves these as TEXT (they do not look
+    /// numeric), which is exactly the shape that crashed the reader.
+    private static func isoText(_ date: Date, fractional: Bool) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.dateFormat = fractional
+            ? "yyyy-MM-dd HH:mm:ss.SSSSSSZZZZZ"
+            : "yyyy-MM-dd HH:mm:ssZZZZZ"
+        return formatter.string(from: date)
     }
 
     private static let coverBytes = Data([
