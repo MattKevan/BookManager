@@ -110,14 +110,17 @@ Replace the current `selectCalibreLibrary(at:)` body:
     }
 ```
 
-- [ ] **Step 3: Release the scope once the import is done reading the source**
+- [ ] **Step 3: Release the scope once the import completes reading the source**
 
-In `importCalibre()`, after the `do/catch` block that sets `calibreImportReport`/`lastError` and before `await refreshAll()`, add:
+In `importCalibre()`, inside the `do` block immediately after `calibreImportReport = try await service.importBooks(...)` succeeds, add:
 
 ```swift
-        // The source is no longer read after the import finishes.
-        stopCalibreAccess()
+            // The source is no longer read after the import completes; a
+            // failed import keeps the scope so the wizard's retry can read it.
+            stopCalibreAccess()
 ```
+
+Release on success only: when `importBooks` throws, `calibreImportReport` stays nil, the wizard remains interactive with the summary shown, and a retry re-reads the source — the scope must still be held then. The failure path is cleaned up by `cancelCalibreImport()` on wizard disappear (Step 4) or `closeLibrary()`.
 
 - [ ] **Step 4: Add `cancelCalibreImport()` and wire `closeLibrary()`**
 
