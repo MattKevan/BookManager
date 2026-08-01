@@ -483,6 +483,7 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					45DA5330A15A4213776A4CE0 = {
+						DevelopmentTeam = N7J3BYZ94H;
 						ProvisioningStyle = Automatic;
 					};
 					60BBB7D9717725AF4BD9A164 = {
@@ -770,6 +771,7 @@
 				CODE_SIGN_ENTITLEMENTS = Config/BookManager.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = N7J3BYZ94H;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Book Manager";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
@@ -806,6 +808,7 @@
 				CODE_SIGN_ENTITLEMENTS = Config/BookManager.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = N7J3BYZ94H;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Book Manager";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";

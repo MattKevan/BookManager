@@ -53,6 +53,7 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         CODE_SIGN_ENTITLEMENTS: Config/BookManager.entitlements
         CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: N7J3BYZ94H
         INFOPLIST_KEY_CFBundleDisplayName: Book Manager
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
     dependencies:
