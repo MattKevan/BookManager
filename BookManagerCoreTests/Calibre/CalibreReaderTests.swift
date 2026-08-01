@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import GRDB
 import Testing
 @testable import BookManagerCore
 
@@ -178,5 +179,79 @@ struct CalibreReaderTests {
 
         #expect(beforeHash == afterHash)
         #expect(beforeMtime == afterMtime)
+    }
+
+    @Test
+    func opensWALLibraryInReadOnlyDirectory() throws {
+        // Calibre's metadata.db is WAL journal mode. A read-only open of a WAL
+        // database requires a writable -shm (or writable directory to create
+        // one); on macOS 26+ a new TCC restriction additionally blocks SQLite
+        // WAL locking on foreign databases, surfacing as SQLITE_AUTH
+        // ("SQLite error 23: authorization denied"). The reader must snapshot
+        // the database into its own writable temp directory and open the copy,
+        // never the source. This test locks the fixture directory down so the
+        // -shm cannot be created (the documented read-only-WAL failure mode)
+        // and verifies the snapshot path both opens and sees uncheckpointed
+        // WAL data.
+        let root = FileManager.default.temporaryDirectory
+            .appending(path: "wal-fixture-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let dbURL = root.appending(path: "metadata.db")
+
+        let queue = try DatabaseQueue(path: dbURL.path)
+        try queue.writeWithoutTransaction { db in
+            try db.execute(sql: "PRAGMA journal_mode = WAL")
+        }
+        try queue.write { db in
+            try db.execute(sql: """
+                CREATE TABLE books (id INTEGER PRIMARY KEY, title TEXT NOT NULL DEFAULT '', sort TEXT NOT NULL DEFAULT '', author_sort TEXT NOT NULL DEFAULT '', series_index REAL NOT NULL DEFAULT 0, timestamp REAL NOT NULL DEFAULT 0, pubdate REAL NOT NULL DEFAULT 0, path TEXT NOT NULL DEFAULT '', uuid TEXT NOT NULL DEFAULT '', has_cover BOOL NOT NULL DEFAULT 0, last_modified REAL NOT NULL DEFAULT 0);
+                CREATE TABLE data (id INTEGER PRIMARY KEY, book INTEGER NOT NULL, format TEXT NOT NULL COLLATE NOCASE, uncompressed_size INTEGER NOT NULL, name TEXT NOT NULL, UNIQUE(book, format));
+                CREATE TABLE library_id (uuid TEXT NOT NULL);
+                """)
+            try db.execute(sql: "PRAGMA user_version = 26")
+            try db.execute(sql: "INSERT INTO library_id(uuid) VALUES ('wal-fixture-uuid')")
+            try db.execute(sql: "INSERT INTO books(id, title) VALUES (1, 'Checkpointed Book')")
+        }
+        try queue.close()
+
+        // A second live connection adds a book WITHOUT checkpointing, so
+        // metadata.db-wal holds committed frames while we attempt the open.
+        let writer = try DatabaseQueue(path: dbURL.path)
+        try writer.write { db in
+            try db.execute(sql: "INSERT INTO books(id, title) VALUES (2, 'Wal-Only Book')")
+        }
+        defer { try? writer.close() }
+
+        // Lock the directory down so SQLite cannot create -shm/-wal here.
+        try? FileManager.default.removeItem(at: URL(fileURLWithPath: dbURL.path + "-shm"))
+        try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: root.path)
+        defer {
+            try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: root.path)
+            try? FileManager.default.removeItem(at: root)
+        }
+
+        let sourceFingerprint = try Self.fingerprint(dbURL)
+
+        let reader = try CalibreReader.open(libraryURL: root)
+        defer { try? reader.close() }
+        let summary = try reader.summary()
+
+        #expect(summary.userVersion == 26)
+        #expect(summary.libraryID == "wal-fixture-uuid")
+        #expect(summary.bookCount == 2)
+        #expect(summary.titles.contains("Wal-Only Book"))
+
+        let after = try Self.fingerprint(dbURL)
+        #expect(after.hash == sourceFingerprint.hash)
+        #expect(after.mtime == sourceFingerprint.mtime)
+    }
+
+    private static func fingerprint(_ url: URL) throws -> (hash: String, mtime: Date) {
+        let data = try Data(contentsOf: url)
+        let digest = SHA256.hash(data: data)
+        let hash = digest.map { String(format: "%02x", $0) }.joined()
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+        let mtime = attributes[.modificationDate] as? Date ?? .distantPast
+        return (hash, mtime)
     }
 }
