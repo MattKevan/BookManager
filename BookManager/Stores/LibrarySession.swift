@@ -215,6 +215,11 @@ final class LibrarySession {
     // MARK: - Activation
 
     private func activate(url: URL, create: Bool, fallbackToWelcome: Bool = false) async {
+        // A mid-session library switch (Cmd+O, Open Recent, Cmd+N) reaches
+        // activate without closeLibrary: stop the old library's monitor so it
+        // never watches the old root against the new library. Idempotent; the
+        // runSyncSequence tail rebuilds the monitor for the new root.
+        stopMonitor()
         state = .loading
         let accessed = url.startAccessingSecurityScopedResource()
         do {
