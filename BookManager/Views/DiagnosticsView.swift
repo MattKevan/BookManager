@@ -45,6 +45,42 @@ struct DiagnosticsView: View {
                 } footer: {
                     Text("Undecodable change files, preserved instead of deleted.")
                 }
+                Section {
+                    if let session, let report = session.reconciliationReport {
+                        if report.renamed.isEmpty && report.adopted.isEmpty
+                            && report.conflictCopies.isEmpty && report.restoredFromTrash.isEmpty
+                            && report.missingFolders.isEmpty && report.errors.isEmpty {
+                            Text("Last sync reconciled nothing out of place.")
+                                .foregroundStyle(.secondary)
+                        } else {
+                            if !report.renamed.isEmpty {
+                                LabeledContent("Re-pointed folders", value: "\(report.renamed.count)")
+                            }
+                            if !report.adopted.isEmpty {
+                                LabeledContent("Adopted folders", value: "\(report.adopted.count)")
+                            }
+                            if !report.restoredFromTrash.isEmpty {
+                                LabeledContent("Restored from trash", value: "\(report.restoredFromTrash.count)")
+                            }
+                            if !report.missingFolders.isEmpty {
+                                LabeledContent("Missing folders", value: "\(report.missingFolders.count)")
+                            }
+                            ForEach(report.conflictCopies, id: \.path) { url in
+                                LabeledContent("Conflict copy", value: url.lastPathComponent)
+                            }
+                            ForEach(report.errors, id: \.self) { message in
+                                Text(message).foregroundStyle(.red)
+                            }
+                        }
+                    } else {
+                        Text("No sync has run yet.")
+                            .foregroundStyle(.secondary)
+                    }
+                } header: {
+                    Text("Reconciliation")
+                } footer: {
+                    Text("Folders re-pointed to canonical paths after merges; conflicts are forked, never overwritten.")
+                }
                 Section("Trash") {
                     if let session, session.deletedBooks.isEmpty {
                         Text("Empty").foregroundStyle(.secondary)

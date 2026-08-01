@@ -364,6 +364,11 @@ public actor LibraryRepository: LibraryRepositoryImporting {
         SyncEngine(layout: layout, catalog: catalog, state: state, deviceID: deviceID)
     }
 
+    /// Builds the folder reconciler for this repository's layout and catalog.
+    public func reconciler() -> FolderReconciler {
+        FolderReconciler(layout: layout, catalog: catalog, deviceID: deviceID)
+    }
+
     /// Upserts the catalog entry for an offline-applied edit (no filesystem
     /// writes — the canonical folder is reconciled by the sync monitor in 4b).
     /// The catalog's cached snapshot must reflect the applied state (a stale

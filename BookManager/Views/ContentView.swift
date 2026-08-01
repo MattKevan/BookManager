@@ -169,6 +169,12 @@ struct ContentView: View {
                 } label: {
                     if session.isLibraryUnavailable {
                         Label("Library unavailable", systemImage: "exclamationmark.triangle")
+                    } else if session.isSyncing {
+                        HStack(spacing: 4) {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text("Syncing…")
+                        }
                     } else if session.pendingSyncCount > 0 {
                         Label("\(session.pendingSyncCount) pending", systemImage: "arrow.triangle.2.circlepath")
                     } else {
@@ -178,9 +184,11 @@ struct ContentView: View {
                 .help(
                     session.isLibraryUnavailable
                         ? "Library unavailable — read-only until the library reconnects. Click to try again."
-                        : (session.pendingSyncCount > 0
-                            ? "\(session.pendingSyncCount) change(s) waiting to sync — click to sync now"
-                            : "Synced — click to check for changes from other Macs")
+                        : (session.isSyncing
+                            ? "Syncing — checking the library for changes from other Macs"
+                            : (session.pendingSyncCount > 0
+                                ? "\(session.pendingSyncCount) change(s) waiting to sync — click to sync now"
+                                : "Synced — click to check for changes from other Macs"))
                 )
                 Button {
                     session.present(.calibre)

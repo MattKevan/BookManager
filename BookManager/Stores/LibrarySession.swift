@@ -48,6 +48,11 @@ final class LibrarySession {
     /// amendment). Transient mid-session write failures still stage to the
     /// outbox via `saveOffline`.
     private(set) var isLibraryUnavailable = false
+    /// True while a sync sequence (drain + ingest + reconcile) is running.
+    private(set) var isSyncing = false
+    /// The last reconciliation pass's findings — surfaced in Diagnostics so
+    /// re-pointed folders and forked conflicts are never silent.
+    private(set) var reconciliationReport: ReconciliationReport?
     var searchText = "" {
         didSet {
             searchTask?.cancel()
@@ -94,6 +99,7 @@ final class LibrarySession {
     private var activeSecurityURL: URL?
     private var calibreSourceSecurityURL: URL?
     private var syncState: SyncState?
+    private var monitor: LibraryMonitor?
     private var searchTask: Task<Void, Never>?
 
     struct FacetSelection: Hashable {
@@ -155,11 +161,14 @@ final class LibrarySession {
         activeSecurityURL?.stopAccessingSecurityScopedResource()
         activeSecurityURL = nil
         stopCalibreAccess()
+        stopMonitor()
         repository = nil
         syncState = nil
         pendingSyncCount = 0
         quarantinedChanges = []
         isLibraryUnavailable = false
+        isSyncing = false
+        reconciliationReport = nil
         state = .welcome
         books = []
         deletedBooks = []
@@ -226,6 +235,11 @@ final class LibrarySession {
             isLibraryUnavailable = false
             refreshPendingSync()
             await refreshAll()
+            // Ingest-on-open: pull changes made by other Macs and reconcile the
+            // folders before the always-on monitor starts (startMonitor is
+            // idempotent — runSyncSequence may already have started it).
+            await runSyncSequence(manual: false)
+            await startMonitor()
         } catch {
             if accessed { url.stopAccessingSecurityScopedResource() }
             if fallbackToWelcome {
@@ -452,11 +466,14 @@ final class LibrarySession {
 
     // MARK: - Sync
 
-    /// Drains the durable outbox into the library, ingests changes made by
-    /// other Macs, and refreshes the catalog. The always-on monitor is slice
-    /// 4b; for now sync runs on demand (toolbar button, app activation).
-    func syncNow() async {
+    /// The full sync sequence shared by the always-on monitor and the manual
+    /// Sync Now button: drain the outbox, ingest changes made by other Macs,
+    /// reconcile the book folders, refresh. Overlapping runs are coalesced.
+    private func runSyncSequence(manual: Bool) async {
         guard let repository, let syncState else { return }
+        guard !isSyncing else { return }
+        isSyncing = true
+        defer { isSyncing = false }
         await ensureLibraryFilesDownloaded()
         do {
             let engine = await repository.syncEngine(state: syncState)
@@ -466,9 +483,69 @@ final class LibrarySession {
         } catch {
             lastError = error.localizedDescription
         }
+        do {
+            let reconciler = await repository.reconciler()
+            reconciliationReport = try await reconciler.reconcile()
+        } catch {
+            lastError = error.localizedDescription
+        }
         refreshLibraryAvailability()
+        if isLibraryUnavailable {
+            // Read-only: stop the monitor so it does not hammer a dead library.
+            stopMonitor()
+        } else if monitor == nil {
+            await startMonitor()
+        }
         refreshPendingSync()
         await refreshAll()
+    }
+
+    /// Manual affordance (toolbar button, app activation via
+    /// `reconnectIfNeeded`): runs the full sync sequence.
+    func syncNow() async {
+        await runSyncSequence(manual: true)
+    }
+
+    /// Starts the always-on monitor. FSEvents on local volumes; periodic
+    /// polling on network/cloud roots where events are unreliable. Idempotent;
+    /// the first ingest + reconcile happens in `activate` before this runs.
+    private func startMonitor() async {
+        guard monitor == nil else { return }
+        guard let repository, let syncState, !isLibraryUnavailable else { return }
+        let capabilities = LibraryRootCapabilities.probe(repository.root)
+        let source: any SyncEventSource
+        if capabilities.isNetworkMount || capabilities.isUbiquitous {
+            source = PollingSource(interval: .seconds(60)) { [weak self] in
+                Task { await self?.monitorEvent() }
+            }
+        } else {
+            source = FSEventSource(root: repository.root) { [weak self] in
+                Task { await self?.monitorEvent() }
+            }
+        }
+        let monitor = LibraryMonitor(
+            eventSource: source,
+            periodic: .seconds(60),
+            debounce: .seconds(1),
+            onChange: { [weak self] in await self?.runSyncSequence(manual: false) },
+            onPeriodic: { [weak self] in await self?.runSyncSequence(manual: true) }
+        )
+        self.monitor = monitor
+        await monitor.start()
+    }
+
+    /// Stops and drops the monitor (library closed, or library unavailable).
+    private func stopMonitor() {
+        guard let monitor else { return }
+        self.monitor = nil
+        Task { await monitor.stop() }
+    }
+
+    /// Event-source hop: the source's closure runs on a background queue and
+    /// hands the event to the actor, which debounces it.
+    private func monitorEvent() async {
+        guard let monitor else { return }
+        await monitor.onEvent()
     }
 
     /// Lightweight reachability probe: the library root directory must be
