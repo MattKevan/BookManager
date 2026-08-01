@@ -66,6 +66,7 @@
 		F2598A85042DDF22B167FD18 /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E1B0345E4E97988D789C4A5 /* SidebarView.swift */; };
 		FB334598B1AEAE392B0A20D2 /* LibraryWelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE22DC7A79DA7703CE5EF160 /* LibraryWelcomeView.swift */; };
 		FDAC49512A213E35BD2BC563 /* CalibreSchema.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4DFC6EB19C484A316D3607E /* CalibreSchema.swift */; };
+		FDF72C5AB371B8D58B183DA7 /* CalibreImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE55CCEAE5F9B6D05CFCD1FD /* CalibreImportView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -165,6 +166,7 @@
 		C658484E2B3B70B7D3858968 /* ImportServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportServiceTests.swift; sourceTree = "<group>"; };
 		CA4DE265111712DFFE44F5CE /* LibraryStorageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryStorageTests.swift; sourceTree = "<group>"; };
 		CAA97EB7CDB42EFE46F1706D /* ImportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportService.swift; sourceTree = "<group>"; };
+		CE55CCEAE5F9B6D05CFCD1FD /* CalibreImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalibreImportView.swift; sourceTree = "<group>"; };
 		D4DFC6EB19C484A316D3607E /* CalibreSchema.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalibreSchema.swift; sourceTree = "<group>"; };
 		D71CFB152C85ECD05FAEE34F /* MetadataEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataEditorView.swift; sourceTree = "<group>"; };
 		E58E824C700C1F72F39EF611 /* MetadataExtractorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataExtractorTests.swift; sourceTree = "<group>"; };
@@ -368,6 +370,7 @@
 			isa = PBXGroup;
 			children = (
 				B299D92FE747584FDD46D395 /* BookTableView.swift */,
+				CE55CCEAE5F9B6D05CFCD1FD /* CalibreImportView.swift */,
 				A6E24C22DC0D497C119E3503 /* ContentView.swift */,
 				922F216A8DB77886FEE7AC6E /* CoverGridView.swift */,
 				8AB6243EDA7B5EAFD4AB27C9 /* DiagnosticsView.swift */,
@@ -622,6 +625,7 @@
 			files = (
 				A0CF78A35D5B9D189902DF1E /* BookManagerApp.swift in Sources */,
 				183696E853097A577B690223 /* BookTableView.swift in Sources */,
+				FDF72C5AB371B8D58B183DA7 /* CalibreImportView.swift in Sources */,
 				43F6F8FC156FB2A7AFF5EB98 /* ContentView.swift in Sources */,
 				CD372D5D26ACA6955A952064 /* CoverGridView.swift in Sources */,
 				D6C1B3B2C636694F81452B78 /* DiagnosticsView.swift in Sources */,

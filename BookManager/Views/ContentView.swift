@@ -10,9 +10,10 @@ struct ContentView: View {
     @State private var importURLs: [URL] = []
     @State private var showImportReport = false
     @State private var showDiagnostics = false
+    @State private var showCalibreImport = false
 
     private enum PickerPurpose: Identifiable {
-        case create, open, addBooks
+        case create, open, addBooks, calibre
         var id: Self { self }
     }
 
@@ -68,6 +69,11 @@ struct ContentView: View {
                         await session.importFiles(urls: urls)
                         showImportReport = session.importReport != nil
                     }
+                case .calibre:
+                    Task {
+                        await session.selectCalibreLibrary(at: urls[0])
+                        showCalibreImport = session.calibreSummary != nil
+                    }
                 case nil:
                     break
                 }
@@ -89,6 +95,9 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showDiagnostics) {
             DiagnosticsView()
+        }
+        .sheet(isPresented: $showCalibreImport) {
+            CalibreImportView(session: session)
         }
         .alert(
             "Something went wrong",
@@ -148,6 +157,13 @@ struct ContentView: View {
                 } label: {
                     Label("Diagnostics", systemImage: "wrench.and.screwdriver")
                 }
+                Button {
+                    pickerPurpose = .calibre
+                    isPickerPresented = true
+                } label: {
+                    Label("Import from Calibre…", systemImage: "tray.and.arrow.down")
+                }
+                .help("Import a copy of an existing Calibre library")
             }
         }
     }

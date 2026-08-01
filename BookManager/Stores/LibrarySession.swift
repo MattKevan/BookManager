@@ -46,6 +46,14 @@ final class LibrarySession {
     var inspectorBook: IndexedBook?
     var diagnosticsPresented = false
 
+    // Calibre import wizard state
+    private(set) var calibreSummary: CalibreLibrarySummary?
+    private(set) var calibreBooks: [CalibreBookRecord] = []
+    var calibreSelectedIDs = Set<Int>()
+    private(set) var calibreImportReport: CalibreImportReport?
+    var calibreImportInProgress = false
+    private(set) var calibreSourcePath: String?
+
     private let deviceID: UUID
     private let bookmarks: LibraryBookmarkStore
     private var activeSecurityURL: URL?
@@ -84,6 +92,12 @@ final class LibrarySession {
         importReport = nil
         inspectorBook = nil
         lastError = nil
+        calibreSummary = nil
+        calibreBooks = []
+        calibreSelectedIDs = []
+        calibreImportReport = nil
+        calibreImportInProgress = false
+        calibreSourcePath = nil
     }
 
     // MARK: - Activation
@@ -171,6 +185,56 @@ final class LibrarySession {
             importReport = ImportReport(items: [
                 ImportItem(sourceURL: urls.first ?? URL(fileURLWithPath: "/"), kind: .epub, status: .failed(error.localizedDescription))
             ])
+        }
+        await refreshAll()
+    }
+
+    // MARK: - Calibre import
+
+    func selectCalibreLibrary(at url: URL) async {
+        let reader: CalibreReader
+        do {
+            reader = try CalibreReader.open(libraryURL: url)
+        } catch {
+            lastError = error.localizedDescription
+            calibreSummary = nil
+            calibreBooks = []
+            calibreSourcePath = nil
+            return
+        }
+        defer { try? reader.close() }
+        do {
+            let summary = try reader.summary()
+            let books = try reader.books()
+            calibreSummary = summary
+            calibreBooks = books
+            calibreSelectedIDs = Set(books.map(\.calibreID))
+            calibreImportReport = nil
+            calibreSourcePath = url.standardizedFileURL.path
+        } catch {
+            lastError = error.localizedDescription
+            calibreSummary = nil
+            calibreBooks = []
+            calibreSourcePath = nil
+        }
+    }
+
+    func importCalibre() async {
+        guard let repository, let summary = calibreSummary,
+              let sourcePath = calibreSourcePath else { return }
+        calibreImportInProgress = true
+        defer { calibreImportInProgress = false }
+        let service = CalibreImportService(layout: .init(root: repository.root))
+        do {
+            calibreImportReport = try await service.importBooks(
+                calibreBooks,
+                from: sourcePath,
+                libraryID: summary.libraryID,
+                selection: Array(calibreSelectedIDs),
+                into: repository
+            )
+        } catch {
+            lastError = error.localizedDescription
         }
         await refreshAll()
     }
