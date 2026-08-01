@@ -357,6 +357,42 @@ public actor LibraryRepository: LibraryRepositoryImporting {
         }
     }
 
+    // MARK: - Sync integration
+
+    /// Builds the sync engine for this repository's layout and catalog.
+    public func syncEngine(state: SyncState) -> SyncEngine {
+        SyncEngine(layout: layout, catalog: catalog, state: state, deviceID: deviceID)
+    }
+
+    /// Upserts the catalog entry for an offline-applied edit (no filesystem
+    /// writes — the canonical folder is reconciled by the sync monitor in 4b).
+    /// The catalog's cached snapshot must reflect the applied state (a stale
+    /// snapshot would make the next edit apply on an outdated base), so the
+    /// document is rebuilt from the base snapshot plus the staged changes.
+    @discardableResult
+    public func upsertResolved(
+        _ resolved: ResolvedBook,
+        bookID: UUID,
+        baseSnapshot: Data,
+        changes: [Data]
+    ) async throws -> IndexedBook {
+        let document = try AutomergeBookDocument(snapshot: baseSnapshot, deviceID: deviceID)
+        for change in changes {
+            try document.apply(change)
+        }
+        let path = CanonicalPathBuilder.relativeDirectory(
+            bookID: bookID, title: resolved.title, authors: resolved.authors
+        )
+        let indexed = try IndexedBookFactory.make(
+            resolved: resolved,
+            bookID: bookID,
+            path: path,
+            snapshot: document.snapshot()
+        )
+        try await catalog.upsert(indexed)
+        return indexed
+    }
+
     private func makeIndexedBook(
         _ document: AutomergeBookDocument,
         relativePath: String

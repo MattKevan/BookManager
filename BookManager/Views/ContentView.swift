@@ -33,6 +33,11 @@ struct ContentView: View {
             }
         }
         .frame(minWidth: 900, minHeight: 560)
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            // Reconnection hook (slice 4a): on app activation, drain the outbox
+            // and ingest changes made by other Macs. The always-on monitor is 4b.
+            Task { await session.syncNow() }
+        }
         .onChange(of: session.selection) { _, newValue in
             if newValue.count == 1 && !session.isMarqueeSelecting {
                 session.inspectorPresented = true
@@ -158,6 +163,20 @@ struct ContentView: View {
                 } label: {
                     Label("Diagnostics", systemImage: "wrench.and.screwdriver")
                 }
+                Button {
+                    Task { await session.syncNow() }
+                } label: {
+                    if session.pendingSyncCount > 0 {
+                        Label("\(session.pendingSyncCount) pending", systemImage: "arrow.triangle.2.circlepath")
+                    } else {
+                        Label("Synced", systemImage: "checkmark.circle")
+                    }
+                }
+                .help(
+                    session.pendingSyncCount > 0
+                        ? "\(session.pendingSyncCount) change(s) waiting to sync — click to sync now"
+                        : "Synced — click to check for changes from other Macs"
+                )
                 Button {
                     session.present(.calibre)
                 } label: {

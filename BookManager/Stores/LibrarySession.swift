@@ -36,6 +36,9 @@ final class LibrarySession {
 
     private(set) var state: State = .welcome
     private(set) var repository: LibraryRepository?
+    /// Metadata edits queued locally because the library folder is unreachable;
+    /// cleared when `syncNow` drains the outbox.
+    private(set) var pendingSyncCount = 0
     var searchText = "" {
         didSet {
             searchTask?.cancel()
@@ -81,6 +84,7 @@ final class LibrarySession {
     private let bookmarks: LibraryBookmarkStore
     private var activeSecurityURL: URL?
     private var calibreSourceSecurityURL: URL?
+    private var syncState: SyncState?
     private var searchTask: Task<Void, Never>?
 
     struct FacetSelection: Hashable {
@@ -143,6 +147,8 @@ final class LibrarySession {
         activeSecurityURL = nil
         stopCalibreAccess()
         repository = nil
+        syncState = nil
+        pendingSyncCount = 0
         state = .welcome
         books = []
         deletedBooks = []
@@ -201,10 +207,12 @@ final class LibrarySession {
             }
             try bookmarks.save(url, for: repository.manifest.id)
             recentLibraries = Self.resolveRecents(bookmarks)
+            syncState = try SyncState(root: Self.syncRoot(), libraryID: repository.manifest.id)
             activeSecurityURL?.stopAccessingSecurityScopedResource()
             activeSecurityURL = accessed ? url : nil
             self.repository = repository
             state = .loaded
+            refreshPendingSync()
             await refreshAll()
         } catch {
             if accessed { url.stopAccessingSecurityScopedResource() }
@@ -383,9 +391,89 @@ final class LibrarySession {
         do {
             let updated = try await repository.updateBook(id: id, edit: edit)
             inspectorBook = updated
-            await refreshAll()
         } catch {
-            state = .failed(message: error.localizedDescription)
+            // The library folder may be unreachable (volume unmounted, cloud
+            // folder offline): queue the edit to the durable outbox and keep
+            // the catalog current so browsing reflects it. If even the offline
+            // path fails, surface the original error.
+            await saveOffline(edit, for: id, originalError: error)
+        }
+        refreshPendingSync()
+        await refreshAll()
+    }
+
+    private func saveOffline(_ edit: BookEdit, for id: UUID, originalError: Error) async {
+        guard let repository, let syncState else {
+            lastError = originalError.localizedDescription
+            return
+        }
+        var book = books.first { $0.id == id }
+        if book == nil {
+            book = try? await repository.book(id: id)
+        }
+        guard let book else {
+            lastError = originalError.localizedDescription
+            return
+        }
+        do {
+            let (changes, resolved) = try OfflineBookEdit.apply(
+                edit, to: book.snapshot, deviceID: deviceID
+            )
+            var clock = HybridLogicalClock(nodeID: deviceID)
+            for change in changes {
+                _ = try syncState.outbox.stage(
+                    change: change, bookID: id, deviceID: deviceID, clock: clock.tick()
+                )
+            }
+            let updated = try await repository.upsertResolved(
+                resolved, bookID: id, baseSnapshot: book.snapshot, changes: changes
+            )
+            inspectorBook = updated
+        } catch {
+            lastError = originalError.localizedDescription
+        }
+    }
+
+    // MARK: - Sync
+
+    /// Drains the durable outbox into the library, ingests changes made by
+    /// other Macs, and refreshes the catalog. The always-on monitor is slice
+    /// 4b; for now sync runs on demand (toolbar button, app activation).
+    func syncNow() async {
+        guard let repository, let syncState else { return }
+        await ensureLibraryFilesDownloaded()
+        do {
+            let engine = await repository.syncEngine(state: syncState)
+            _ = try await engine.drainOutbox()
+            _ = try await engine.ingest()
+        } catch {
+            lastError = error.localizedDescription
+        }
+        refreshPendingSync()
+        await refreshAll()
+    }
+
+    private func refreshPendingSync() {
+        pendingSyncCount = (try? syncState?.outbox.pendingCount()) ?? 0
+    }
+
+    /// iCloud Drive can leave library files as placeholders until requested;
+    /// ingest must read real content, so request a download first. The wait is
+    /// bounded (Task 4's `ensureDownloaded` loop is caller-bounded by design).
+    private func ensureLibraryFilesDownloaded() async {
+        guard let repository else { return }
+        let capabilities = LibraryRootCapabilities.probe(repository.root)
+        guard capabilities.isUbiquitous else { return }
+        try? await withThrowingTaskGroup(of: Void.self) { group in
+            group.addTask {
+                await LibraryRootCapabilities.ensureDownloaded(repository.root)
+            }
+            group.addTask {
+                try await Task.sleep(for: .seconds(10))
+                throw CancellationError()
+            }
+            try await group.next()
+            group.cancelAll()
         }
     }
 
@@ -456,6 +544,13 @@ final class LibrarySession {
         guard let repository else { return }
         missingFiles = (try? await repository.missingFormatFiles()) ?? []
         await refreshDeleted()
+    }
+
+    private static func syncRoot() throws -> URL {
+        let root = URL.applicationSupportDirectory
+            .appending(path: "Book Manager", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        return root
     }
 
     private static func indexDirectory() throws -> URL {
