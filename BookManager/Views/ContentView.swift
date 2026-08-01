@@ -6,6 +6,7 @@ import UniformTypeIdentifiers
 struct ContentView: View {
     @Bindable var session: LibrarySession
     @State private var pickerPurpose: PickerPurpose?
+    @State private var isPickerPresented = false
     @State private var importURLs: [URL] = []
     @State private var showImportReport = false
     @State private var showDiagnostics = false
@@ -20,8 +21,14 @@ struct ContentView: View {
             switch session.state {
             case .welcome:
                 LibraryWelcomeView(
-                    createLibrary: { pickerPurpose = .create },
-                    openLibrary: { pickerPurpose = .open }
+                    createLibrary: {
+                        pickerPurpose = .create
+                        isPickerPresented = true
+                    },
+                    openLibrary: {
+                        pickerPurpose = .open
+                        isPickerPresented = true
+                    }
                 )
             case .loading:
                 ProgressView("Opening Library…").controlSize(.large)
@@ -39,32 +46,34 @@ struct ContentView: View {
         }
         .frame(minWidth: 900, minHeight: 560)
         .fileImporter(
-            isPresented: Binding(
-                get: { pickerPurpose != nil },
-                set: { if !$0 { pickerPurpose = nil } }
-            ),
+            isPresented: $isPickerPresented,
             allowedContentTypes: pickerPurpose == .addBooks
                 ? [.epub, .pdf, .data]
                 : [.folder],
-            allowsMultipleSelection: true
-        ) { result in
-            let purpose = pickerPurpose
-            pickerPurpose = nil
-            guard case let .success(urls) = result else { return }
-            switch purpose {
-            case .create:
-                Task { await session.createLibrary(at: urls[0]) }
-            case .open:
-                Task { await session.openLibrary(at: urls[0]) }
-            case .addBooks:
-                Task {
-                    await session.importFiles(urls: urls)
-                    showImportReport = session.importReport != nil
+            allowsMultipleSelection: true,
+            onCompletion: { result in
+                // NOTE: SwiftUI flips `isPresented` to false (firing the binding's
+                // set) BEFORE onCompletion runs, so the purpose must be read from
+                // `pickerPurpose`, which is only cleared here — never by the binding.
+                let purpose = pickerPurpose
+                pickerPurpose = nil
+                guard case let .success(urls) = result else { return }
+                switch purpose {
+                case .create:
+                    Task { await session.createLibrary(at: urls[0]) }
+                case .open:
+                    Task { await session.openLibrary(at: urls[0]) }
+                case .addBooks:
+                    Task {
+                        await session.importFiles(urls: urls)
+                        showImportReport = session.importReport != nil
+                    }
+                case nil:
+                    break
                 }
-            case nil:
-                break
-            }
-        }
+            },
+            onCancellation: { pickerPurpose = nil }
+        )
         .sheet(isPresented: $showImportReport) {
             if let report = session.importReport {
                 ImportReportView(report: report) { showImportReport = false }
@@ -99,6 +108,7 @@ struct ContentView: View {
             ToolbarItemGroup {
                 Button {
                     pickerPurpose = .addBooks
+                    isPickerPresented = true
                 } label: {
                     Label("Add Books", systemImage: "plus")
                 }
