@@ -61,6 +61,24 @@ public struct CalibreBookRecord: Sendable, Equatable {
     public let cover: CalibreCover?
     /// Page counts from the v27 `books_pages_link` table, nil when absent.
     public let pages: CalibrePageCount?
+    /// The source library's stable book UUID (`books.uuid`), nil when absent.
+    public let sourceUUID: String?
+    /// The source library's title sort key (`books.sort`), nil when empty.
+    public let titleSort: String?
+    /// The source library's author sort key (`books.author_sort`), nil when empty.
+    public let authorSort: String?
+    /// The source library's last-modified timestamp (`books.last_modified`).
+    public let lastModified: Date?
+    /// The source library's relative book-folder path (`books.path`), nil when empty.
+    public let sourcePath: String?
+    /// Original format entries preserved verbatim (source `name` + `path` override).
+    public let originalFormats: [CalibreOriginalFormat]
+    /// Conversion options preserved verbatim (format → settings blob).
+    public let conversionOptions: [CalibreConversionOption]
+    /// Identifier values beyond the first per type (the first stays in `identifiers`).
+    public let extraIdentifiers: [String: [String]]
+    /// Custom-column definitions for the columns this book references.
+    public let customColumnDefinitions: [String: CalibreColumnDefinition]
     /// Namespaced preservation payload: custom columns (`calibre.custom.<label>`),
     /// unsupported book columns (`calibre.pages`, `calibre.lccn`), annotations
     /// and last-read positions. Values are JSON-encoded strings.
@@ -85,6 +103,15 @@ public struct CalibreBookRecord: Sendable, Equatable {
         formats: [CalibreFormatRecord],
         cover: CalibreCover?,
         pages: CalibrePageCount?,
+        sourceUUID: String?,
+        titleSort: String?,
+        authorSort: String?,
+        lastModified: Date?,
+        sourcePath: String?,
+        originalFormats: [CalibreOriginalFormat],
+        conversionOptions: [CalibreConversionOption],
+        extraIdentifiers: [String: [String]],
+        customColumnDefinitions: [String: CalibreColumnDefinition],
         rawMetadata: [String: String],
         opfPath: String?
     ) {
@@ -104,6 +131,15 @@ public struct CalibreBookRecord: Sendable, Equatable {
         self.formats = formats
         self.cover = cover
         self.pages = pages
+        self.sourceUUID = sourceUUID
+        self.titleSort = titleSort
+        self.authorSort = authorSort
+        self.lastModified = lastModified
+        self.sourcePath = sourcePath
+        self.originalFormats = originalFormats
+        self.conversionOptions = conversionOptions
+        self.extraIdentifiers = extraIdentifiers
+        self.customColumnDefinitions = customColumnDefinitions
         self.rawMetadata = rawMetadata
         self.opfPath = opfPath
     }
@@ -121,6 +157,53 @@ public struct CalibrePageCount: Sendable, Equatable {
         self.algorithm = algorithm
         self.format = format
         self.formatSize = formatSize
+    }
+}
+
+/// The original name (and optional path override) of one format file in the
+/// source library, preserved so the canonical rename loses nothing.
+public struct CalibreOriginalFormat: Sendable, Equatable, Encodable {
+    public let format: String
+    public let name: String
+    public let path: String?
+
+    public init(format: String, name: String, path: String?) {
+        self.format = format
+        self.name = name
+        self.path = path
+    }
+}
+
+/// One per-book conversion-options entry from Calibre's `conversion_options`
+/// table (format → settings blob), preserved verbatim. `Data` encodes as
+/// base64 in the JSON payload.
+public struct CalibreConversionOption: Sendable, Equatable, Encodable {
+    public let format: String
+    public let data: Data
+
+    public init(format: String, data: Data) {
+        self.format = format
+        self.data = data
+    }
+}
+
+/// The full definition of a custom column, preserved per book so the raw
+/// `calibre.custom.<label>` values can be rendered with their real names.
+public struct CalibreColumnDefinition: Sendable, Equatable, Encodable {
+    public let name: String
+    public let datatype: String
+    public let display: String
+    public let isMultiple: Bool
+    public let editable: Bool
+    public let normalized: Bool
+
+    public init(name: String, datatype: String, display: String, isMultiple: Bool, editable: Bool, normalized: Bool) {
+        self.name = name
+        self.datatype = datatype
+        self.display = display
+        self.isMultiple = isMultiple
+        self.editable = editable
+        self.normalized = normalized
     }
 }
 

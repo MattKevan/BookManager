@@ -27,7 +27,7 @@ protocol CalibreSchemaAdapting: Sendable {
     func fetchComments(_ db: Database) throws -> [(book: Int, text: String)]
     func fetchFormats(_ db: Database) throws -> [(book: Int, format: String, name: String, size: Int64, path: String?)]
     func customColumns(_ db: Database) throws -> [CalibreCustomColumn]
-    func fetchCustomValues(_ db: Database, column: CalibreCustomColumn) throws -> [(book: Int, value: String?)]
+    func fetchCustomValues(_ db: Database, column: CalibreCustomColumn) throws -> [(book: Int, value: String?, extra: String?)]
     func fetchAnnotations(_ db: Database) throws -> [(book: Int, payload: String)]
     func fetchLastReadPositions(_ db: Database) throws -> [(book: Int, payload: String)]
     func fetchPageCounts(_ db: Database) throws -> [(book: Int, pages: Int, algorithm: Int, format: String, formatSize: Int64)]
@@ -41,7 +41,11 @@ struct CalibreCustomColumn: Sendable, Equatable {
     let label: String
     let name: String
     let datatype: String
+    let display: String
     let isMultiple: Bool
+    let editable: Bool
+    let normalized: Bool
+    let markForDelete: Bool
 }
 
 /// Adapter base for Calibre database schemas. Query logic is shared across
@@ -229,7 +233,9 @@ class CalibreSchemaBase: CalibreSchemaAdapting, @unchecked Sendable {
             db,
             sql: """
                 SELECT id AS id, label AS label, name AS name, datatype AS datatype,
-                       is_multiple AS is_multiple
+                       display AS display, is_multiple AS is_multiple,
+                       editable AS editable, normalized AS normalized,
+                       mark_for_delete AS mark_for_delete
                 FROM custom_columns ORDER BY id
                 """
         ).map {
@@ -238,26 +244,36 @@ class CalibreSchemaBase: CalibreSchemaAdapting, @unchecked Sendable {
                 label: $0["label"] as String,
                 name: $0["name"] as String,
                 datatype: $0["datatype"] as String,
-                isMultiple: ($0["is_multiple"] as Int? ?? 0) != 0
+                display: $0["display"] as String,
+                isMultiple: ($0["is_multiple"] as Int? ?? 0) != 0,
+                editable: ($0["editable"] as Int? ?? 0) != 0,
+                normalized: ($0["normalized"] as Int? ?? 0) != 0,
+                markForDelete: ($0["mark_for_delete"] as Int? ?? 0) != 0
             )
         }
     }
 
-    func fetchCustomValues(_ db: Database, column: CalibreCustomColumn) throws -> [(book: Int, value: String?)] {
+    func fetchCustomValues(_ db: Database, column: CalibreCustomColumn) throws -> [(book: Int, value: String?, extra: String?)] {
         if column.isMultiple {
             let table = "books_custom_column_\(column.id)_link"
             guard try !columns(in: table, db).isEmpty else { return [] }
             return try Row.fetchAll(
                 db,
-                sql: "SELECT book AS book, value AS value FROM \(table) ORDER BY book, id"
-            ).map { (book: $0["book"] as Int, value: Self.valueString($0["value"]?.databaseValue)) }
+                sql: "SELECT book AS book, value AS value, extra AS extra FROM \(table) ORDER BY book, id"
+            ).map {
+                (
+                    book: $0["book"] as Int,
+                    value: Self.valueString($0["value"]?.databaseValue),
+                    extra: Self.valueString($0["extra"]?.databaseValue)
+                )
+            }
         }
         let table = "custom_column_\(column.id)"
         guard try !columns(in: table, db).isEmpty else { return [] }
         return try Row.fetchAll(
             db,
             sql: "SELECT book AS book, value AS value FROM \(table) ORDER BY book"
-        ).map { (book: $0["book"] as Int, value: Self.valueString($0["value"]?.databaseValue)) }
+        ).map { (book: $0["book"] as Int, value: Self.valueString($0["value"]?.databaseValue), extra: nil) }
     }
 
     func fetchAnnotations(_ db: Database) throws -> [(book: Int, payload: String)] {
@@ -271,11 +287,15 @@ class CalibreSchemaBase: CalibreSchemaAdapting, @unchecked Sendable {
             sql: """
                 SELECT book AS book, format AS format, user_type AS user_type,
                        user AS user, annot_id AS annot_id, annot_type AS annot_type,
-                       annot_data AS annot_data
+                       annot_data AS annot_data, searchable_text AS searchable_text,
+                       timestamp AS timestamp
                 FROM annotations ORDER BY book, id
                 """
         )
-        return try Self.groupJSON(rows: rows, keys: ["format", "user_type", "user", "annot_id", "annot_type", "annot_data"])
+        return try Self.groupJSON(
+            rows: rows,
+            keys: ["format", "user_type", "user", "annot_id", "annot_type", "annot_data", "searchable_text", "timestamp"]
+        )
     }
 
     func fetchLastReadPositions(_ db: Database) throws -> [(book: Int, payload: String)] {

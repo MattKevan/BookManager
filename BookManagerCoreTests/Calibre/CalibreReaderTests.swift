@@ -220,6 +220,47 @@ struct CalibreReaderTests {
     }
 
     @Test
+    func preservesSourceIdentityAndPayload() throws {
+        let library = try makeLibrary()
+        let record = try book(1, from: library)
+
+        // Source identity and sort keys surface as structured fields and as
+        // namespaced raw keys (flat, backward-compatible payload).
+        #expect(record.sourceUUID == "uuid-1")
+        #expect(record.titleSort == "Range: Why Generalists Triumph in a Specialized World")
+        #expect(record.authorSort == "Epstein, David")
+        #expect(record.sourcePath == "David Epstein/Range (1)")
+        #expect(record.rawMetadata["calibre.uuid"] == "uuid-1")
+        #expect(record.rawMetadata["calibre.titleSort"] == "Range: Why Generalists Triumph in a Specialized World")
+        #expect(record.rawMetadata["calibre.authorSort"] == "Epstein, David")
+        #expect(record.rawMetadata["calibre.sourcePath"] == "David Epstein/Range (1)")
+        #expect(record.rawMetadata["calibre.lastModified"] != nil)
+        #expect(record.rawMetadata["calibre.originalFormats"] != nil)
+        #expect(record.rawMetadata["calibre.customColumns"] != nil)
+        // Multi-value link extra surfaces as a parallel key.
+        #expect(record.rawMetadata["calibre.custom.shelves.extra"] != nil)
+    }
+
+    @Test
+    func calibreWebSentinelDateIsNilAndTextSeriesIndexDecodes() throws {
+        // calibre-web writes "0101-01-01 00:00:00+00:00" (year-101 sentinel)
+        // for missing pubdates — must import as nil, not year 101 — and can
+        // create TEXT-affinity series_index tables ("1.5" stored as TEXT).
+        // Book 1 exercises the TEXT series_index; book 2 carries the sentinel
+        // (book 1's pubdate is asserted by textDatesDecodeWithoutCrash).
+        let library = try CalibreFixture.makeTextDateLibrary(named: "sentinel-\(UUID().uuidString)")
+        let reader = try CalibreReader.open(libraryURL: library)
+        defer { try? reader.close() }
+        let records = try reader.books()
+
+        let range = try #require(records.first { $0.calibreID == 1 })
+        #expect(range.seriesIndex == 1.5)
+
+        let talent = try #require(records.first { $0.calibreID == 2 })
+        #expect(talent.publicationDate == nil)
+    }
+
+    @Test
     func opensWALLibraryInReadOnlyDirectory() throws {
         // Calibre's metadata.db is WAL journal mode. A read-only open of a WAL
         // database requires a writable -shm (or writable directory to create

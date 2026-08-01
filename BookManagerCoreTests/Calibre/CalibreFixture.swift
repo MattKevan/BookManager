@@ -58,6 +58,11 @@ enum CalibreFixture {
         let queue = try DatabaseQueue(path: url.path)
         try queue.write { db in
             let isV27 = userVersion == 27
+            // calibre-web declares series_index as String, so its tables have
+            // TEXT affinity; the text-dates variant mirrors that shape.
+            let seriesIndexType = textDates
+                ? "TEXT NOT NULL DEFAULT '1.0'"
+                : "REAL NOT NULL DEFAULT 1.0"
             let booksExtra = extraColumns
                 ? "pages INTEGER,\n                    cover BLOB,"
                 : ""
@@ -89,7 +94,7 @@ enum CalibreFixture {
                     sort TEXT COLLATE NOCASE,
                     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     pubdate TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    series_index REAL NOT NULL DEFAULT 1.0,
+                    series_index \(seriesIndexType),
                     author_sort TEXT COLLATE NOCASE,
                     \(booksMidColumns)path TEXT NOT NULL DEFAULT '',
                     \(booksFlagsColumn)uuid TEXT,
@@ -178,11 +183,27 @@ enum CalibreFixture {
     }
 
     private static func insert(_ spec: BookSpec, db: Database, textDates: Bool, isV27: Bool) throws {
-        let pubdate = spec.pubdate.map { textDates ? isoText($0, fractional: false) : "\(julian($0))" } ?? "0"
+        // calibre-web's "no date" sentinel (book 2 in the text-dates variant)
+        // and its TEXT series_index (book 1); other books keep their dates.
+        let pubdate: String
+        if textDates, spec.id == 2 {
+            pubdate = "0101-01-01 00:00:00+00:00"
+        } else if let date = spec.pubdate {
+            pubdate = textDates ? isoText(date, fractional: false) : "\(julian(date))"
+        } else {
+            pubdate = "0"
+        }
         let timestamp = spec.addedDate.map { textDates ? isoText($0, fractional: true) : "\(julian($0))" } ?? "0"
-        // The v26→27 upgrade drops the lccn column; a realistic ISO string
-        // models a Calibre-written last_modified.
-        let lastModified = isV27 ? "2024-06-15 10:30:00+00:00" : "2000-01-01 00:00:00+00:00"
+        // A realistic ISO string models a Calibre-written last_modified; a
+        // per-spec override can customize it.
+        let lastModified = spec.lastModifiedText ?? "2024-06-15 10:30:00+00:00"
+        // TEXT storage for book 1's series_index exercises the tolerant read.
+        let seriesIndexValue: DatabaseValueConvertible
+        if textDates, spec.id == 1 {
+            seriesIndexValue = "1.5"
+        } else {
+            seriesIndexValue = spec.series?.index ?? 1.0
+        }
         if isV27 {
             try db.execute(
                 sql: """
@@ -191,7 +212,7 @@ enum CalibreFixture {
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                 arguments: [
-                    spec.id, spec.title, spec.sort, timestamp, pubdate, spec.series?.index ?? 1.0,
+                    spec.id, spec.title, spec.sort, timestamp, pubdate, seriesIndexValue,
                     spec.authorSort, spec.path, "uuid-\(spec.id)",
                     spec.hasCoverFile ? 1 : 0, lastModified,
                 ]
@@ -204,7 +225,7 @@ enum CalibreFixture {
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                 arguments: [
-                    spec.id, spec.title, spec.sort, timestamp, pubdate, spec.series?.index ?? 1.0,
+                    spec.id, spec.title, spec.sort, timestamp, pubdate, seriesIndexValue,
                     spec.authorSort, spec.lccn ?? "", spec.path, "uuid-\(spec.id)",
                     spec.hasCoverFile ? 1 : 0, lastModified,
                 ]
@@ -329,10 +350,13 @@ enum CalibreFixture {
             )
         }
         if let shelves = spec.shelves {
-            for shelf in shelves {
+            for (index, shelf) in shelves.enumerated() {
+                // Model a composite custom column (e.g. rating+shelves): book 1's
+                // first shelf carries a real link-table extra, the rest are NULL.
+                let extra: String? = (spec.id == 1 && index == 0) ? "0.5" : nil
                 try db.execute(
                     sql: "INSERT INTO books_custom_column_2_link(book, value, extra) VALUES (?, ?, ?)",
-                    arguments: [spec.id, shelf, ""]
+                    arguments: [spec.id, shelf, extra]
                 )
             }
         }
@@ -422,6 +446,8 @@ enum CalibreFixture {
         let sort: String
         let authorSort: String
         let path: String
+        /// Overrides the fixture's default `last_modified` ISO string.
+        let lastModifiedText: String? = nil
         let authors: [(name: String, sort: String)]
         let series: (name: String, index: Double)?
         let tags: [String]

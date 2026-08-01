@@ -16,6 +16,9 @@ private struct BookLookups {
     var lastRead: [Int: String] = [:]
     var raw: [Int: [String: String]] = [:]
     var pageCounts: [Int: CalibrePageCount] = [:]
+    var conversionOptions: [Int: [CalibreConversionOption]] = [:]
+    var extraIdentifiers: [Int: [String: [String]]] = [:]
+    var columnDefinitions: [String: CalibreColumnDefinition] = [:]
 }
 
 /// A raw `data`-table format row before URL resolution.
@@ -196,6 +199,10 @@ public final class CalibreReader: Sendable {
             let type = entry.type.lowercased()
             if lookups.identifiers[entry.book]?[type] == nil {
                 lookups.identifiers[entry.book, default: [:]][type] = entry.value
+            } else {
+                // Calibre's identifiers table UNIQUEs (book, type), so a second
+                // value per type is a defensive edge, not the norm.
+                lookups.extraIdentifiers[entry.book, default: [:]][type, default: []].append(entry.value)
             }
         }
         for entry in try schema.fetchComments(db) {
@@ -220,18 +227,43 @@ public final class CalibreReader: Sendable {
                 formatSize: entry.formatSize
             )
         }
+        for entry in try schema.fetchConversionOptions(db) {
+            lookups.conversionOptions[entry.book, default: []].append(
+                CalibreConversionOption(format: entry.format, data: entry.data)
+            )
+        }
         let customColumns = try schema.customColumns(db)
         for column in customColumns {
+            lookups.columnDefinitions[column.label] = CalibreColumnDefinition(
+                name: column.name,
+                datatype: column.datatype,
+                display: column.display,
+                isMultiple: column.isMultiple,
+                editable: column.editable,
+                normalized: column.normalized
+            )
             let values = try schema.fetchCustomValues(db, column: column)
             if column.isMultiple {
                 var grouped: [Int: [String]] = [:]
-                for entry in values where entry.value != nil {
-                    grouped[entry.book, default: []].append(entry.value!)
+                var extras: [Int: [String]] = [:]
+                for entry in values {
+                    if let value = entry.value {
+                        grouped[entry.book, default: []].append(value)
+                    }
+                    if let extra = entry.extra, !extra.isEmpty {
+                        extras[entry.book, default: []].append(extra)
+                    }
                 }
                 let encoder = JSONEncoder()
                 for (book, items) in grouped {
                     lookups.raw[book, default: [:]][column.key] =
                         String(decoding: try encoder.encode(items), as: UTF8.self)
+                }
+                if !extras.isEmpty {
+                    for (book, items) in extras {
+                        lookups.raw[book, default: [:]][column.key + ".extra"] =
+                            String(decoding: try encoder.encode(items), as: UTF8.self)
+                    }
                 }
             } else {
                 for entry in values {
@@ -254,6 +286,11 @@ public final class CalibreReader: Sendable {
     ) throws -> CalibreBookRecord {
         let id = row["id"] as Int
         let bookPath = row["path"] as String? ?? ""
+        let sourcePath = bookPath.isEmpty ? nil : bookPath
+        let sourceUUID = (row["uuid"] as String?).flatMap { $0.isEmpty ? nil : $0 }
+        let titleSort = (row["sort"] as String?).flatMap { $0.isEmpty ? nil : $0 }
+        let authorSort = (row["author_sort"] as String?).flatMap { $0.isEmpty ? nil : $0 }
+        let lastModified = Self.date(fromDatabaseValue: row["last_modified"]?.databaseValue)
         var title = row["title"] as String? ?? ""
         var authors = lookups.authors[id] ?? []
 
@@ -304,7 +341,9 @@ public final class CalibreReader: Sendable {
         if bookColumns.contains("lccn"), let lccn = row["lccn"] as String?, !lccn.isEmpty {
             raw["calibre.lccn"] = lccn
         }
-        if bookColumns.contains("pages"), let pages = row["pages"] as Int? {
+        if let pageCount = lookups.pageCounts[id] {
+            raw["calibre.pages"] = "\(pageCount.pages)"
+        } else if bookColumns.contains("pages"), let pages = row["pages"] as Int? {
             raw["calibre.pages"] = "\(pages)"
         }
         if let annotations = lookups.annotations[id] {
@@ -314,8 +353,43 @@ public final class CalibreReader: Sendable {
             raw["calibre.lastReadPositions"] = lastRead
         }
 
+        // Custom-column definitions, but only for columns this book references.
+        var customColumnDefinitions: [String: CalibreColumnDefinition] = [:]
+        for key in raw.keys where key.hasPrefix("calibre.custom.") && !key.hasSuffix(".extra") {
+            let label = String(key.dropFirst("calibre.custom.".count))
+            if let definition = lookups.columnDefinitions[label] {
+                customColumnDefinitions[label] = definition
+            }
+        }
+
+        let originalFormats: [CalibreOriginalFormat] = (lookups.formats[id] ?? []).map {
+            CalibreOriginalFormat(format: $0.format, name: $0.name, path: $0.path)
+        }
+        let conversionOptions = lookups.conversionOptions[id] ?? []
+        let extraIdentifiers = lookups.extraIdentifiers[id] ?? [:]
+
+        if let sourceUUID { raw["calibre.uuid"] = sourceUUID }
+        if let titleSort { raw["calibre.titleSort"] = titleSort }
+        if let authorSort { raw["calibre.authorSort"] = authorSort }
+        if let lastModified { raw["calibre.lastModified"] = Self.isoString(from: lastModified) }
+        if let sourcePath { raw["calibre.sourcePath"] = sourcePath }
+        if !conversionOptions.isEmpty, let json = Self.jsonString(conversionOptions) {
+            raw["calibre.conversionOptions"] = json
+        }
+        if !originalFormats.isEmpty, let json = Self.jsonString(originalFormats) {
+            raw["calibre.originalFormats"] = json
+        }
+        if !extraIdentifiers.isEmpty, let json = Self.jsonString(extraIdentifiers) {
+            raw["calibre.extraIdentifiers"] = json
+        }
+        if !customColumnDefinitions.isEmpty, let json = Self.jsonString(customColumnDefinitions) {
+            raw["calibre.customColumns"] = json
+        }
+
         let seriesIndexValue: Double?
-        if lookups.series[id] != nil, let index = row["series_index"] as Double?, index != 0 {
+        if lookups.series[id] != nil,
+           let index = Self.double(fromDatabaseValue: row["series_index"]?.databaseValue),
+           index != 0 {
             seriesIndexValue = index
         } else {
             seriesIndexValue = nil
@@ -339,6 +413,15 @@ public final class CalibreReader: Sendable {
             formats: formats,
             cover: cover,
             pages: lookups.pageCounts[id],
+            sourceUUID: sourceUUID,
+            titleSort: titleSort,
+            authorSort: authorSort,
+            lastModified: lastModified,
+            sourcePath: sourcePath,
+            originalFormats: originalFormats,
+            conversionOptions: conversionOptions,
+            extraIdentifiers: extraIdentifiers,
+            customColumnDefinitions: customColumnDefinitions,
             rawMetadata: raw,
             opfPath: opfPath
         )
@@ -391,14 +474,14 @@ public final class CalibreReader: Sendable {
         }
         if let date = isoDate(from: normalized, fractionalSeconds: true)
             ?? isoDate(from: normalized, fractionalSeconds: false) {
-            return date
+            return Self.validDate(date)
         }
         // Naive "2019-05-28T00:00:00" without a timezone, treated as UTC.
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = TimeZone(identifier: "UTC")
         formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
-        return formatter.date(from: normalized)
+        return Self.validDate(formatter.date(from: normalized))
     }
 
     private static func isoDate(from string: String, fractionalSeconds: Bool) -> Date? {
@@ -407,6 +490,50 @@ public final class CalibreReader: Sendable {
             ? [.withInternetDateTime, .withFractionalSeconds]
             : [.withInternetDateTime]
         return formatter.date(from: string)
+    }
+
+    /// calibre-web writes a year-101 sentinel ("0101-01-01 00:00:00+00:00")
+    /// for missing pubdates; a date before year 1000 is a sentinel, not a
+    /// real date, and must decode to nil.
+    private static func validDate(_ date: Date?) -> Date? {
+        guard let date else { return nil }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        let year = calendar.dateComponents([.year], from: date).year ?? 0
+        return year >= 1000 ? date : nil
+    }
+
+    /// Decodes a numeric column in whichever storage class the database uses
+    /// (calibre-web can create TEXT-affinity `series_index` tables); GRDB's
+    /// typed `as Double?` cast is strict and traps on TEXT storage.
+    static func double(fromDatabaseValue value: DatabaseValue?) -> Double? {
+        guard let value else { return nil }
+        switch value.storage {
+        case .double(let double):
+            return double
+        case .int64(let int):
+            return Double(int)
+        case .string(let string):
+            return Double(string)
+        case .blob, .null:
+            return nil
+        }
+    }
+
+    /// ISO-8601 string for the preserved `calibre.lastModified` payload value.
+    static func isoString(from date: Date) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.string(from: date)
+    }
+
+    /// JSON-encodes a structured payload (custom columns, original formats,
+    /// conversion options, extra identifiers) into the flat raw string it is
+    /// stored as. Nil on encode failure — the caller skips the key.
+    private static func jsonString<T: Encodable>(_ value: T) -> String? {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        return (try? encoder.encode(value)).map { String(decoding: $0, as: UTF8.self) }
     }
 }
 
