@@ -156,6 +156,9 @@ public actor LibraryRepository: LibraryRepositoryImporting {
         if let comments = metadata.comments, !comments.isEmpty {
             try await write(document.setComments(comments, clock: current.tick()), clock: current)
         }
+        if let rawMetadata = metadata.rawMetadata, !rawMetadata.isEmpty {
+            try await write(document.setRawMetadata(rawMetadata, clock: current.tick()), clock: current)
+        }
         for file in staged {
             let filename = CanonicalPathBuilder.formatFileName(
                 title: metadata.title, authors: metadata.authors, kind: file.kind

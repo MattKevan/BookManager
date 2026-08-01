@@ -138,6 +138,13 @@ public final class AutomergeBookDocument: @unchecked Sendable {
         return try commit(schema, message: "set-cover", timestamp: clock.date)
     }
 
+    public func setRawMetadata(_ payload: [String: String], clock: HybridLogicalClock) throws -> Data {
+        var schema = try decode()
+        let json = String(decoding: try JSONEncoder().encode(payload), as: UTF8.self)
+        schema.rawMetadata[deviceID.uuidString] = VersionedValue(value: json, clock: clock)
+        return try commit(schema, message: "set-raw-metadata", timestamp: clock.date)
+    }
+
     public func setDeleted(_ deleted: Bool, clock: HybridLogicalClock) throws -> Data {
         var schema = try decode()
         schema.deletions[deviceID.uuidString] = VersionedValue(value: deleted, clock: clock)
@@ -228,6 +235,7 @@ public final class AutomergeBookDocument: @unchecked Sendable {
         let comments = newest(schema.comments)?.value
         let formats = resolvedFormats(schema.formats)
         let cover = newest(schema.covers)?.value
+        let rawMetadata = resolvedRawMetadata(schema.rawMetadata)
         let deletion = newest(schema.deletions)
         let clocks = [
             newest(schema.titles)?.clock,
@@ -241,6 +249,7 @@ public final class AutomergeBookDocument: @unchecked Sendable {
             newest(schema.languages)?.clock,
             newest(schema.comments)?.clock,
             newest(schema.covers)?.clock,
+            newest(schema.rawMetadata)?.clock,
             deletion?.clock
         ].compactMap { $0 }
         // Tags and identifiers participate in the modified clock through their own newest entries.
@@ -268,6 +277,7 @@ public final class AutomergeBookDocument: @unchecked Sendable {
             comments: comments,
             formats: formats,
             cover: cover,
+            rawMetadata: rawMetadata,
             isDeleted: deletion?.value ?? false,
             modifiedClock: modifiedClock
         )
@@ -290,6 +300,19 @@ public final class AutomergeBookDocument: @unchecked Sendable {
         formats.compactMapValues { devices in
             devices.values.max(by: { $0.clock < $1.clock })?.value
         }.values.sorted { $0.kind < $1.kind }
+    }
+
+    private func resolvedRawMetadata(_ rawMetadata: [String: VersionedValue<String>]) -> [String: String]? {
+        guard let json = newest(rawMetadata)?.value else { return nil }
+        guard let data = json.data(using: .utf8),
+              let payload = try? JSONDecoder().decode([String: String].self, from: data) else {
+            // A payload that cannot be decoded is treated as absent. Debug builds
+            // assert so development surfaces it; release builds degrade gracefully
+            // and diagnostics can inspect the raw change payload directly.
+            assert(false, "Unparseable raw metadata payload: \(json)")
+            return nil
+        }
+        return payload
     }
 
     private func commit(

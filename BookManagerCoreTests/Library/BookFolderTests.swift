@@ -95,6 +95,52 @@ struct BookFolderTests {
     }
 
     @Test
+    func materializeWritesRawMetadataSidecarWhenPresent() async throws {
+        let (root, layout) = try makeLayout()
+        let folder = BookFolder(layout: layout)
+        let bookID = UUID()
+        let resolved = ResolvedBook(
+            id: bookID, title: "Range", authors: ["David Epstein"],
+            series: nil, seriesIndex: nil, tags: [], rating: nil, publisher: nil,
+            publicationDate: nil, addedDate: nil, languages: [], identifiers: [:],
+            comments: nil, formats: [], cover: nil,
+            rawMetadata: ["calibre.custom.genre": #"["science"]"#, "calibre.pages": "320"],
+            isDeleted: false,
+            modifiedClock: HybridLogicalClock(physicalMilliseconds: 1, nodeID: UUID())
+        )
+
+        let result = try await folder.materialize(bookID: bookID, resolved: resolved, staged: [], cover: nil)
+
+        let dir = await folder.bookDirectoryURL(relativePath: result.path)
+        let sidecar = dir.appending(path: "raw_metadata.json")
+        #expect(FileManager.default.fileExists(atPath: sidecar.path))
+        let decoded = try JSONDecoder().decode(
+            [String: String].self, from: Data(contentsOf: sidecar)
+        )
+        #expect(decoded["calibre.pages"] == "320")
+        #expect(decoded["calibre.custom.genre"] == #"["science"]"#)
+    }
+
+    @Test
+    func materializeSkipsRawMetadataSidecarWhenAbsent() async throws {
+        let (root, layout) = try makeLayout()
+        let folder = BookFolder(layout: layout)
+        let bookID = UUID()
+        let resolved = ResolvedBook(
+            id: bookID, title: "Range", authors: ["David Epstein"],
+            series: nil, seriesIndex: nil, tags: [], rating: nil, publisher: nil,
+            publicationDate: nil, addedDate: nil, languages: [], identifiers: [:],
+            comments: nil, formats: [], cover: nil, isDeleted: false,
+            modifiedClock: HybridLogicalClock(physicalMilliseconds: 1, nodeID: UUID())
+        )
+
+        let result = try await folder.materialize(bookID: bookID, resolved: resolved, staged: [], cover: nil)
+
+        let dir = await folder.bookDirectoryURL(relativePath: result.path)
+        #expect(!FileManager.default.fileExists(atPath: dir.appending(path: "raw_metadata.json").path))
+    }
+
+    @Test
     func renameMovesFolderAndSidecars() async throws {
         let (root, layout) = try makeLayout()
         let folder = BookFolder(layout: layout)

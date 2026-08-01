@@ -94,6 +94,13 @@ public actor BookFolder {
         try OpfGenerator.opfData(bookID: bookID, resolved: resolved)
             .write(to: directory.appending(path: "metadata.opf"), options: .atomic)
 
+        if let rawMetadata = resolved.rawMetadata, !rawMetadata.isEmpty {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            try encoder.encode(rawMetadata)
+                .write(to: directory.appending(path: "raw_metadata.json"), options: .atomic)
+        }
+
         return (path, formats)
     }
 

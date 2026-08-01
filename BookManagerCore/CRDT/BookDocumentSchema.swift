@@ -28,6 +28,7 @@ public struct BookDocumentSchema: Codable, Equatable, Sendable {
     public var comments: [String: VersionedValue<String>]
     public var formats: [String: [String: VersionedValue<BookFormatValue>]]
     public var covers: [String: VersionedValue<CoverValue>]
+    public var rawMetadata: [String: VersionedValue<String>]
 
     public init(
         schemaVersion: Int = 2,
@@ -46,7 +47,8 @@ public struct BookDocumentSchema: Codable, Equatable, Sendable {
         identifiers: [String: [String: VersionedValue<String>]] = [:],
         comments: [String: VersionedValue<String>] = [:],
         formats: [String: [String: VersionedValue<BookFormatValue>]] = [:],
-        covers: [String: VersionedValue<CoverValue>] = [:]
+        covers: [String: VersionedValue<CoverValue>] = [:],
+        rawMetadata: [String: VersionedValue<String>] = [:]
     ) {
         self.schemaVersion = schemaVersion
         self.bookID = bookID
@@ -65,12 +67,13 @@ public struct BookDocumentSchema: Codable, Equatable, Sendable {
         self.comments = comments
         self.formats = formats
         self.covers = covers
+        self.rawMetadata = rawMetadata
     }
 
     private enum CodingKeys: String, CodingKey {
         case schemaVersion, bookID, titles, authors, deletions, series, seriesIndexes
         case tags, ratings, publishers, publicationDates, addedDates
-        case languages, identifiers, comments, formats, covers
+        case languages, identifiers, comments, formats, covers, rawMetadata
     }
 
     public init(from decoder: Decoder) throws {
@@ -92,6 +95,7 @@ public struct BookDocumentSchema: Codable, Equatable, Sendable {
         comments = try container.decodeIfPresent([String: VersionedValue<String>].self, forKey: .comments) ?? [:]
         formats = try container.decodeIfPresent([String: [String: VersionedValue<BookFormatValue>]].self, forKey: .formats) ?? [:]
         covers = try container.decodeIfPresent([String: VersionedValue<CoverValue>].self, forKey: .covers) ?? [:]
+        rawMetadata = try container.decodeIfPresent([String: VersionedValue<String>].self, forKey: .rawMetadata) ?? [:]
     }
 }
 
@@ -111,6 +115,47 @@ public struct ResolvedBook: Codable, Equatable, Identifiable, Sendable {
     public let comments: String?
     public let formats: [BookFormatValue]
     public let cover: CoverValue?
+    public let rawMetadata: [String: String]?
     public let isDeleted: Bool
     public let modifiedClock: HybridLogicalClock
+
+    public init(
+        id: UUID,
+        title: String,
+        authors: [String],
+        series: String?,
+        seriesIndex: Double?,
+        tags: [String],
+        rating: Int?,
+        publisher: String?,
+        publicationDate: Date?,
+        addedDate: Date?,
+        languages: [String],
+        identifiers: [String: String],
+        comments: String?,
+        formats: [BookFormatValue],
+        cover: CoverValue?,
+        rawMetadata: [String: String]? = nil,
+        isDeleted: Bool,
+        modifiedClock: HybridLogicalClock
+    ) {
+        self.id = id
+        self.title = title
+        self.authors = authors
+        self.series = series
+        self.seriesIndex = seriesIndex
+        self.tags = tags
+        self.rating = rating
+        self.publisher = publisher
+        self.publicationDate = publicationDate
+        self.addedDate = addedDate
+        self.languages = languages
+        self.identifiers = identifiers
+        self.comments = comments
+        self.formats = formats
+        self.cover = cover
+        self.rawMetadata = rawMetadata
+        self.isDeleted = isDeleted
+        self.modifiedClock = modifiedClock
+    }
 }

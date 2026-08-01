@@ -43,6 +43,7 @@ public struct NewBookMetadata: Sendable {
     public var languages: [String]
     public var identifiers: [String: String]
     public var comments: String?
+    public var rawMetadata: [String: String]?
 
     public init(
         title: String,
@@ -55,7 +56,8 @@ public struct NewBookMetadata: Sendable {
         publicationDate: Date? = nil,
         languages: [String] = [],
         identifiers: [String: String] = [:],
-        comments: String? = nil
+        comments: String? = nil,
+        rawMetadata: [String: String]? = nil
     ) {
         self.title = title
         self.authors = authors
@@ -68,6 +70,7 @@ public struct NewBookMetadata: Sendable {
         self.languages = languages
         self.identifiers = identifiers
         self.comments = comments
+        self.rawMetadata = rawMetadata
     }
 }
 

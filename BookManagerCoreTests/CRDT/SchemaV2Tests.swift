@@ -257,4 +257,24 @@ struct SchemaV2Tests {
         #expect(try first.resolvedBook().identifiers["google"] == "g")
         #expect(try second.resolvedBook().identifiers["google"] == "g")
     }
+
+    @Test
+    func rawMetadataRoundTripsAndSurvivesRebuild() throws {
+        let source = try document()
+        let base = try source.setTitle("Range", clock: .init(physicalMilliseconds: 1_000, nodeID: deviceA))
+        let payload = ["calibre.custom.genre": #"["science"]"#, "calibre.pages": "320"]
+        let change = try source.setRawMetadata(payload, clock: .init(physicalMilliseconds: 2_000, nodeID: deviceA))
+
+        let replica = try AutomergeBookDocument.empty(deviceID: deviceB)
+        // The base change carries the bookID (Automerge encodes everything since
+        // the last commit); the raw change alone would leave the replica without
+        // an id — same pattern as the other replica tests in this suite.
+        try replica.apply(base)
+        try replica.apply(change)
+        #expect(try replica.resolvedBook().rawMetadata == payload)
+
+        // v2 documents without the field still resolve with nil raw metadata.
+        let v2 = try AutomergeBookDocument.new(bookID: bookID, deviceID: deviceA)
+        #expect(try v2.resolvedBook().rawMetadata == nil)
+    }
 }
