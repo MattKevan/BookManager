@@ -395,6 +395,7 @@ public actor LibraryRepository: LibraryRepositoryImporting {
             languages: book.languages,
             identifiers: book.identifiers,
             comments: normalizeEmpty(book.comments),
+            rawMetadata: book.rawMetadata,
             formats: book.formats.map {
                 BookFormatRecord(
                     kind: $0.kind, filename: $0.filename,

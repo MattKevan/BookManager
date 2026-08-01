@@ -26,6 +26,7 @@ public struct IndexedBook: Identifiable, Equatable, Sendable {
             && lhs.publicationMilliseconds == rhs.publicationMilliseconds
             && lhs.addedMilliseconds == rhs.addedMilliseconds && lhs.languages == rhs.languages
             && lhs.identifiers == rhs.identifiers && lhs.comments == rhs.comments
+            && lhs.rawMetadata == rhs.rawMetadata
             && lhs.formats == rhs.formats && lhs.coverHash == rhs.coverHash
             && lhs.relativePath == rhs.relativePath
             && lhs.modifiedMilliseconds == rhs.modifiedMilliseconds && lhs.isDeleted == rhs.isDeleted
@@ -43,6 +44,9 @@ public struct IndexedBook: Identifiable, Equatable, Sendable {
     public let languages: [String]
     public let identifiers: [String: String]
     public let comments: String?
+    /// Preserved Calibre payload (namespaced keys, JSON-encoded values). Opaque
+    /// to the catalogue — stored and returned verbatim; nil when absent.
+    public let rawMetadata: [String: String]?
     public let formats: [BookFormatRecord]
     public let coverHash: String?
     public let relativePath: String
@@ -64,6 +68,7 @@ public struct IndexedBook: Identifiable, Equatable, Sendable {
         languages: [String] = [],
         identifiers: [String: String] = [:],
         comments: String? = nil,
+        rawMetadata: [String: String]? = nil,
         formats: [BookFormatRecord] = [],
         coverHash: String? = nil,
         relativePath: String = "",
@@ -84,6 +89,7 @@ public struct IndexedBook: Identifiable, Equatable, Sendable {
         self.languages = languages
         self.identifiers = identifiers
         self.comments = comments
+        self.rawMetadata = rawMetadata
         self.formats = formats
         self.coverHash = coverHash
         self.relativePath = relativePath
@@ -123,6 +129,7 @@ extension IndexedBook: FetchableRecord {
         languages = (try? JSONCoding.decode([String].self, from: row["languages"] as String?)) ?? []
         identifiers = (try? JSONCoding.decode([String: String].self, from: row["identifiers"] as String?)) ?? [:]
         comments = row["comments"] as String?
+        rawMetadata = (try? JSONCoding.decode([String: String].self, from: row["rawMetadata"] as String?))
         formats = (try? JSONCoding.decode([BookFormatRecord].self, from: row["formats"] as String?)) ?? []
         coverHash = row["coverHash"] as String?
         relativePath = row["relativePath"] as String

@@ -18,14 +18,15 @@ public actor LocalCatalog {
         let tagsJSON = try JSONCoding.encode(book.tags)
         let languagesJSON = try JSONCoding.encode(book.languages)
         let identifiersJSON = try JSONCoding.encode(book.identifiers)
+        let rawMetadataJSON = try book.rawMetadata.map(JSONCoding.encode)
         let formatsJSON = try JSONCoding.encode(book.formats)
         try database.write { db in
             try db.execute(
                 sql: """
                     INSERT INTO book(id, title, authors, series, seriesIndex, tags, rating, publisher,
                         publicationMilliseconds, addedMilliseconds, languages, identifiers, comments,
-                        formats, coverHash, relativePath, modifiedMilliseconds, isDeleted, snapshot)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        rawMetadata, formats, coverHash, relativePath, modifiedMilliseconds, isDeleted, snapshot)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(id) DO UPDATE SET
                         title = excluded.title, authors = excluded.authors, series = excluded.series,
                         seriesIndex = excluded.seriesIndex, tags = excluded.tags, rating = excluded.rating,
@@ -33,6 +34,7 @@ public actor LocalCatalog {
                         publicationMilliseconds = excluded.publicationMilliseconds,
                         addedMilliseconds = excluded.addedMilliseconds, languages = excluded.languages,
                         identifiers = excluded.identifiers, comments = excluded.comments,
+                        rawMetadata = excluded.rawMetadata,
                         formats = excluded.formats, coverHash = excluded.coverHash,
                         relativePath = excluded.relativePath, modifiedMilliseconds = excluded.modifiedMilliseconds,
                         isDeleted = excluded.isDeleted, snapshot = excluded.snapshot
@@ -42,7 +44,7 @@ public actor LocalCatalog {
                     book.seriesIndex, tagsJSON, book.rating,
                     book.publisher, book.publicationMilliseconds,
                     book.addedMilliseconds, languagesJSON, identifiersJSON,
-                    book.comments, formatsJSON, book.coverHash, book.relativePath,
+                    book.comments, rawMetadataJSON, formatsJSON, book.coverHash, book.relativePath,
                     book.modifiedMilliseconds, book.isDeleted, book.snapshot
                 ]
             )
@@ -199,6 +201,10 @@ public actor LocalCatalog {
             try db.drop(table: "bookSearch")
             try createV2Schema(db)
         }
+        migrator.registerMigration("v3RawMetadata") { db in
+            try db.drop(table: "book")
+            try createBookTable(db, rawMetadata: true)
+        }
         return migrator
     }
 
@@ -220,27 +226,7 @@ public actor LocalCatalog {
     }
 
     private static func createV2Schema(_ db: Database) throws {
-        try db.create(table: "book") { table in
-            table.column("id", .text).primaryKey()
-            table.column("title", .text).notNull()
-            table.column("authors", .text).notNull()
-            table.column("series", .text)
-            table.column("seriesIndex", .double)
-            table.column("tags", .text).notNull()
-            table.column("rating", .integer)
-            table.column("publisher", .text)
-            table.column("publicationMilliseconds", .integer)
-            table.column("addedMilliseconds", .integer)
-            table.column("languages", .text).notNull()
-            table.column("identifiers", .text).notNull()
-            table.column("comments", .text)
-            table.column("formats", .text).notNull()
-            table.column("coverHash", .text)
-            table.column("relativePath", .text).notNull()
-            table.column("modifiedMilliseconds", .integer).notNull()
-            table.column("isDeleted", .boolean).notNull()
-            table.column("snapshot", .blob).notNull()
-        }
+        try createBookTable(db, rawMetadata: false)
         try db.create(virtualTable: "bookSearch", using: FTS5()) { table in
             table.column("bookID").notIndexed()
             table.column("title")
@@ -262,6 +248,33 @@ public actor LocalCatalog {
             table.column("kind", .text).notNull()
             table.column("contentHash", .text).notNull()
             table.primaryKey(["bookID", "kind", "contentHash"])
+        }
+    }
+
+    private static func createBookTable(_ db: Database, rawMetadata: Bool) throws {
+        try db.create(table: "book") { table in
+            table.column("id", .text).primaryKey()
+            table.column("title", .text).notNull()
+            table.column("authors", .text).notNull()
+            table.column("series", .text)
+            table.column("seriesIndex", .double)
+            table.column("tags", .text).notNull()
+            table.column("rating", .integer)
+            table.column("publisher", .text)
+            table.column("publicationMilliseconds", .integer)
+            table.column("addedMilliseconds", .integer)
+            table.column("languages", .text).notNull()
+            table.column("identifiers", .text).notNull()
+            table.column("comments", .text)
+            if rawMetadata {
+                table.column("rawMetadata", .text)
+            }
+            table.column("formats", .text).notNull()
+            table.column("coverHash", .text)
+            table.column("relativePath", .text).notNull()
+            table.column("modifiedMilliseconds", .integer).notNull()
+            table.column("isDeleted", .boolean).notNull()
+            table.column("snapshot", .blob).notNull()
         }
     }
 }
