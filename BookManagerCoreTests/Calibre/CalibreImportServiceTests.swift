@@ -244,6 +244,39 @@ struct CalibreImportServiceTests {
         #expect(first.cover == Data([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10]))
         #expect(first.metadata.rawMetadata?["calibre.pages"] == "320")
     }
+
+    @Test
+    func importPreservesRawPayloadEndToEnd() async throws {
+        let layout = try layout()
+        let service = CalibreImportService(layout: layout)
+        let repository = CalibreMemoryRepository()
+        let library = try CalibreFixture.makeVariantLibrary(
+            named: "svc-v27-\(UUID().uuidString)", userVersion: 27, extraColumns: false
+        )
+        let reader = try CalibreReader.open(libraryURL: library)
+        let records = try reader.books()
+        try reader.close()
+
+        let report = try await service.importBooks(
+            records, from: library.path,
+            libraryID: "acceptance-fixture-uuid",
+            selection: [1], into: repository
+        )
+        #expect(report.imported.count == 1)
+
+        let created = try #require(await repository.createdBooks().first)
+        let raw = created.metadata.rawMetadata ?? [:]
+        #expect(raw["calibre.uuid"] == "uuid-1")
+        #expect(raw["calibre.titleSort"] == "Range: Why Generalists Triumph in a Specialized World")
+        #expect(raw["calibre.authorSort"] == "Epstein, David")
+        #expect(raw["calibre.sourcePath"] == "David Epstein/Range (1)")
+        #expect(raw["calibre.pages"] == "320")
+        #expect(raw["calibre.conversionOptions"] != nil)
+        #expect(raw["calibre.originalFormats"] != nil)
+        #expect(raw["calibre.customColumns"] != nil)
+        #expect(raw["calibre.custom.genre"] == "science")
+        #expect(raw["calibre.custom.shelves"] != nil)
+    }
 }
 
 private struct CapturedCreate {
