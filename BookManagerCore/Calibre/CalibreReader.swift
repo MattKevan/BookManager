@@ -121,10 +121,12 @@ public final class CalibreReader: Sendable {
     }
 
     public func close() throws {
-        try database.close()
-        if let snapshotDirectory {
-            try? FileManager.default.removeItem(at: snapshotDirectory)
+        defer {
+            if let snapshotDirectory {
+                try? FileManager.default.removeItem(at: snapshotDirectory)
+            }
         }
+        try database.close()
     }
 
     public func summary() throws -> CalibreLibrarySummary {
