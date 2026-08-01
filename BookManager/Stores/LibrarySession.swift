@@ -50,6 +50,9 @@ final class LibrarySession {
     var viewMode: ViewMode = .table
     var inspectorPresented = false
     var selection = Set<UUID>()
+    /// The anchor for ⇧-click range selection in the grid. Ignored by the
+    /// table view (which manages its own selection semantics natively).
+    private(set) var selectionAnchor: UUID?
     var selectedFacet: FacetSelection?
 
     private(set) var books: [IndexedBook] = []
@@ -141,6 +144,7 @@ final class LibrarySession {
         books = []
         deletedBooks = []
         selection = []
+        selectionAnchor = nil
         selectedFacet = nil
         searchText = ""
         missingFiles = []
@@ -259,6 +263,32 @@ final class LibrarySession {
     func selectFacet(_ facet: FacetSelection?) {
         selectedFacet = (facet == selectedFacet) ? nil : facet
         Task { await refreshBooks() }
+    }
+
+    /// macOS grid-click semantics: plain click replaces, ⌘ toggles, ⇧ selects
+    /// the anchor→clicked range. Reads the modifier flags at gesture time.
+    func selectInGrid(_ book: IndexedBook) {
+        let flags = NSEvent.modifierFlags
+        let modifier: GridSelectionModifier = flags.contains(.command)
+            ? .command
+            : (flags.contains(.shift) ? .shift : .none)
+        let result = GridSelectionSemantics.applying(
+            click: book.id,
+            modifier: modifier,
+            anchor: selectionAnchor,
+            visible: books.map(\.id),
+            selection: selection
+        )
+        selection = result.selection
+        if let anchor = result.anchor {
+            selectionAnchor = anchor
+        }
+    }
+
+    /// Empty-space click: clear the selection and the range anchor.
+    func clearGridSelection() {
+        selection = []
+        selectionAnchor = nil
     }
 
     // MARK: - Import
