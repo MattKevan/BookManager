@@ -59,6 +59,8 @@ public struct CalibreBookRecord: Sendable, Equatable {
     public let comments: String?
     public let formats: [CalibreFormatRecord]
     public let cover: CalibreCover?
+    /// Page counts from the v27 `books_pages_link` table, nil when absent.
+    public let pages: CalibrePageCount?
     /// Namespaced preservation payload: custom columns (`calibre.custom.<label>`),
     /// unsupported book columns (`calibre.pages`, `calibre.lccn`), annotations
     /// and last-read positions. Values are JSON-encoded strings.
@@ -82,6 +84,7 @@ public struct CalibreBookRecord: Sendable, Equatable {
         comments: String?,
         formats: [CalibreFormatRecord],
         cover: CalibreCover?,
+        pages: CalibrePageCount?,
         rawMetadata: [String: String],
         opfPath: String?
     ) {
@@ -100,8 +103,24 @@ public struct CalibreBookRecord: Sendable, Equatable {
         self.comments = comments
         self.formats = formats
         self.cover = cover
+        self.pages = pages
         self.rawMetadata = rawMetadata
         self.opfPath = opfPath
+    }
+}
+
+/// Page counts from the v27 `books_pages_link` table.
+public struct CalibrePageCount: Sendable, Equatable {
+    public let pages: Int
+    public let algorithm: Int
+    public let format: String
+    public let formatSize: Int64
+
+    public init(pages: Int, algorithm: Int, format: String, formatSize: Int64) {
+        self.pages = pages
+        self.algorithm = algorithm
+        self.format = format
+        self.formatSize = formatSize
     }
 }
 

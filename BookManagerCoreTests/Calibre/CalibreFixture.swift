@@ -57,8 +57,31 @@ enum CalibreFixture {
     private static func buildDatabase(at url: URL, userVersion: Int, extraColumns: Bool, textDates: Bool) throws {
         let queue = try DatabaseQueue(path: url.path)
         try queue.write { db in
+            let isV27 = userVersion == 27
             let booksExtra = extraColumns
                 ? "pages INTEGER,\n                    cover BLOB,"
+                : ""
+            // The v26→27 upgrade drops isbn/lccn/flags from books.
+            let booksMidColumns = isV27
+                ? ""
+                : "isbn TEXT DEFAULT '' COLLATE NOCASE,\n                    lccn TEXT DEFAULT '' COLLATE NOCASE,\n                    "
+            let booksFlagsColumn = isV27 ? "" : "flags INTEGER NOT NULL DEFAULT 1,\n                    "
+            // v27 adds the page-count table (plus its insert trigger) and
+            // conversion_options; both are read defensively when present.
+            let v27Tables = isV27
+                ? """
+                CREATE TABLE books_pages_link (
+                    book INTEGER PRIMARY KEY, pages INTEGER DEFAULT 0 NOT NULL,
+                    algorithm INTEGER DEFAULT 0 NOT NULL, format TEXT DEFAULT '' NOT NULL COLLATE NOCASE,
+                    format_size INTEGER DEFAULT 0 NOT NULL, timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    needs_scan INTEGER NOT NULL DEFAULT 0 CHECK(needs_scan IN (0, 1)),
+                    FOREIGN KEY (book) REFERENCES books(id) ON DELETE CASCADE);
+                CREATE TRIGGER books_pages_link_create_trigger AFTER INSERT ON books FOR EACH ROW
+                    BEGIN INSERT INTO books_pages_link(book) VALUES(NEW.id); END;
+                CREATE TABLE conversion_options (
+                    id INTEGER PRIMARY KEY, format TEXT NOT NULL COLLATE NOCASE,
+                    book INTEGER, data BLOB NOT NULL, UNIQUE(format, book));
+                """
                 : ""
             try db.execute(sql: """
                 CREATE TABLE books ( id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -68,11 +91,8 @@ enum CalibreFixture {
                     pubdate TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     series_index REAL NOT NULL DEFAULT 1.0,
                     author_sort TEXT COLLATE NOCASE,
-                    isbn TEXT DEFAULT '' COLLATE NOCASE,
-                    lccn TEXT DEFAULT '' COLLATE NOCASE,
-                    path TEXT NOT NULL DEFAULT '',
-                    flags INTEGER NOT NULL DEFAULT 1,
-                    uuid TEXT,
+                    \(booksMidColumns)path TEXT NOT NULL DEFAULT '',
+                    \(booksFlagsColumn)uuid TEXT,
                     has_cover BOOL DEFAULT 0,
                     \(booksExtra)
                     last_modified TIMESTAMP NOT NULL DEFAULT '2000-01-01 00:00:00+00:00');
@@ -132,6 +152,7 @@ enum CalibreFixture {
                     book INTEGER NOT NULL, format TEXT NOT NULL COLLATE NOCASE,
                     user TEXT NOT NULL, device TEXT NOT NULL, cfi TEXT NOT NULL,
                     epoch REAL NOT NULL, pos_frac REAL NOT NULL DEFAULT 0);
+                \(v27Tables)
                 """)
 
             try db.execute(sql: "PRAGMA user_version = \(userVersion)")
@@ -150,27 +171,59 @@ enum CalibreFixture {
             )
 
             for spec in specs(extraColumns: extraColumns) {
-                try insert(spec, db: db, textDates: textDates)
+                try insert(spec, db: db, textDates: textDates, isV27: isV27)
             }
         }
         try queue.close()
     }
 
-    private static func insert(_ spec: BookSpec, db: Database, textDates: Bool) throws {
+    private static func insert(_ spec: BookSpec, db: Database, textDates: Bool, isV27: Bool) throws {
         let pubdate = spec.pubdate.map { textDates ? isoText($0, fractional: false) : "\(julian($0))" } ?? "0"
         let timestamp = spec.addedDate.map { textDates ? isoText($0, fractional: true) : "\(julian($0))" } ?? "0"
-        try db.execute(
-            sql: """
-                INSERT INTO books(id, title, sort, timestamp, pubdate, series_index,
-                    author_sort, lccn, path, uuid, has_cover, last_modified)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-            arguments: [
-                spec.id, spec.title, spec.sort, timestamp, pubdate, spec.series?.index ?? 1.0,
-                spec.authorSort, spec.lccn ?? "", spec.path, "uuid-\(spec.id)",
-                spec.hasCoverFile ? 1 : 0, "2000-01-01 00:00:00+00:00",
-            ]
-        )
+        // The v26→27 upgrade drops the lccn column; a realistic ISO string
+        // models a Calibre-written last_modified.
+        let lastModified = isV27 ? "2024-06-15 10:30:00+00:00" : "2000-01-01 00:00:00+00:00"
+        if isV27 {
+            try db.execute(
+                sql: """
+                    INSERT INTO books(id, title, sort, timestamp, pubdate, series_index,
+                        author_sort, path, uuid, has_cover, last_modified)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                arguments: [
+                    spec.id, spec.title, spec.sort, timestamp, pubdate, spec.series?.index ?? 1.0,
+                    spec.authorSort, spec.path, "uuid-\(spec.id)",
+                    spec.hasCoverFile ? 1 : 0, lastModified,
+                ]
+            )
+        } else {
+            try db.execute(
+                sql: """
+                    INSERT INTO books(id, title, sort, timestamp, pubdate, series_index,
+                        author_sort, lccn, path, uuid, has_cover, last_modified)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                arguments: [
+                    spec.id, spec.title, spec.sort, timestamp, pubdate, spec.series?.index ?? 1.0,
+                    spec.authorSort, spec.lccn ?? "", spec.path, "uuid-\(spec.id)",
+                    spec.hasCoverFile ? 1 : 0, lastModified,
+                ]
+            )
+        }
+        // v27: the insert trigger created the pages row; give book 1 real
+        // counts and a conversion option.
+        if isV27, spec.id == 1 {
+            try db.execute(
+                sql: """
+                    UPDATE books_pages_link SET pages = 320, algorithm = 2,
+                        format = 'EPUB', format_size = 12345 WHERE book = 1
+                    """
+            )
+            try db.execute(
+                sql: "INSERT INTO conversion_options(format, book, data) VALUES ('EPUB', 1, ?)",
+                arguments: [Data([0x01, 0x02, 0x03, 0x04])]
+            )
+        }
         // Schema-variant columns live only in the extra-columns DDL.
         if let blob = spec.coverBlob {
             try db.execute(

@@ -15,6 +15,7 @@ private struct BookLookups {
     var annotations: [Int: String] = [:]
     var lastRead: [Int: String] = [:]
     var raw: [Int: [String: String]] = [:]
+    var pageCounts: [Int: CalibrePageCount] = [:]
 }
 
 /// A raw `data`-table format row before URL resolution.
@@ -102,8 +103,21 @@ public final class CalibreReader: Sendable {
             throw error
         }
 
-        let schema = CalibreSchema26()
+        // Pick the schema adapter by the database's own version stamp: the
+        // reader supports user_version 26 and 27, nothing else.
+        let schema: any CalibreSchemaAdapting
         do {
+            let version = try queue.read { db in
+                try CalibreSchemaBase().userVersion(db)
+            }
+            switch version {
+            case CalibreSchema26.supportedUserVersion:
+                schema = CalibreSchema26()
+            case CalibreSchema27.supportedUserVersion:
+                schema = CalibreSchema27()
+            default:
+                throw CalibreReaderError.unsupportedSchemaVersion(version)
+            }
             try queue.read { db in
                 try schema.validate(db, libraryURL: databaseURL.deletingLastPathComponent())
             }
@@ -197,6 +211,14 @@ public final class CalibreReader: Sendable {
         }
         for entry in try schema.fetchLastReadPositions(db) {
             lookups.lastRead[entry.book] = entry.payload
+        }
+        for entry in try schema.fetchPageCounts(db) {
+            lookups.pageCounts[entry.book] = CalibrePageCount(
+                pages: entry.pages,
+                algorithm: entry.algorithm,
+                format: entry.format,
+                formatSize: entry.formatSize
+            )
         }
         let customColumns = try schema.customColumns(db)
         for column in customColumns {
@@ -316,6 +338,7 @@ public final class CalibreReader: Sendable {
             comments: lookups.comments[id],
             formats: formats,
             cover: cover,
+            pages: lookups.pageCounts[id],
             rawMetadata: raw,
             opfPath: opfPath
         )

@@ -30,6 +30,8 @@ protocol CalibreSchemaAdapting: Sendable {
     func fetchCustomValues(_ db: Database, column: CalibreCustomColumn) throws -> [(book: Int, value: String?)]
     func fetchAnnotations(_ db: Database) throws -> [(book: Int, payload: String)]
     func fetchLastReadPositions(_ db: Database) throws -> [(book: Int, payload: String)]
+    func fetchPageCounts(_ db: Database) throws -> [(book: Int, pages: Int, algorithm: Int, format: String, formatSize: Int64)]
+    func fetchConversionOptions(_ db: Database) throws -> [(book: Int, format: String, data: Data)]
     func columns(in table: String, _ db: Database) throws -> Set<String>
 }
 
@@ -42,11 +44,13 @@ struct CalibreCustomColumn: Sendable, Equatable {
     let isMultiple: Bool
 }
 
-/// Adapter for Calibre database schema `user_version` 26
-/// (the schema shipped with Calibre ~6.x-7.x; authoritative DDL from
-/// kovidgoyal/calibre `resources/metadata_sqlite.sql` at commit aabd29c571f8).
-struct CalibreSchema26: CalibreSchemaAdapting {
-    static let supportedUserVersion = 26
+/// Adapter base for Calibre database schemas. Query logic is shared across
+/// supported `user_version`s; each subclass pins the version it accepts
+/// (authoritative DDL: kovidgoyal/calibre `resources/metadata_sqlite.sql`).
+class CalibreSchemaBase: CalibreSchemaAdapting, @unchecked Sendable {
+    /// Overridden by each version subclass; `class` (not `static`) so the
+    /// protocol's static requirement is satisfied with dynamic dispatch.
+    class var supportedUserVersion: Int { 26 }
 
     func validate(_ db: Database, libraryURL: URL) throws {
         let version = try userVersion(db)
@@ -291,6 +295,31 @@ struct CalibreSchema26: CalibreSchemaAdapting {
         return try Self.groupJSON(rows: rows, keys: ["format", "user", "device", "cfi", "epoch", "pos_frac"])
     }
 
+    func fetchPageCounts(_ db: Database) throws -> [(book: Int, pages: Int, algorithm: Int, format: String, formatSize: Int64)] {
+        guard try !columns(in: "books_pages_link", db).isEmpty else { return [] }
+        return try Row.fetchAll(db, sql: """
+            SELECT book AS book, pages AS pages, algorithm AS algorithm,
+                   format AS format, format_size AS format_size
+            FROM books_pages_link
+            """).map {
+                (
+                    book: $0["book"] as Int,
+                    pages: $0["pages"] as Int,
+                    algorithm: $0["algorithm"] as Int,
+                    format: $0["format"] as String,
+                    formatSize: $0["format_size"] as Int64
+                )
+            }
+    }
+
+    func fetchConversionOptions(_ db: Database) throws -> [(book: Int, format: String, data: Data)] {
+        guard try !columns(in: "conversion_options", db).isEmpty else { return [] }
+        return try Row.fetchAll(db, sql: """
+            SELECT book AS book, format AS format, data AS data
+            FROM conversion_options
+            """).map { (book: $0["book"] as Int, format: $0["format"] as String, data: $0["data"] as Data) }
+    }
+
     func columns(in table: String, _ db: Database) throws -> Set<String> {
         let rows = try Row.fetchAll(db, sql: "PRAGMA table_info(\(table))")
         return Set(rows.compactMap { $0["name"] as String })
@@ -341,4 +370,18 @@ struct CalibreSchema26: CalibreSchemaAdapting {
             (book: book, payload: String(decoding: try encoder.encode(entries), as: UTF8.self))
         }
     }
+}
+
+/// Adapter for Calibre database schema `user_version` 26
+/// (the schema shipped with Calibre ~6.x).
+final class CalibreSchema26: CalibreSchemaBase {
+    override class var supportedUserVersion: Int { 26 }
+}
+
+/// Adapter for Calibre database schema `user_version` 27 (current Calibre):
+/// v26 plus the `books_pages_link` table (+ insert trigger/index) and minus
+/// the `isbn`/`lccn`/`flags` books columns. Query logic is identical; the
+/// new tables are read defensively when present.
+final class CalibreSchema27: CalibreSchemaBase {
+    override class var supportedUserVersion: Int { 27 }
 }

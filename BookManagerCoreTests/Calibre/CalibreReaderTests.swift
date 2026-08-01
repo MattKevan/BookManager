@@ -201,6 +201,25 @@ struct CalibreReaderTests {
     }
 
     @Test
+    func opensV27LibraryWithPageCounts() throws {
+        // Regression: current Calibre creates user_version 27; the reader
+        // pinned to 26 rejected it wholesale. v27 adds books_pages_link and
+        // drops the books isbn/lccn/flags columns.
+        let library = try CalibreFixture.makeVariantLibrary(
+            named: "v27-\(UUID().uuidString)", userVersion: 27, extraColumns: false
+        )
+        let reader = try CalibreReader.open(libraryURL: library)
+        defer { try? reader.close() }
+        let summary = try reader.summary()
+        #expect(summary.userVersion == 27)
+
+        let records = try reader.books()
+        let range = try #require(records.first { $0.calibreID == 1 })
+        #expect(range.pages?.pages == 320)
+        #expect(range.pages?.algorithm == 2)
+    }
+
+    @Test
     func opensWALLibraryInReadOnlyDirectory() throws {
         // Calibre's metadata.db is WAL journal mode. A read-only open of a WAL
         // database requires a writable -shm (or writable directory to create
