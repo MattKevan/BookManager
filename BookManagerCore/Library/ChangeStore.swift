@@ -55,4 +55,22 @@ public actor ChangeStore {
         return urls.compactMap { UUID(uuidString: $0.lastPathComponent) }
             .sorted { $0.uuidString < $1.uuidString }
     }
+
+    /// The `.amchange` files for one book (URLs, not decoded data) — the
+    /// ingest path needs the source URLs to quarantine corrupt files.
+    /// Mirrors `bookChanges(bookID:)`'s enumeration exactly.
+    public func bookChangeFiles(bookID: UUID) throws -> [URL] {
+        let bookRoot = layout.bookChangesRoot
+            .appending(path: bookID.uuidString, directoryHint: .isDirectory)
+        guard FileManager.default.fileExists(atPath: bookRoot.path) else {
+            return []
+        }
+        let keys: [URLResourceKey] = [.isRegularFileKey]
+        return (FileManager.default.enumerator(
+            at: bookRoot,
+            includingPropertiesForKeys: keys
+        )?.compactMap { $0 as? URL }
+            .filter { $0.pathExtension == "amchange" }
+            .sorted { $0.path < $1.path }) ?? []
+    }
 }
