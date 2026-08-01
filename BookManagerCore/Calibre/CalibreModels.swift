@@ -189,7 +189,7 @@ public struct CalibreConversionOption: Sendable, Equatable, Encodable {
 
 /// The full definition of a custom column, preserved per book so the raw
 /// `calibre.custom.<label>` values can be rendered with their real names.
-public struct CalibreColumnDefinition: Sendable, Equatable, Encodable {
+public struct CalibreColumnDefinition: Sendable, Equatable, Codable {
     public let name: String
     public let datatype: String
     public let display: String
