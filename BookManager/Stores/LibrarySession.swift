@@ -49,6 +49,9 @@ final class LibrarySession {
     var lastError: String?
     var viewMode: ViewMode = .table
     var inspectorPresented = false
+    /// True while a grid marquee drag is in flight; suppresses the inspector's
+    /// click-driven auto-show so a mid-drag single selection doesn't pop it open.
+    var isMarqueeSelecting = false
     var selection = Set<UUID>()
     /// The anchor for ⇧-click range selection in the grid. Ignored by the
     /// table view (which manages its own selection semantics natively).
@@ -150,6 +153,7 @@ final class LibrarySession {
         missingFiles = []
         viewMode = .table
         inspectorPresented = false
+        isMarqueeSelecting = false
         importReport = nil
         inspectorBook = nil
         lastError = nil

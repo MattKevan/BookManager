@@ -65,7 +65,10 @@ struct CoverGridView: View {
     private var marqueeDrag: some Gesture {
         DragGesture(minimumDistance: 3, coordinateSpace: .named("coverGrid"))
             .onChanged { value in
-                if marqueeStart == nil { marqueeStart = value.startLocation }
+                if marqueeStart == nil {
+                    marqueeStart = value.startLocation
+                    session.isMarqueeSelecting = true
+                }
                 marqueeCurrent = value.location
                 let rect = marqueeRect(start: value.startLocation, current: value.location)
                 let hit = GridSelectionSemantics.intersecting(tileFrames, rect: rect)
@@ -73,6 +76,7 @@ struct CoverGridView: View {
                 session.selection = add ? session.selection.union(hit) : hit
             }
             .onEnded { _ in
+                session.isMarqueeSelecting = false
                 marqueeStart = nil
                 marqueeCurrent = nil
             }
@@ -121,12 +125,6 @@ private struct CoverTile: View {
                             lineWidth: 3
                         )
                 )
-                .onTapGesture(count: 2) {
-                    Task { await session?.open(id: book.id) }
-                }
-                .onTapGesture {
-                    session?.selectInGrid(book)
-                }
                 .onHover { hovering in
                     isHovering = hovering
                 }
@@ -144,6 +142,13 @@ private struct CoverTile: View {
             RoundedRectangle(cornerRadius: 10)
                 .fill(isHovering ? Color.accentColor.opacity(0.08) : .clear)
         )
+        .contentShape(Rectangle())
+        .onTapGesture(count: 2) {
+            Task { await session?.open(id: book.id) }
+        }
+        .onTapGesture {
+            session?.selectInGrid(book)
+        }
         .task {
             image = await ThumbnailCache.shared.thumbnail(for: book, repository: session?.repository)
         }

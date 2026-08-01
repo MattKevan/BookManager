@@ -34,7 +34,9 @@ struct ContentView: View {
         }
         .frame(minWidth: 900, minHeight: 560)
         .onChange(of: session.selection) { _, newValue in
-            if newValue.count == 1 { session.inspectorPresented = true }
+            if newValue.count == 1 && !session.isMarqueeSelecting {
+                session.inspectorPresented = true
+            }
         }
         .fileImporter(
             isPresented: $session.isPickerPresented,
