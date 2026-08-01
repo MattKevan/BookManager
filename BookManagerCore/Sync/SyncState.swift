@@ -11,7 +11,9 @@ public struct SyncState: Sendable {
 
     public init(root: URL, libraryID: UUID) throws {
         self.libraryID = libraryID
-        outbox = try Outbox(root: root.appending(path: "Outbox", directoryHint: .isDirectory))
+        outbox = try Outbox(root: root
+            .appending(path: "Outbox", directoryHint: .isDirectory)
+            .appending(path: libraryID.uuidString, directoryHint: .isDirectory))
         let dir = root.appending(path: "SyncState", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         stateURL = dir.appending(path: "\(libraryID.uuidString).json")

@@ -42,4 +42,19 @@ struct SyncStateTests {
         try state.reset()
         #expect(try state.appliedFingerprints().isEmpty)
     }
+
+    @Test
+    func outboxIsPerLibrary() throws {
+        // The outbox root must be scoped to the library ID: draining library
+        // B's outbox must never see library A's pending changes.
+        let dir = try stateDir()
+        let first = try SyncState(root: dir, libraryID: UUID())
+        let second = try SyncState(root: dir, libraryID: UUID())
+        var clock = HybridLogicalClock(nodeID: UUID())
+        _ = try first.outbox.stage(
+            change: Data("a".utf8), bookID: UUID(), deviceID: UUID(), clock: clock.tick()
+        )
+        #expect(try second.outbox.pendingCount() == 0)
+        #expect(try first.outbox.pendingCount() == 1)
+    }
 }

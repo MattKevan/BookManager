@@ -32,6 +32,19 @@ struct DiagnosticsView: View {
                         }
                     }
                 }
+                Section {
+                    if let session, session.quarantinedChanges.isEmpty {
+                        Text("None").foregroundStyle(.secondary)
+                    } else {
+                        ForEach(session?.quarantinedChanges ?? [], id: \.path) { url in
+                            Text(url.lastPathComponent).foregroundStyle(.secondary)
+                        }
+                    }
+                } header: {
+                    Text("Quarantined Changes")
+                } footer: {
+                    Text("Undecodable change files, preserved instead of deleted.")
+                }
                 Section("Trash") {
                     if let session, session.deletedBooks.isEmpty {
                         Text("Empty").foregroundStyle(.secondary)

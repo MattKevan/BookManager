@@ -45,14 +45,24 @@ public actor SyncEngine {
 
         for bookID in bookIDs {
             let files = try await store.bookChangeFiles(bookID: bookID)
+            // Seed the document from the catalog's stored snapshot so changes
+            // applied by earlier ingests stay part of it. When the catalog has
+            // no snapshot (cleared/never upserted), fall back to a full rebuild
+            // from every change file — the fingerprint filter alone would drop
+            // earlier contributions.
+            let snapshotData = try? await catalog.snapshot(bookID: bookID)
+            let seededDocument = snapshotData.flatMap { try? AutomergeBookDocument(snapshot: $0, deviceID: deviceID) }
+            let document = try seededDocument ?? AutomergeBookDocument.empty(deviceID: deviceID)
+            // With a seeded document, skip already-applied changes; without one,
+            // every change file must be (re)applied.
+            let filterApplied = seededDocument != nil
             var pending = files.filter { url in
-                guard let data = try? Data(contentsOf: url) else { return true }
+                guard filterApplied, let data = try? Data(contentsOf: url) else { return true }
                 let fingerprint = Self.fingerprint(data)
                 return !applied.contains(fingerprint) && !newlyApplied.contains(fingerprint)
             }
             if pending.isEmpty { continue }
 
-            let document = try AutomergeBookDocument.empty(deviceID: deviceID)
             var appliedAny = false
             var madeProgress = true
             while !pending.isEmpty && madeProgress {

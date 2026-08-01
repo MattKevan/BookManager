@@ -39,6 +39,10 @@ final class LibrarySession {
     /// Metadata edits queued locally because the library folder is unreachable;
     /// cleared when `syncNow` drains the outbox.
     private(set) var pendingSyncCount = 0
+
+    /// Undecodable change files moved to the library quarantine by the last
+    /// ingest — surfaced in Diagnostics so nothing silently disappears.
+    private(set) var quarantinedChanges: [URL] = []
     /// Read-only gate: the library folder is known unreachable, so editing is
     /// disabled until a reconnect succeeds (approved read-only-when-offline
     /// amendment). Transient mid-session write failures still stage to the
@@ -154,6 +158,7 @@ final class LibrarySession {
         repository = nil
         syncState = nil
         pendingSyncCount = 0
+        quarantinedChanges = []
         isLibraryUnavailable = false
         state = .welcome
         books = []
@@ -456,7 +461,8 @@ final class LibrarySession {
         do {
             let engine = await repository.syncEngine(state: syncState)
             _ = try await engine.drainOutbox()
-            _ = try await engine.ingest()
+            let report = try await engine.ingest()
+            quarantinedChanges = report.quarantined
         } catch {
             lastError = error.localizedDescription
         }

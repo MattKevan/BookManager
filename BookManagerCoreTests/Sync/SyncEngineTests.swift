@@ -113,4 +113,37 @@ struct SyncEngineTests {
         try await engine.fullRescan()
         #expect(try await h.catalog.allBooks().count == 1)
     }
+
+    @Test
+    func incrementalIngestAccumulatesAcrossMultipleRuns() async throws {
+        // Changes for a book often arrive in separate syncs (cloud delivery).
+        // Each ingest must accumulate on the catalog's stored snapshot —
+        // rebuilding from only the newly-arrived changes would drop earlier
+        // contributions (and a valid change must never be quarantined).
+        let h = try Harness()
+        let deviceID = UUID()
+        let bookID = UUID()
+        let document = try AutomergeBookDocument.new(bookID: bookID, deviceID: deviceID)
+        var clock = HybridLogicalClock(nodeID: deviceID)
+        let titleChange = try document.setTitle("Base", clock: clock.tick())
+        let tagsDoc = try AutomergeBookDocument(snapshot: document.snapshot(), deviceID: deviceID)
+        let tagsChange = try tagsDoc.setTags(["science"], clock: clock.tick())
+        let store = ChangeStore(layout: h.layout)
+
+        // Ingest 1: only the title has arrived.
+        _ = try await store.writeBookChange(titleChange, bookID: bookID, deviceID: deviceID, clock: clock)
+        let engine = try h.engine()
+        let first = try await engine.ingest()
+        #expect(first.quarantined.isEmpty)
+        #expect(try await h.catalog.allBooks().first?.title == "Base")
+
+        // Ingest 2: the tags change arrives later — the earlier title must
+        // survive, and nothing is quarantined.
+        _ = try await store.writeBookChange(tagsChange, bookID: bookID, deviceID: deviceID, clock: clock)
+        let second = try await engine.ingest()
+        #expect(second.quarantined.isEmpty)
+        let book = try #require(try await h.catalog.allBooks().first)
+        #expect(book.title == "Base")
+        #expect(book.tags == ["science"])
+    }
 }
