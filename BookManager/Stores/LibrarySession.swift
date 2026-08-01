@@ -73,6 +73,7 @@ final class LibrarySession {
     private let deviceID: UUID
     private let bookmarks: LibraryBookmarkStore
     private var activeSecurityURL: URL?
+    private var calibreSourceSecurityURL: URL?
     private var searchTask: Task<Void, Never>?
 
     struct FacetSelection: Hashable {
@@ -133,6 +134,7 @@ final class LibrarySession {
         searchTask = nil
         activeSecurityURL?.stopAccessingSecurityScopedResource()
         activeSecurityURL = nil
+        stopCalibreAccess()
         repository = nil
         state = .welcome
         books = []
@@ -154,6 +156,24 @@ final class LibrarySession {
         pickerAction = nil
         isPickerPresented = false
         recentLibraries = Self.resolveRecents(bookmarks)
+    }
+
+    /// Stops the Calibre source's security-scoped access and clears all wizard
+    /// state. Called when the wizard disappears (Cancel, Done, or Escape);
+    /// idempotent.
+    func cancelCalibreImport() {
+        stopCalibreAccess()
+        calibreSummary = nil
+        calibreBooks = []
+        calibreSelectedIDs = []
+        calibreImportReport = nil
+        calibreImportInProgress = false
+        calibreSourcePath = nil
+    }
+
+    private func stopCalibreAccess() {
+        calibreSourceSecurityURL?.stopAccessingSecurityScopedResource()
+        calibreSourceSecurityURL = nil
     }
 
     // MARK: - Activation
@@ -257,6 +277,19 @@ final class LibrarySession {
     // MARK: - Calibre import
 
     func selectCalibreLibrary(at url: URL) async {
+        // The folder comes from SwiftUI's fileImporter and is security-scoped:
+        // the sandbox denies every read of the source (including the
+        // metadata.db snapshot copy inside CalibreReader.open) until the scope
+        // is started. Hold it for the whole wizard — the import copies book
+        // files from this folder later.
+        stopCalibreAccess()
+        if url.startAccessingSecurityScopedResource() {
+            calibreSourceSecurityURL = url
+        }
+        defer {
+            // The wizard never appears on the failure paths: release the scope.
+            if calibreSummary == nil { stopCalibreAccess() }
+        }
         let reader: CalibreReader
         do {
             reader = try CalibreReader.open(libraryURL: url)
@@ -301,6 +334,8 @@ final class LibrarySession {
         } catch {
             lastError = error.localizedDescription
         }
+        // The source is no longer read after the import finishes.
+        stopCalibreAccess()
         await refreshAll()
     }
 

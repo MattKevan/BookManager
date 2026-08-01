@@ -28,6 +28,7 @@ struct CalibreImportView: View {
                 .padding()
         }
         .frame(minWidth: 560, minHeight: 460)
+        .onDisappear { session.cancelCalibreImport() }
     }
 
     private var sourceName: String {
