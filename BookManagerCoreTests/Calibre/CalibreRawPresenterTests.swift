@@ -47,13 +47,13 @@ struct CalibreRawPresenterTests {
             "calibre.titleSort": "Range",
             "calibre.sourcePath": "David Epstein/Range (1)",
             "calibre.conversionOptions": "[{\"format\":\"EPUB\",\"data\":\"AQID\"}]",
-            "calibre.originalFormats": "[{\"format\":\"EPUB\",\"name\":\"Range - David Epstein\",\"path\":null}]",
+            "calibre.originalFormats": "[{\"format\":\"EPUB\",\"name\":\"Range - David Epstein\"},{\"format\":\"MOBI\",\"name\":\"Range - David Epstein\"}]",
         ])
         let labels = rows.map(\.label)
         #expect(labels == ["Calibre UUID", "Title Sort", "Source Path", "Pages", "Conversion Options", "Original Formats"])
         #expect(rows.first { $0.label == "Pages" }?.value == "Unknown")
         #expect(rows.first { $0.label == "Conversion Options" }?.value == "1 format")
-        #expect(rows.first { $0.label == "Original Formats" }?.value.contains("EPUB") == true)
+        #expect(rows.first { $0.label == "Original Formats" }?.value == "EPUB, MOBI")
     }
 
     @Test

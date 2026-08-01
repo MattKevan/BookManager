@@ -28,6 +28,7 @@ struct BookInspectorView: View {
         .task(id: book?.id) {
             if let book {
                 coverImage = await ThumbnailCache.shared.thumbnail(for: book, repository: session.repository)
+                guard !Task.isCancelled else { return }
             } else {
                 coverImage = nil
             }
