@@ -34,9 +34,10 @@ struct ContentView: View {
         }
         .frame(minWidth: 900, minHeight: 560)
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            // Reconnection hook (slice 4a): on app activation, drain the outbox
-            // and ingest changes made by other Macs. The always-on monitor is 4b.
-            Task { await session.syncNow() }
+            // Reconnection hook (slice 4a): on app activation, refresh
+            // availability and sync (drain the outbox, ingest changes made by
+            // other Macs). The always-on monitor is 4b.
+            Task { await session.reconnectIfNeeded() }
         }
         .onChange(of: session.selection) { _, newValue in
             if newValue.count == 1 && !session.isMarqueeSelecting {
@@ -145,7 +146,7 @@ struct ContentView: View {
                 } label: {
                     Label("Edit Metadata", systemImage: "pencil")
                 }
-                .disabled(session.selection.count != 1)
+                .disabled(session.isLibraryUnavailable || session.selection.count != 1)
                 Button {
                     session.inspectorPresented.toggle()
                 } label: {
@@ -166,16 +167,20 @@ struct ContentView: View {
                 Button {
                     Task { await session.syncNow() }
                 } label: {
-                    if session.pendingSyncCount > 0 {
+                    if session.isLibraryUnavailable {
+                        Label("Library unavailable", systemImage: "exclamationmark.triangle")
+                    } else if session.pendingSyncCount > 0 {
                         Label("\(session.pendingSyncCount) pending", systemImage: "arrow.triangle.2.circlepath")
                     } else {
                         Label("Synced", systemImage: "checkmark.circle")
                     }
                 }
                 .help(
-                    session.pendingSyncCount > 0
-                        ? "\(session.pendingSyncCount) change(s) waiting to sync — click to sync now"
-                        : "Synced — click to check for changes from other Macs"
+                    session.isLibraryUnavailable
+                        ? "Library unavailable — read-only until the library reconnects. Click to try again."
+                        : (session.pendingSyncCount > 0
+                            ? "\(session.pendingSyncCount) change(s) waiting to sync — click to sync now"
+                            : "Synced — click to check for changes from other Macs")
                 )
                 Button {
                     session.present(.calibre)

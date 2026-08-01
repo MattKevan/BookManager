@@ -39,6 +39,11 @@ final class LibrarySession {
     /// Metadata edits queued locally because the library folder is unreachable;
     /// cleared when `syncNow` drains the outbox.
     private(set) var pendingSyncCount = 0
+    /// Read-only gate: the library folder is known unreachable, so editing is
+    /// disabled until a reconnect succeeds (approved read-only-when-offline
+    /// amendment). Transient mid-session write failures still stage to the
+    /// outbox via `saveOffline`.
+    private(set) var isLibraryUnavailable = false
     var searchText = "" {
         didSet {
             searchTask?.cancel()
@@ -149,6 +154,7 @@ final class LibrarySession {
         repository = nil
         syncState = nil
         pendingSyncCount = 0
+        isLibraryUnavailable = false
         state = .welcome
         books = []
         deletedBooks = []
@@ -212,6 +218,7 @@ final class LibrarySession {
             activeSecurityURL = accessed ? url : nil
             self.repository = repository
             state = .loaded
+            isLibraryUnavailable = false
             refreshPendingSync()
             await refreshAll()
         } catch {
@@ -388,6 +395,10 @@ final class LibrarySession {
 
     func saveEdit(_ edit: BookEdit, for id: UUID) async {
         guard let repository else { return }
+        guard !isLibraryUnavailable else {
+            lastError = "Library unavailable — the library becomes editable again once it reconnects."
+            return
+        }
         do {
             let updated = try await repository.updateBook(id: id, edit: edit)
             inspectorBook = updated
@@ -449,8 +460,25 @@ final class LibrarySession {
         } catch {
             lastError = error.localizedDescription
         }
+        refreshLibraryAvailability()
         refreshPendingSync()
         await refreshAll()
+    }
+
+    /// Lightweight reachability probe: the library root directory must be
+    /// readable. False when unmounted/unreachable.
+    func refreshLibraryAvailability() {
+        guard let repository else { return }
+        var isDirectory: ObjCBool = false
+        isLibraryUnavailable = !FileManager.default.fileExists(
+            atPath: repository.root.path, isDirectory: &isDirectory
+        ) || !isDirectory.boolValue
+    }
+
+    /// Reconnect flow used on app activation: refresh availability, then sync.
+    func reconnectIfNeeded() async {
+        refreshLibraryAvailability()
+        await syncNow()
     }
 
     private func refreshPendingSync() {
