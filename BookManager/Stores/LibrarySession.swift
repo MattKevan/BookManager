@@ -331,11 +331,12 @@ final class LibrarySession {
                 selection: Array(calibreSelectedIDs),
                 into: repository
             )
+            // The source is no longer read after the import completes; a
+            // failed import keeps the scope so the wizard's retry can read it.
+            stopCalibreAccess()
         } catch {
             lastError = error.localizedDescription
         }
-        // The source is no longer read after the import finishes.
-        stopCalibreAccess()
         await refreshAll()
     }
 
