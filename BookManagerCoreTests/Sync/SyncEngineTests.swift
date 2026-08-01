@@ -146,4 +146,41 @@ struct SyncEngineTests {
         #expect(book.title == "Base")
         #expect(book.tags == ["science"])
     }
+
+    @Test
+    func outOfOrderDeliveryConvergesWithoutQuarantine() async throws {
+        // Out-of-order cloud delivery: every change is a full-schema re-encode
+        // (decode → mutate → commit), so a change delivered ahead of its
+        // predecessor embeds the predecessor's state. It must ingest cleanly —
+        // never quarantined, never lost — and later delivery of the earlier
+        // change must still converge. This locks the 4a final-review ruling's
+        // intent (no data loss on reordered delivery) against the actual,
+        // self-contained change format.
+        let h = try Harness()
+        let deviceID = UUID()
+        let bookID = UUID()
+        let baseDoc = try AutomergeBookDocument.new(bookID: bookID, deviceID: deviceID)
+        var clock = HybridLogicalClock(nodeID: deviceID)
+        let base = try baseDoc.setTitle("Base", clock: clock.tick())
+        let depDoc = try AutomergeBookDocument(snapshot: baseDoc.snapshot(), deviceID: deviceID)
+        let dep = try depDoc.setTags(["science"], clock: clock.tick())
+        let store = ChangeStore(layout: h.layout)
+        // Deliver ONLY the later change first; the base arrives later.
+        _ = try await store.writeBookChange(dep, bookID: bookID, deviceID: deviceID, clock: clock)
+
+        let engine = try h.engine()
+        let first = try await engine.ingest()
+        #expect(first.quarantined.isEmpty)
+        let firstBook = try #require(try await h.catalog.allBooks().first)
+        #expect(firstBook.title == "Base")
+        #expect(firstBook.tags == ["science"])
+
+        // The earlier change arrives later: nothing quarantined, still converged.
+        _ = try await store.writeBookChange(base, bookID: bookID, deviceID: deviceID, clock: clock)
+        let second = try await engine.ingest()
+        #expect(second.quarantined.isEmpty)
+        let book = try #require(try await h.catalog.allBooks().first)
+        #expect(book.title == "Base")
+        #expect(book.tags == ["science"])
+    }
 }
