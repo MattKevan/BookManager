@@ -480,13 +480,17 @@ Expected: branch header only.
 
 Implemented via subagent-driven development in `.worktrees/calibre-migration` (branch `feature/calibre-migration`, fast-forward merged to `main` at `31886a8`). 6 commits; 82 core tests (14 suites) + 2 UI tests green on the merged tree; ANALYZE + CLEAN SUCCEEDED.
 
+**Post-merge bug fix (78c82f0, 77777dd):** importing a real Calibre library failed with "SQLite error 23: authorization denied" (SQLITE_AUTH). Calibre's metadata.db is WAL journal mode; read-only WAL opens need a writable -shm/directory, and macOS 26+ TCC blocks SQLite WAL locking on foreign databases. `CalibreReader.open` now snapshots `metadata.db` + its `-wal` into the app's own temp space and opens the copy (source never opened by SQLite; uncheckpointed WAL rows preserved; snapshot removed on close/error). Regression test `opensWALLibraryInReadOnlyDirectory` locks a fixture directory read-only with a live uncheckpointed WAL writer and verifies open succeeds, the WAL-only book is visible, and source hash/mtime are unchanged. `books()` was also refactored into `makeLookups`/`record` helpers during the fix (the original 162-line body tripped the linter). 83 core tests + 2 UI tests green on the merged tree.
+
 ### Human decisions recorded during the slice
+
 1. **Raw metadata lives in the CRDT** (per-device LWW register holding a JSON string of namespaced values) + `raw_metadata.json` sidecar at materialize; catalogue deliberately does not store it (UI never displays it; rebuilds derive from the change store).
 2. **Book-level duplicate semantics** for Calibre import: any exact-duplicate format hash → the whole book reports `.duplicate`, nothing copied (documented deviation from Slice 2's per-file granularity).
 3. **`NewBookMetadata.addedDate`** added (default nil; `writeChanges` honors it, else `.now`) so Calibre timestamps carry through — Slice 2 behavior unchanged.
 4. **Final-review follow-ups parked** (non-blocking): drop `importBooks`'s vestigial `throws`; offload `selectCalibreLibrary`'s reader load off the MainActor (brief freeze on large libraries).
 
 ### Deferred items (candidates for later slices)
+
 - **Hardening:** blob-cover temp file leaks on cover-staging error paths (one-line `defer removeItem`); progress record's `selection` field can go stale on resume (informational); resume keyed by source-path hash only — a replaced library at the same path with colliding calibreIDs would silently skip (a content fingerprint in the progress record would harden); `summary()` fetches every book row and `titles` is never displayed (dead data + double scan); `bookCount` protocol requirement is dead code; `fetchCustomValues` guards only table existence not the `value` column (composite columns could throw); `CalibreOPFParser` ignores the XML parse result; legacy `lang` languages branch orders by `item_order` without checking the column exists.
 - **Known gaps:** `books_plugin_data` (Calibre plugin payloads) not preserved — not in the plan's annotations/last-read list; author `sort` mapped but Calibre `author_sort` conventions unused; `calibreImportProgress: Double?` plan field replaced by an indeterminate ProgressView (service reports only at completion).
 - **UX (flagged for manual acceptance):** the `lastError` alert may not present above the wizard sheet on macOS — dissolved in practice because `importBooks` never throws (per-book failures render in the sheet's report); still worth a click-through.
