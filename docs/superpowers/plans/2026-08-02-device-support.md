@@ -285,9 +285,9 @@ struct MTPTransportTests {
     @Test
     func factoryShape() async throws {
         let factory = MTPTransportFactory()
-        // No device attached in CI: candidates() must return [] without throwing.
-        let candidates = try await factory.candidates()
-        #expect(candidates.isEmpty || !candidates.isEmpty) // smoke: enumerates without crashing
+        // No device attached in CI: candidates() must not throw and must not crash.
+        let candidates = try? await factory.candidates()
+        #expect(candidates != nil)
     }
 }
 ```
@@ -661,7 +661,7 @@ public struct DeviceBookScanner: Sendable {
                 let extracted = kind.flatMap { try? MetadataExtractor.extract(from: localURL, kind: $0) }
                 records.append(DeviceBookRecord(
                     file: file,
-                    title: extracted?.title.isEmpty == false ? extracted!.title : stem(of: file.name),
+                    title: (extracted.map { $0.title.isEmpty ? stem(of: file.name) : $0.title }) ?? stem(of: file.name),
                     authors: extracted?.authors ?? [],
                     format: ext.uppercased(),
                     isDRM: false
@@ -983,10 +983,9 @@ struct DeviceServicesTests {
             profile: profile, converter: IdentityConverter()
         )
 
-        if case .failed = items[0].status {
-            #expect(true)
-        } else {
-            #expect(Bool(false), "expected failure, got \(items[0].status)")
+        guard case .failed = items[0].status else {
+            Issue.record("expected failure, got \(items[0].status)")
+            return
         }
         #expect(SendReport(items: items).summary.contains("1 failed"))
     }
