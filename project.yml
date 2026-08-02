@@ -19,6 +19,9 @@ packages:
   ZIPFoundation:
     url: https://github.com/weichsel/ZIPFoundation.git
     exactVersion: 0.9.19
+  libmobi-swift:
+    url: https://github.com/awxkee/libmobi-swift.git
+    exactVersion: 1.0.2
 
 settings:
   base:
@@ -40,6 +43,8 @@ targets:
       - package: Automerge
       - package: GRDB
       - package: ZIPFoundation
+      - package: libmobi-swift
+        product: libmobi
 
   BookManager:
     type: application
@@ -64,6 +69,8 @@ targets:
     platform: macOS
     sources:
       - BookManagerCoreTests
+    resources:
+      - path: BookManagerCoreTests/MobiImport/Fixtures
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
@@ -71,6 +78,8 @@ targets:
       - target: BookManagerCore
       - package: GRDB
       - package: ZIPFoundation
+      - package: libmobi-swift
+        product: libmobi
 
   BookManagerUITests:
     type: bundle.ui-testing
