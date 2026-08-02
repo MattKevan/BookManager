@@ -221,6 +221,31 @@ public actor LibraryRepository: LibraryRepositoryImporting {
         return updated
     }
 
+    /// Writes a cover for a book: a `setCover` Automerge change, a materialized
+    /// `cover.jpg` in the book folder (atomic write), and a catalog upsert.
+    /// Used by metadata enrichment's cover downloads. Mirrors `createBook`'s
+    /// cover handling and `updateBook`'s change/materialize/upsert shape.
+    public func updateCover(coverData: Data, for bookID: UUID) async throws -> IndexedBook {
+        guard let indexed = try await catalog.book(id: bookID) else {
+            throw LibraryRepositoryError.bookNotFound(bookID)
+        }
+        let document = try AutomergeBookDocument(snapshot: indexed.snapshot, deviceID: deviceID)
+        var clock = HybridLogicalClock(nodeID: deviceID)
+        let change = try document.setCover(
+            CoverValue(filename: "cover.jpg", contentHash: BookFolder.contentHash(coverData)),
+            clock: clock.tick()
+        )
+        _ = try await changeStore.writeBookChange(
+            change, bookID: bookID, deviceID: deviceID, clock: clock
+        )
+
+        let directory = await folder.bookDirectoryURL(relativePath: indexed.relativePath)
+        try coverData.write(to: directory.appending(path: "cover.jpg"), options: .atomic)
+        let updated = try makeIndexedBook(document, relativePath: indexed.relativePath)
+        try await catalog.upsert(updated)
+        return updated
+    }
+
     // MARK: - Delete and restore
 
     public func deleteBook(id: UUID) async throws {
