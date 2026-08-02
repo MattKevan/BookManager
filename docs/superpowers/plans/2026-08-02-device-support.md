@@ -16,7 +16,7 @@
 - **Sandbox**: MTP/USB access requires adding `com.apple.security.device.usb` to `Config/BookManager.entitlements`. If the chosen library cannot enumerate/transfer inside the sandboxed app, escalate per the spike's BLOCKED protocol (documented fallbacks: MTPKit; temporary non-sandboxed debug build; report).
 - Existing non-perf suite stays green. **Verification commands MUST use `-skip-testing:BookManagerCoreTests/PerformanceTests`** (established convention).
 - Run `xcodegen generate --spec project.yml` after modifying `project.yml` or adding any file (sources are directory-globbed).
-- Test command shape: `xcodebuild -project BookManager.xcodeproj -scheme BookManager -destination 'platform=macOS' -derivedDataPath .build/DerivedData test -only-testing:BookManagerCoreTests/Devices/<Suite>`.
+- Test command shape: `xcodebuild -project BookManager.xcodeproj -scheme BookManager -destination 'platform=macOS' -derivedDataPath .build/DerivedData test -only-testing:BookManagerCoreTests/<Suite>`.
 - New devices = new profile/transport files + a registry entry — never shared-code edits (verified by a stub profile alongside `KindlePaperwhite12Profile` in registry tests).
 
 ---
@@ -112,7 +112,7 @@ struct DeviceTransportTests {
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
-Run: `xcodegen generate --spec project.yml`, then `xcodebuild -project BookManager.xcodeproj -scheme BookManager -destination 'platform=macOS' -derivedDataPath .build/DerivedData test -only-testing:BookManagerCoreTests/Devices/DeviceTransportTests`. Expected: FAIL — no such module member `MockTransport`/`DeviceTransport`.
+Run: `xcodegen generate --spec project.yml`, then `xcodebuild -project BookManager.xcodeproj -scheme BookManager -destination 'platform=macOS' -derivedDataPath .build/DerivedData test -only-testing:BookManagerCoreTests/DeviceTransportTests`. Expected: FAIL — no such module member `MockTransport`/`DeviceTransport`.
 
 - [ ] **Step 3: Implement the models, protocol, and mock**
 
@@ -413,7 +413,7 @@ struct DeviceRegistryTests {
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
-Run: `xcodegen generate --spec project.yml`, then `xcodebuild ... test -only-testing:BookManagerCoreTests/Devices/DeviceRegistryTests`. Expected: FAIL — `DeviceRegistry`/`DeviceProfile` undefined.
+Run: `xcodegen generate --spec project.yml`, then `xcodebuild ... test -only-testing:BookManagerCoreTests/DeviceRegistryTests`. Expected: FAIL — `DeviceRegistry`/`DeviceProfile` undefined.
 
 - [ ] **Step 3: Implement profiles + registry**
 
@@ -583,7 +583,7 @@ private extension DeviceBookRecord {
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
-Run: `xcodegen generate --spec project.yml`, then `xcodebuild ... test -only-testing:BookManagerCoreTests/Devices/DeviceBookScannerTests`. Expected: FAIL — `DeviceBookScanner` undefined.
+Run: `xcodegen generate --spec project.yml`, then `xcodebuild ... test -only-testing:BookManagerCoreTests/DeviceBookScannerTests`. Expected: FAIL — `DeviceBookScanner` undefined.
 
 - [ ] **Step 3: Implement the scanner**
 
@@ -786,7 +786,7 @@ struct SendPlanTests {
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
-Run: `xcodegen generate --spec project.yml`, then `xcodebuild ... test -only-testing:BookManagerCoreTests/Devices/SendPlanTests`. Expected: FAIL — undefined symbols.
+Run: `xcodegen generate --spec project.yml`, then `xcodebuild ... test -only-testing:BookManagerCoreTests/SendPlanTests`. Expected: FAIL — undefined symbols.
 
 - [ ] **Step 3: Implement the seam + plan**
 
@@ -1015,7 +1015,7 @@ struct DeviceServicesTests {
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
-Run: `xcodegen generate --spec project.yml`, then `xcodebuild ... test -only-testing:BookManagerCoreTests/Devices/DeviceServicesTests`. Expected: FAIL — undefined symbols.
+Run: `xcodegen generate --spec project.yml`, then `xcodebuild ... test -only-testing:BookManagerCoreTests/DeviceServicesTests`. Expected: FAIL — undefined symbols.
 
 - [ ] **Step 3: Implement report + services**
 
