@@ -36,9 +36,13 @@ public actor FolderReconciler {
 
     public func reconcile() async throws -> ReconciliationReport {
         var report = ReconciliationReport()
+        // ONE root scan per pass: the folder index (all candidates in
+        // enumeration order + a short-id prefix map) replaces the per-book
+        // O(dirs) scans — O(N × dirs) → O(N + dirs).
+        let index = await buildFolderIndex()
         let books = try await catalog.allBooks()
         for book in books {
-            await reconcilePath(book, into: &report)
+            await reconcilePath(book, into: &report, index: index)
             await reconcileTrash(book, into: &report)
         }
         let deleted = try await catalog.deletedBooks()
@@ -50,7 +54,7 @@ public actor FolderReconciler {
 
     // MARK: - Path reconciliation
 
-    private func reconcilePath(_ book: IndexedBook, into report: inout ReconciliationReport) async {
+    private func reconcilePath(_ book: IndexedBook, into report: inout ReconciliationReport, index: FolderIndex) async {
         let canonical = CanonicalPathBuilder.relativeDirectory(
             bookID: book.id, title: book.title, authors: book.authors
         )
@@ -78,7 +82,7 @@ public actor FolderReconciler {
             return
         }
 
-        guard let actualURL = await actualFolderURL(for: book, excluding: canonicalURL) else {
+        guard let actualURL = await actualFolderURL(for: book, excluding: canonicalURL, index: index) else {
             report.missingFolders.append(book.id)
             return
         }
@@ -100,8 +104,9 @@ public actor FolderReconciler {
     }
 
     /// Locates the folder that actually holds the book's files, never the
-    /// canonical folder itself (it is handled separately).
-    private func actualFolderURL(for book: IndexedBook, excluding excluded: URL) async -> URL? {
+    /// canonical folder itself (it is handled separately). The per-pass
+    /// `index` makes discovery a lookup, not a per-book root enumeration.
+    private func actualFolderURL(for book: IndexedBook, excluding excluded: URL, index: FolderIndex) async -> URL? {
         let canonical = CanonicalPathBuilder.relativeDirectory(
             bookID: book.id, title: book.title, authors: book.authors
         )
@@ -116,12 +121,12 @@ public actor FolderReconciler {
                 return url
             }
         }
-        // 2. Short-ID name scan (canonical folder names embed the id prefix).
-        // Never discover or re-fork our own conflict copies — they embed the
-        // same prefix and would be forked again on the next pass if the
-        // content-mismatch branch fires (unbounded folder growth).
+        // 2. Short-ID index lookup (canonical folder names embed the id
+        // prefix). Never discover or re-fork our own conflict copies — they
+        // embed the same prefix and would be forked again on the next pass if
+        // the content-mismatch branch fires (unbounded folder growth).
         let shortID = String(book.id.uuidString.prefix(8)).lowercased()
-        for url in await bookFolderCandidates() where !isExcluded(url) {
+        for url in index.byPrefix[shortID] ?? [] where !isExcluded(url) {
             if url.lastPathComponent.localizedCaseInsensitiveContains(" (conflict ")
                 { continue }
             if url.lastPathComponent.localizedCaseInsensitiveContains(shortID) {
@@ -131,7 +136,7 @@ public actor FolderReconciler {
         // 3. Content-hash scan (a manual move loses the id marker). Books with
         // no formats match vacuously — skip hash discovery for them.
         guard !book.formats.isEmpty else { return nil }
-        for url in await bookFolderCandidates() where !isExcluded(url) {
+        for url in index.all where !isExcluded(url) {
             if await folderMatches(book, at: url) {
                 return url
             }
@@ -233,11 +238,22 @@ public actor FolderReconciler {
             : url.lastPathComponent
     }
 
-    /// Every directory under the library root that can hold a book folder,
-    /// excluding the `.bookmanager` control tree (trash, quarantine, recovery).
-    private func bookFolderCandidates() async -> [URL] {
+    /// One root scan per reconcile pass: every book-folder candidate in
+    /// enumeration order, plus a map from each lowercased 8-char hex window of
+    /// a folder name to the folders containing it. Per-book discovery is a
+    /// lookup, not a per-book enumeration.
+    private struct FolderIndex {
+        let all: [URL]
+        let byPrefix: [String: [URL]]
+    }
+
+    /// Enumerates the library root ONCE (`.skipsHiddenFiles` keeps the
+    /// `.bookmanager` control tree out), collecting every directory plus the
+    /// short-id prefixes its name embeds.
+    private func buildFolderIndex() async -> FolderIndex {
         let manager = FileManager.default
-        var results: [URL] = []
+        var all: [URL] = []
+        var byPrefix: [String: [URL]] = [:]
         let enumerator = manager.enumerator(
             at: layout.root,
             includingPropertiesForKeys: [.isDirectoryKey],
@@ -249,9 +265,37 @@ public actor FolderReconciler {
                   isDirectory.boolValue else {
                 continue
             }
-            results.append(url)
+            all.append(url)
+            for prefix in Self.hexPrefixes(in: url.lastPathComponent) {
+                byPrefix[prefix, default: []].append(url)
+            }
         }
-        return results
+        return FolderIndex(all: all, byPrefix: byPrefix)
+    }
+
+    /// Every lowercased 8-char window of every maximal hex-character run in a
+    /// folder name — exactly the substrings an 8-char book-id prefix can match
+    /// via `localizedCaseInsensitiveContains` (see `actualFolderURL`).
+    private static func hexPrefixes(in name: String) -> Set<String> {
+        var runs: [String] = []
+        var current = ""
+        for scalar in name.lowercased().unicodeScalars {
+            if scalar.properties.isHexDigit {
+                current.unicodeScalars.append(scalar)
+            } else {
+                if current.count >= 8 { runs.append(current) }
+                current = ""
+            }
+        }
+        if current.count >= 8 { runs.append(current) }
+        var prefixes: Set<String> = []
+        for run in runs {
+            let chars = Array(run)
+            for start in 0...(chars.count - 8) {
+                prefixes.insert(String(chars[start..<(start + 8)]))
+            }
+        }
+        return prefixes
     }
 
     private static func formatValue(_ format: BookFormatRecord) -> BookFormatValue {

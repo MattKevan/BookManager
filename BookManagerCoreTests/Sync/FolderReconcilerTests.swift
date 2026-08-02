@@ -233,4 +233,22 @@ struct FolderReconcilerTests {
         // The conflict copy is preserved untouched.
         #expect(FileManager.default.fileExists(atPath: conflictURL.path))
     }
+
+    @Test
+    func discoveryStillFindsStrayFoldersViaIndex() async throws {
+        let h = try await Harness()
+        let book = try await h.createBook(title: "Indexed")
+        let canonical = CanonicalPathBuilder.relativeDirectory(
+            bookID: book.id, title: book.title, authors: book.authors
+        )
+        // Move the folder somewhere non-canonical (the discovery case).
+        let folderURL = h.layout.root.appending(path: canonical, directoryHint: .isDirectory)
+        let moved = h.layout.root.appending(path: "Stray \(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.moveItem(at: folderURL, to: moved)
+
+        let report = try await h.reconciler().reconcile()
+        #expect(report.renamed == [book.id])
+        #expect(report.missingFolders.isEmpty)
+        #expect(FileManager.default.fileExists(atPath: folderURL.path))
+    }
 }
