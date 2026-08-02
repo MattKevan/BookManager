@@ -83,6 +83,7 @@
 		CD372D5D26ACA6955A952064 /* CoverGridView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 922F216A8DB77886FEE7AC6E /* CoverGridView.swift */; };
 		CF48364CE47026AEE1274504 /* FolderReconcilerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8633065E1E28A56C11EAF21A /* FolderReconcilerTests.swift */; };
 		D0A566804E7EB2792EA61B9B /* BookFolder.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3EB714E6E2C57690A730F94 /* BookFolder.swift */; };
+		D0C63273D9B67978CDAD0909 /* MetadataReviewSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53DCEA28EE0C12D03C85E45B /* MetadataReviewSheet.swift */; };
 		D3D0C78B0CF3FB3B24076660 /* OfflineBookEdit.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC99822D51C0AD9570DC7085 /* OfflineBookEdit.swift */; };
 		D4EA8BDBE47C3BA2A92DF62C /* LibraryMonitorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEFD333EB0AA1DFF27C99321 /* LibraryMonitorTests.swift */; };
 		D5658B0F5AE2B7F1A4FE8AB2 /* MetadataExtractorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E58E824C700C1F72F39EF611 /* MetadataExtractorTests.swift */; };
@@ -180,6 +181,7 @@
 		40F349DC5B3BC95D5E3FC6D6 /* GridSelectionSemantics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GridSelectionSemantics.swift; sourceTree = "<group>"; };
 		4973027E235C62C6A61C0133 /* MetadataLookupServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataLookupServiceTests.swift; sourceTree = "<group>"; };
 		49CF48B554295CF4D9801062 /* LibraryRootCapabilities.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryRootCapabilities.swift; sourceTree = "<group>"; };
+		53DCEA28EE0C12D03C85E45B /* MetadataReviewSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataReviewSheet.swift; sourceTree = "<group>"; };
 		5A3D22208D73EACF693FC0B7 /* LibraryRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryRepository.swift; sourceTree = "<group>"; };
 		5D641BF004408EB3B9B77D94 /* CalibreImportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalibreImportService.swift; sourceTree = "<group>"; };
 		5EFBA8EB5B9ADFEB3ACDE0B7 /* BookManagerCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookManagerCore.swift; sourceTree = "<group>"; };
@@ -509,6 +511,7 @@
 				768C45F6FF1C77FFEA249DA5 /* ImportReportView.swift */,
 				FE22DC7A79DA7703CE5EF160 /* LibraryWelcomeView.swift */,
 				D71CFB152C85ECD05FAEE34F /* MetadataEditorView.swift */,
+				53DCEA28EE0C12D03C85E45B /* MetadataReviewSheet.swift */,
 				2E1B0345E4E97988D789C4A5 /* SidebarView.swift */,
 			);
 			path = Views;
@@ -829,6 +832,7 @@
 				050B0C32F9422ED9DE8FBFB8 /* LibrarySession.swift in Sources */,
 				FB334598B1AEAE392B0A20D2 /* LibraryWelcomeView.swift in Sources */,
 				6CFD9DA7BA4FEED223E643F0 /* MetadataEditorView.swift in Sources */,
+				D0C63273D9B67978CDAD0909 /* MetadataReviewSheet.swift in Sources */,
 				F2598A85042DDF22B167FD18 /* SidebarView.swift in Sources */,
 				D62398DF22CF74C237F60AED /* ThumbnailCache.swift in Sources */,
 			);

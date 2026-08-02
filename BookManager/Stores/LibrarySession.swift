@@ -90,6 +90,17 @@ final class LibrarySession {
     private(set) var missingFiles: [(book: IndexedBook, filename: String)] = []
     var importReport: ImportReport?
     var inspectorBook: IndexedBook?
+
+    // Metadata enrichment state
+    private(set) var metadataCandidates: [MetadataCandidate] = []
+    /// Presented by the view; the review sheet binds to this.
+    var metadataReviewPresented = false
+    private(set) var metadataLookupError: String?
+    private(set) var metadataBookID: UUID?
+    private(set) var isFetchingMetadata = false
+    private var metadataService: MetadataLookupService?
+
+    private static let metadataUserAgent = "BookManager/1.0 (contact: dev@example.com)"
     var diagnosticsPresented = false
 
     // Calibre import wizard state
@@ -188,6 +199,12 @@ final class LibrarySession {
         isMarqueeSelecting = false
         importReport = nil
         inspectorBook = nil
+        metadataCandidates = []
+        metadataReviewPresented = false
+        metadataLookupError = nil
+        metadataBookID = nil
+        isFetchingMetadata = false
+        metadataService = nil
         lastError = nil
         calibreSummary = nil
         calibreBooks = []
@@ -473,6 +490,118 @@ final class LibrarySession {
         } catch {
             lastError = originalError.localizedDescription
         }
+    }
+
+    // MARK: - Metadata enrichment
+
+    /// Looks up metadata for a book (ISBN-first, then title+author) and either
+    /// auto-applies a high-confidence candidate or presents the review sheet.
+    func fetchMetadata(for bookID: UUID) async {
+        guard let repository, !isFetchingMetadata else { return }
+        guard let book = books.first(where: { $0.id == bookID }) else { return }
+        metadataLookupError = nil
+        isFetchingMetadata = true
+        defer { isFetchingMetadata = false }
+        let service: MetadataLookupService
+        if let existing = metadataService {
+            service = existing
+        } else {
+            let client = URLSessionMetadataHTTPClient()
+            let registry = MetadataRegistry(sources: [
+                OpenLibrarySource(client: client, userAgent: Self.metadataUserAgent),
+                GoogleBooksSource(client: client, userAgent: Self.metadataUserAgent),
+            ])
+            let created = MetadataLookupService(registry: registry)
+            metadataService = created
+            service = created
+        }
+        let query = MetadataLookupQuery(
+            isbn: book.identifiers["isbn"], title: book.title, authors: book.authors
+        )
+        do {
+            let result = try await service.lookup(query)
+            if let autoApply = result.autoApply {
+                await applyMetadataCandidate(autoApply, for: bookID, auto: true)
+            } else if !result.candidates.isEmpty {
+                metadataCandidates = result.candidates
+                metadataBookID = bookID
+                metadataReviewPresented = true
+            } else {
+                metadataLookupError = "No metadata found."
+            }
+        } catch {
+            metadataLookupError = error.localizedDescription
+        }
+    }
+
+    /// Applies a chosen candidate with missing-fields-only semantics — existing
+    /// values are never clobbered — and downloads the cover (bounded) when the
+    /// book has none. `auto` suppresses the review-sheet cleanup (nothing to
+    /// clear on the auto-apply path).
+    func applyMetadataCandidate(_ candidate: MetadataCandidate, for bookID: UUID, auto: Bool = false) async {
+        defer {
+            if !auto {
+                metadataCandidates = []
+                metadataBookID = nil
+                metadataReviewPresented = false
+            }
+        }
+        guard let repository else { return }
+        guard let book = books.first(where: { $0.id == bookID }) else { return }
+
+        var edit = BookEdit()
+        var changed = false
+        if book.title.isEmpty, !candidate.title.isEmpty {
+            edit.title = candidate.title
+            changed = true
+        }
+        if book.authors.isEmpty, !candidate.authors.isEmpty {
+            edit.authors = candidate.authors
+            changed = true
+        }
+        if book.publisher == nil, let publisher = candidate.publisher, !publisher.isEmpty {
+            edit.publisher = .set(publisher)
+            changed = true
+        }
+        if book.publicationDate == nil, let date = candidate.publicationDate {
+            edit.publicationDate = .set(date)
+            changed = true
+        }
+        if book.identifiers["isbn"] == nil, let isbn = candidate.isbn {
+            edit.identifiers = book.identifiers.merging(["isbn": isbn]) { _, new in new }
+            changed = true
+        }
+        if changed {
+            do {
+                _ = try await repository.updateBook(id: bookID, edit: edit)
+            } catch {
+                lastError = error.localizedDescription
+            }
+        }
+
+        if book.coverHash == nil, let coverURL = candidate.coverURL {
+            do {
+                let client = URLSessionMetadataHTTPClient()
+                let request = URLRequest(url: coverURL)
+                let data = try await withThrowingTaskGroup(of: Data.self) { group in
+                    group.addTask { try await client.data(from: request) }
+                    group.addTask {
+                        try await Task.sleep(for: .seconds(10))
+                        throw CancellationError()
+                    }
+                    guard let data = try await group.next() else {
+                        throw CancellationError()
+                    }
+                    group.cancelAll()
+                    return data
+                }
+                _ = try await repository.updateCover(coverData: data, for: bookID)
+            } catch {
+                // Best-effort: a cover download failure must not undo the metadata apply.
+                metadataLookupError = "Metadata applied; cover download failed."
+            }
+        }
+        await refreshAll()
     }
 
     // MARK: - Sync

@@ -113,6 +113,19 @@ struct ContentView: View {
         .sheet(isPresented: $showCalibreImport) {
             CalibreImportView(session: session)
         }
+        .sheet(isPresented: $session.metadataReviewPresented) {
+            MetadataReviewSheet(
+                candidates: session.metadataCandidates,
+                onPick: { candidate in
+                    Task {
+                        if let id = session.metadataBookID {
+                            await session.applyMetadataCandidate(candidate, for: id)
+                        }
+                    }
+                },
+                onSkip: { session.metadataReviewPresented = false }
+            )
+        }
         .alert(
             "Something went wrong",
             isPresented: Binding(

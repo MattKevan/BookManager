@@ -89,6 +89,16 @@ struct BookInspectorView: View {
                     session.inspectorBook = book
                 }
                 .disabled(session.inspectorBook != nil)
+
+                Button("Fetch Metadata…") {
+                    Task { await session.fetchMetadata(for: book.id) }
+                }
+                .disabled(session.isFetchingMetadata)
+                if let error = session.metadataLookupError {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
             .padding(16)
         }
