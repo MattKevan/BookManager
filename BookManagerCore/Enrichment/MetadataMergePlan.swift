@@ -6,48 +6,51 @@ public enum MetadataMergeChoice: Sendable, Equatable {
     case useFetched
 }
 
+/// A per-field row in the metadata merge review: the book's current value vs
+/// the fetched candidate's value, plus the default Keep/Use-fetched choice
+/// (use-fetched only when the current field is empty).
+public struct MetadataMergeItem: Identifiable, Sendable, Equatable {
+    public enum Field: String, Sendable, Equatable, Hashable {
+        case title
+        case authors
+        case publisher
+        case publicationDate
+        case isbn
+        case cover
+    }
+
+    public let field: Field
+    public let label: String
+    public let currentValue: String?
+    public let fetchedValue: String?
+    public let defaultChoice: MetadataMergeChoice
+
+    public var id: String { field.rawValue }
+
+    public init(
+        field: Field,
+        label: String,
+        currentValue: String?,
+        fetchedValue: String?,
+        defaultChoice: MetadataMergeChoice
+    ) {
+        self.field = field
+        self.label = label
+        self.currentValue = currentValue
+        self.fetchedValue = fetchedValue
+        self.defaultChoice = defaultChoice
+    }
+}
+
 /// The pure decision model behind the editor's "Fetch Metadata…" review: for
 /// each field a candidate can supply, compare the book's current value against
 /// the fetched value and default to "use fetched" only when the book's field
 /// is empty. `apply` turns the user's choices into a `BookEdit` + cover flag —
 /// no network, no view logic (precedent: `GridSelectionSemantics`).
 public struct MetadataMergePlan: Sendable, Equatable {
-    public struct Item: Identifiable, Sendable, Equatable {
-        public enum Field: String, Sendable, Equatable, Hashable {
-            case title
-            case authors
-            case publisher
-            case publicationDate
-            case isbn
-            case cover
-        }
+    public let items: [MetadataMergeItem]
 
-        public let field: Field
-        public let label: String
-        public let currentValue: String?
-        public let fetchedValue: String?
-        public let defaultChoice: MetadataMergeChoice
-
-        public var id: String { field.rawValue }
-
-        public init(
-            field: Field,
-            label: String,
-            currentValue: String?,
-            fetchedValue: String?,
-            defaultChoice: MetadataMergeChoice
-        ) {
-            self.field = field
-            self.label = label
-            self.currentValue = currentValue
-            self.fetchedValue = fetchedValue
-            self.defaultChoice = defaultChoice
-        }
-    }
-
-    public let items: [Item]
-
-    public init(items: [Item]) {
+    public init(items: [MetadataMergeItem]) {
         self.items = items
     }
 
@@ -60,15 +63,15 @@ public struct MetadataMergePlan: Sendable, Equatable {
         let currentIsbn = book.identifiers["isbn"]
         let coverFetched = candidate.coverURL != nil
 
-        let items: [Item] = [
-            Item(
+        let items: [MetadataMergeItem] = [
+            MetadataMergeItem(
                 field: .title,
                 label: "Title",
                 currentValue: book.title,
                 fetchedValue: candidate.title,
                 defaultChoice: defaultChoice(current: book.title, fetched: candidate.title)
             ),
-            Item(
+            MetadataMergeItem(
                 field: .authors,
                 label: "Authors",
                 currentValue: book.authors.isEmpty ? nil : book.authors.joined(separator: ", "),
@@ -78,14 +81,14 @@ public struct MetadataMergePlan: Sendable, Equatable {
                     fetched: candidate.authors.isEmpty ? nil : candidate.authors.joined(separator: ", ")
                 )
             ),
-            Item(
+            MetadataMergeItem(
                 field: .publisher,
                 label: "Publisher",
                 currentValue: book.publisher,
                 fetchedValue: candidate.publisher,
                 defaultChoice: defaultChoice(current: book.publisher, fetched: candidate.publisher)
             ),
-            Item(
+            MetadataMergeItem(
                 field: .publicationDate,
                 label: "Publication Date",
                 currentValue: book.publicationDate.map(Self.displayDate),
@@ -95,14 +98,14 @@ public struct MetadataMergePlan: Sendable, Equatable {
                     fetched: candidate.publicationDate.map(Self.displayDate)
                 )
             ),
-            Item(
+            MetadataMergeItem(
                 field: .isbn,
                 label: "ISBN",
                 currentValue: currentIsbn,
                 fetchedValue: candidate.isbn,
                 defaultChoice: defaultChoice(current: currentIsbn, fetched: candidate.isbn)
             ),
-            Item(
+            MetadataMergeItem(
                 field: .cover,
                 label: "Cover",
                 currentValue: book.coverHash == nil ? nil : "Cover present",
@@ -130,11 +133,11 @@ public struct MetadataMergePlan: Sendable, Equatable {
     /// fetched" for a field the candidate can't supply resolves to `.clear`
     /// (publisher/date) or no change (isbn).
     public static func apply(
-        choices: [Item.Field: MetadataMergeChoice],
+        choices: [MetadataMergeItem.Field: MetadataMergeChoice],
         book: IndexedBook,
         candidate: MetadataCandidate
     ) -> (edit: BookEdit, coverChosen: Bool) {
-        let use: (Item.Field) -> Bool = { choices[$0] == .useFetched }
+        let use: (MetadataMergeItem.Field) -> Bool = { choices[$0] == .useFetched }
 
         let publisher: FieldEdit<String>
         if use(.publisher) {
