@@ -215,6 +215,16 @@ public actor FolderReconciler {
         let inTrash = FileManager.default.fileExists(atPath: trashURL.path)
         if book.isDeleted {
             if !inTrash {
+                // Same root guard as reconcilePath: an empty relativePath must
+                // never resolve to the library root, or trashing would move the
+                // ROOT into the trash directory. Surfaced in errors; inert.
+                let sourceResolved = await folder.bookDirectoryURL(relativePath: book.relativePath)
+                    .resolvingSymlinksInPath().standardizedFileURL
+                let rootResolved = layout.root.resolvingSymlinksInPath().standardizedFileURL
+                guard !book.relativePath.isEmpty, sourceResolved != rootResolved else {
+                    report.errors.append("trash \(book.id): empty relativePath")
+                    return
+                }
                 let source = await folder.bookDirectoryURL(relativePath: book.relativePath)
                 if FileManager.default.fileExists(atPath: source.path) {
                     do {

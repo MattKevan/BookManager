@@ -281,4 +281,28 @@ struct FolderReconcilerTests {
         #expect(report.missingFolders.isEmpty)
         #expect(FileManager.default.fileExists(atPath: folderURL.path))
     }
+
+    @Test
+    func deletedBookWithEmptyPathNeverTrashesTheRoot() async throws {
+        let h = try await Harness()
+        let bookID = UUID()
+        try await h.catalog.upsert(IndexedBook(
+            id: bookID, title: "Ghost Deleted", authors: ["Alice"],
+            relativePath: "",
+            modifiedMilliseconds: 1, isDeleted: true, snapshot: Data()
+        ))
+
+        let report = try await h.reconciler().reconcile()
+
+        // The deleted-book trash guard fired instead of moving the library root.
+        #expect(report.errors.contains { $0 == "trash \(bookID): empty relativePath" })
+        #expect(report.renamed.isEmpty)
+        #expect(report.restoredFromTrash.isEmpty)
+        // The control directory was NOT moved into trash.
+        #expect(FileManager.default.fileExists(atPath: h.layout.controlRoot.path))
+        #expect(!FileManager.default.fileExists(
+            atPath: h.layout.trashRoot
+                .appending(path: bookID.uuidString, directoryHint: .isDirectory).path
+        ))
+    }
 }
