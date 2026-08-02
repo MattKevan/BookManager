@@ -132,7 +132,7 @@ git commit -m "feat: MOBI reader — extract content model with DRM rejection"
 
 **Interfaces:**
 - Consumes: `MobiContent` (Task 2), `MobiChapter`, ZIPFoundation, an OPF builder (mirror `OpfGenerator`'s conventions).
-- Produces: `MobiToEpubConverter.convert(_ content: MobiContent) throws -> Data` — the EPUB archive bytes, deterministic (same input → same bytes), valid structure.
+- Produces: `MobiToEpubConverter.convert(_ content: MobiContent) throws -> Data` — the EPUB archive bytes, deterministic (same input → same bytes), valid structure. Note: in-body images are NOT extracted — libmobi's `resourceNNNNN.<ext>` rewrites are left as dangling references in converted EPUBs (documented in the spec); image extraction is a follow-up.
 
 - [ ] **Step 1: Write the failing tests**
 

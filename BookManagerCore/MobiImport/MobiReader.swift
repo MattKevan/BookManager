@@ -145,12 +145,21 @@ public struct MobiReader: Sendable {
     /// dropped.
     private static func strippedContent(_ fragment: String) -> String {
         let trimmed = fragment.trimmingCharacters(in: .whitespacesAndNewlines)
+        let result: String
         if let range = trimmed.range(of: "</html>", options: .caseInsensitive) {
             let after = String(trimmed[range.upperBound...])
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-            return after.isEmpty ? trimmed : after
+            result = after.isEmpty ? trimmed : after
+        } else {
+            result = trimmed
         }
-        return trimmed
+        // A fragment split at `<mbp:pagebreak` starts with the marker's
+        // trailing `/>` — strip it so embedded fragments stay well-formed.
+        if result.hasPrefix("/>") {
+            return String(result.dropFirst(2))
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return result
     }
 
     private static func chapterTitle(from content: String) -> String? {

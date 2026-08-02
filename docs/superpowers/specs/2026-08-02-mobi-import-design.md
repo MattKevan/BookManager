@@ -14,7 +14,7 @@
 
 1. MOBI, AZW, and AZW3 files are importable via **Add Books** and drop: the picker accepts `.mobi`/`.azw`/`.azw3`; on import the file converts to an EPUB and flows through the existing pipeline (metadata extraction, hashing, canonical folder, cover) — the library stores the EPUB.
 2. **`MobiReader`** (Core): parses a MOBI → an extracted-content model: title/authors/cover/metadata (EXTH + rawml) and the chapter HTML markup. Tolerant of missing metadata (defaults), never crashes on malformed files.
-3. **`MobiToEpubConverter`** (Core): builds a clean, deterministic EPUB (ZIPFoundation): normalized XHTML chapters from the MOBI rawml, spine + nav, images, cover, and an OPF with the mapped metadata. Output is a valid, openable EPUB.
+3. **`MobiToEpubConverter`** (Core): builds a clean, deterministic EPUB (ZIPFoundation): normalized XHTML chapters from the MOBI rawml, spine + nav, images, cover, and an OPF with the mapped metadata. In-body images are NOT extracted: libmobi rewrites image links to `resourceNNNNN.<ext>` references, so converted EPUBs from illustrated books may carry dangling image references — image extraction is a documented follow-up, not part of this slice. Output is a valid, openable EPUB.
 4. **Non-DRM only**: encrypted MOBI files are rejected with a clear "DRM-protected book" error (DRM removal is out of scope).
 5. **LGPL compliance note** (docs, not code): libmobi C vendored as-is under LGPL-3.0+; attribution notice added to the app's about/notices.
 
