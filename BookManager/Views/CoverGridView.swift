@@ -21,45 +21,87 @@ struct CoverGridView: View {
     @State private var marqueeStart: CGPoint?
     @State private var marqueeCurrent: CGPoint?
     @State private var tileFrames: [UUID: CGRect] = [:]
+    @State private var gridWidth: CGFloat = 0
+    @FocusState private var focusedID: UUID?
+
+    /// Estimated grid columns for Up/Down navigation (adaptive minimum item
+    /// width ≈ 120pt + 16pt spacing + padding).
+    private var estimatedColumns: Int {
+        Int(max(1, (gridWidth / 140).rounded(.down)))
+    }
 
     var body: some View {
+        grid
+            .coordinateSpace(name: "coverGrid")
+            .background {
+                GeometryReader { geo in
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture { session.clearGridSelection() }
+                        .onAppear { gridWidth = geo.size.width }
+                        .onChange(of: geo.size.width) { _, newValue in gridWidth = newValue }
+                }
+            }
+            .simultaneousGesture(marqueeDrag)
+            .onPreferenceChange(CoverTileFrameKey.self) { tileFrames = $0 }
+            .overlay {
+                Group {
+                    marqueeOverlay
+                    if session.books.isEmpty {
+                        ContentUnavailableView(
+                            "No Books",
+                            systemImage: "books.vertical",
+                            description: Text("Drag ebook files here or use Add Books to import.")
+                        )
+                    }
+                }
+            }
+            .onChange(of: session.selection) { _, newValue in
+                // Keyboard focus follows a single selection (any mouse click), so
+                // arrow keys work immediately after interaction. Marquee drags are
+                // excluded: their selection is transient and mouse-driven.
+                if !session.isMarqueeSelecting, newValue.count == 1, let id = newValue.first {
+                    focusedID = id
+                }
+            }
+            .onChange(of: focusedID) { _, newValue in
+                // Single selection follows keyboard focus (Tab into the grid).
+                if let newValue, !session.isMarqueeSelecting {
+                    session.selection = [newValue]
+                }
+            }
+            .onKeyPress(.leftArrow) { moveFocus(by: -1); return .handled }
+            .onKeyPress(.rightArrow) { moveFocus(by: 1); return .handled }
+            .onKeyPress(.upArrow) { moveFocus(by: -estimatedColumns); return .handled }
+            .onKeyPress(.downArrow) { moveFocus(by: estimatedColumns); return .handled }
+            .onKeyPress(.return) { openFocused(); return .handled }
+            .onKeyPress(.delete) { trashFocused(); return .handled }
+    }
+
+    private var grid: some View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 16) {
                 ForEach(session.books) { book in
-                    CoverTile(book: book)
-                        .environment(\.librarySession, session)
-                        .background {
-                            GeometryReader { geo in
-                                Color.clear.preference(
-                                    key: CoverTileFrameKey.self,
-                                    value: [book.id: geo.frame(in: .named("coverGrid"))]
-                                )
-                            }
-                        }
+                    tile(book)
                 }
             }
             .padding(16)
         }
-        .coordinateSpace(name: "coverGrid")
-        .background {
-            Color.clear
-                .contentShape(Rectangle())
-                .onTapGesture { session.clearGridSelection() }
-        }
-        .simultaneousGesture(marqueeDrag)
-        .onPreferenceChange(CoverTileFrameKey.self) { tileFrames = $0 }
-        .overlay {
-            Group {
-                marqueeOverlay
-                if session.books.isEmpty {
-                    ContentUnavailableView(
-                        "No Books",
-                        systemImage: "books.vertical",
-                        description: Text("Drag ebook files here or use Add Books to import.")
+    }
+
+    private func tile(_ book: IndexedBook) -> some View {
+        CoverTile(book: book)
+            .environment(\.librarySession, session)
+            .focusable()
+            .focused($focusedID, equals: book.id)
+            .background {
+                GeometryReader { geo in
+                    Color.clear.preference(
+                        key: CoverTileFrameKey.self,
+                        value: [book.id: geo.frame(in: .named("coverGrid"))]
                     )
                 }
             }
-        }
     }
 
     private var marqueeDrag: some Gesture {
@@ -80,6 +122,48 @@ struct CoverGridView: View {
                 marqueeStart = nil
                 marqueeCurrent = nil
             }
+    }
+
+    // MARK: - Keyboard navigation
+
+    /// Moves keyboard focus (and the single selection) by `delta` positions in
+    /// `session.books` order; Left/Right ±1, Up/Down ±columns. Starting from
+    /// nothing, the first keypress picks the first (or last) tile.
+    private func moveFocus(by delta: Int) {
+        let books = session.books
+        guard !books.isEmpty else { return }
+        let targetIndex: Int
+        if let focusedID, let index = books.firstIndex(where: { $0.id == focusedID }) {
+            targetIndex = min(max(index + delta, 0), books.count - 1)
+        } else if let selected = session.selection.first,
+                  let index = books.firstIndex(where: { $0.id == selected }) {
+            targetIndex = min(max(index + delta, 0), books.count - 1)
+        } else {
+            targetIndex = delta > 0 ? 0 : books.count - 1
+        }
+        let book = books[targetIndex]
+        focusedID = book.id
+        session.selection = [book.id]
+    }
+
+    private func openFocused() {
+        if let focusedID {
+            Task { await session.open(id: focusedID) }
+        } else if let selected = session.selection.first {
+            Task { await session.open(id: selected) }
+        }
+    }
+
+    private func trashFocused() {
+        let ids: Set<UUID>
+        if let focusedID {
+            ids = [focusedID]
+        } else if !session.selection.isEmpty {
+            ids = session.selection
+        } else {
+            return
+        }
+        Task { await session.delete(ids: ids) }
     }
 
     private func marqueeRect(start: CGPoint, current: CGPoint) -> CGRect {
@@ -148,6 +232,12 @@ private struct CoverTile: View {
         }
         .onTapGesture {
             session?.selectInGrid(book)
+        }
+        .accessibilityLabel(book.title)
+        .accessibilityHint("Double-click to open")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction {
+            Task { await session?.open(id: book.id) }
         }
         .task {
             image = await ThumbnailCache.shared.thumbnail(for: book, repository: session?.repository)
