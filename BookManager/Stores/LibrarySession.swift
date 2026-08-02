@@ -440,7 +440,7 @@ final class LibrarySession {
 
     // MARK: - Editing
 
-    func saveEdit(_ edit: BookEdit, for id: UUID) async {
+    func saveEdit(_ edit: BookEdit, coverData: Data?, for id: UUID) async {
         guard let repository else { return }
         guard !isLibraryUnavailable else {
             lastError = "Library unavailable — the library becomes editable again once it reconnects."
@@ -449,11 +449,20 @@ final class LibrarySession {
         do {
             let updated = try await repository.updateBook(id: id, edit: edit)
             inspectorBook = updated
+            // Best-effort cover: a failure must not undo the metadata save.
+            if let coverData {
+                do {
+                    _ = try await repository.updateCover(coverData: coverData, for: id)
+                } catch {
+                    lastError = "Metadata saved; cover update failed: \(error.localizedDescription)"
+                }
+            }
         } catch {
             // The library folder may be unreachable (volume unmounted, cloud
             // folder offline): queue the edit to the durable outbox and keep
             // the catalog current so browsing reflects it. If even the offline
-            // path fails, surface the original error.
+            // path fails, surface the original error. Covers require the
+            // library, so the offline path never takes cover data.
             await saveOffline(edit, for: id, originalError: error)
         }
         refreshPendingSync()
@@ -494,6 +503,30 @@ final class LibrarySession {
 
     // MARK: - Metadata enrichment
 
+    /// The metadata lookup service, created once (sources: OpenLibrary then
+    /// Google Books). Shared by the inspector's fetch and the editor's
+    /// review-first fetch.
+    private func lookupService() -> MetadataLookupService {
+        if let existing = metadataService {
+            return existing
+        }
+        let client = URLSessionMetadataHTTPClient()
+        let registry = MetadataRegistry(sources: [
+            OpenLibrarySource(client: client, userAgent: Self.metadataUserAgent),
+            GoogleBooksSource(client: client, userAgent: Self.metadataUserAgent),
+        ])
+        let created = MetadataLookupService(registry: registry)
+        metadataService = created
+        return created
+    }
+
+    private func lookupResult(for book: IndexedBook) async throws -> MetadataLookupResult {
+        let query = MetadataLookupQuery(
+            isbn: book.identifiers["isbn"], title: book.title, authors: book.authors
+        )
+        return try await lookupService().lookup(query)
+    }
+
     /// Looks up metadata for a book (ISBN-first, then title+author) and either
     /// auto-applies a high-confidence candidate or presents the review sheet.
     func fetchMetadata(for bookID: UUID) async {
@@ -502,24 +535,8 @@ final class LibrarySession {
         metadataLookupError = nil
         isFetchingMetadata = true
         defer { isFetchingMetadata = false }
-        let service: MetadataLookupService
-        if let existing = metadataService {
-            service = existing
-        } else {
-            let client = URLSessionMetadataHTTPClient()
-            let registry = MetadataRegistry(sources: [
-                OpenLibrarySource(client: client, userAgent: Self.metadataUserAgent),
-                GoogleBooksSource(client: client, userAgent: Self.metadataUserAgent),
-            ])
-            let created = MetadataLookupService(registry: registry)
-            metadataService = created
-            service = created
-        }
-        let query = MetadataLookupQuery(
-            isbn: book.identifiers["isbn"], title: book.title, authors: book.authors
-        )
         do {
-            let result = try await service.lookup(query)
+            let result = try await lookupResult(for: book)
             if let autoApply = result.autoApply {
                 await applyMetadataCandidate(autoApply, for: bookID, auto: true)
             } else if !result.candidates.isEmpty {
@@ -531,6 +548,24 @@ final class LibrarySession {
             }
         } catch {
             metadataLookupError = error.localizedDescription
+        }
+    }
+
+    /// Returns candidates for the editor's review-first fetch. Never applies —
+    /// even a high-confidence candidate comes back as a candidate so the user
+    /// can decide per field. Errors surface via `metadataLookupError`.
+    func lookupMetadataCandidates(for bookID: UUID) async -> [MetadataCandidate] {
+        guard let repository else { return [] }
+        guard let book = books.first(where: { $0.id == bookID }) else { return [] }
+        do {
+            let result = try await lookupResult(for: book)
+            if let autoApply = result.autoApply {
+                return [autoApply]
+            }
+            return result.candidates
+        } catch {
+            metadataLookupError = error.localizedDescription
+            return []
         }
     }
 

@@ -1,9 +1,11 @@
+import AppKit
 import BookManagerCore
 import SwiftUI
 
 struct MetadataEditorView: View {
     let book: IndexedBook
-    let onSave: (BookEdit) -> Void
+    let session: LibrarySession?
+    let onSave: (BookEdit, Data?) -> Void
     let onCancel: () -> Void
 
     @State private var title = ""
@@ -18,6 +20,29 @@ struct MetadataEditorView: View {
     @State private var languagesText = ""
     @State private var identifiersText = ""
     @State private var comments = ""
+
+    // Metadata merge (Fetch Metadata…): candidate pick, then the per-field
+    // Keep/Use-fetched review. One sheet whose content switches step — avoids
+    // the double-sheet presentation glitch.
+    private enum ReviewStep: Identifiable {
+        case candidates([MetadataCandidate])
+        case merge(plan: MetadataMergePlan, candidate: MetadataCandidate)
+
+        var id: String {
+            switch self {
+            case .candidates: return "candidates"
+            case .merge(let plan, _): return "merge-\(plan.items.map(\.id).joined(separator: ","))"
+            }
+        }
+    }
+
+    @State private var reviewStep: ReviewStep?
+    @State private var mergeChoices: [MetadataMergeItem.Field: MetadataMergeChoice] = [:]
+    @State private var pendingCoverData: Data?
+    @State private var isFetchingMetadata = false
+    @State private var currentCoverImage: NSImage?
+    @State private var fetchedCoverImage: NSImage?
+    @State private var mergeError: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -48,10 +73,15 @@ struct MetadataEditorView: View {
             .formStyle(.grouped)
             .padding()
             HStack {
+                Button("Fetch Metadata…") {
+                    fetchMetadata()
+                }
+                .disabled(isFetchingMetadata)
+                .help("Fetch metadata and a cover from OpenLibrary / Google Books and review per-field changes before saving")
                 Spacer()
                 Button("Cancel") { onCancel() }
                 Button("Save") {
-                    onSave(collectEdit())
+                    onSave(collectEdit(), pendingCoverData)
                 }
                 .buttonStyle(.borderedProminent)
             }
@@ -59,6 +89,37 @@ struct MetadataEditorView: View {
         }
         .frame(minWidth: 420, minHeight: 480)
         .onAppear(perform: populate)
+        .sheet(item: $reviewStep) { step in
+            switch step {
+            case .candidates(let candidates):
+                MetadataReviewSheet(
+                    candidates: candidates,
+                    onPick: startMerge(with:),
+                    onSkip: { reviewStep = nil }
+                )
+            case .merge(let plan, let candidate):
+                MetadataMergeReviewSheet(
+                    plan: plan,
+                    choices: $mergeChoices,
+                    currentCover: currentCoverImage,
+                    fetchedCover: fetchedCoverImage,
+                    onConfirm: {
+                        confirmMerge(plan: plan, candidate: candidate)
+                    },
+                    onCancel: { reviewStep = nil }
+                )
+            }
+        }
+        .alert(
+            "Fetch Metadata",
+            isPresented: Binding(
+                get: { mergeError != nil },
+                set: { if !$0 { mergeError = nil } }
+            )
+        ) {
+        } message: {
+            Text(mergeError ?? "")
+        }
     }
 
     private func populate() {
@@ -118,5 +179,112 @@ struct MetadataEditorView: View {
             identifiers: identifiers == book.identifiers ? nil : identifiers,
             comments: commentsEdit
         )
+    }
+
+    // MARK: - Fetch Metadata…
+
+    /// Runs the review-first lookup; the result goes to the candidate pick
+    /// (never auto-applied — the editor is per-field review by design).
+    private func fetchMetadata() {
+        guard let session, !isFetchingMetadata else { return }
+        isFetchingMetadata = true
+        Task {
+            let candidates = await session.lookupMetadataCandidates(for: book.id)
+            isFetchingMetadata = false
+            guard !Task.isCancelled else { return }
+            if candidates.isEmpty {
+                mergeError = session.metadataLookupError ?? "No metadata found."
+                return
+            }
+            reviewStep = .candidates(candidates)
+        }
+    }
+
+    /// Picking a candidate builds the per-field plan (defaults from the book's
+    /// empty fields) and moves to the merge review.
+    private func startMerge(with candidate: MetadataCandidate) {
+        let plan = MetadataMergePlan.make(book: book, candidate: candidate)
+        var choices: [MetadataMergeItem.Field: MetadataMergeChoice] = [:]
+        for item in plan.items {
+            choices[item.field] = item.defaultChoice
+        }
+        mergeChoices = choices
+        reviewStep = .merge(plan: plan, candidate: candidate)
+        loadCoverImages(for: candidate)
+    }
+
+    private func loadCoverImages(for candidate: MetadataCandidate) {
+        currentCoverImage = nil
+        fetchedCoverImage = nil
+        let repository = session?.repository
+        let book = self.book
+        Task {
+            let image = await ThumbnailCache.shared.thumbnail(for: book, repository: repository)
+            guard !Task.isCancelled else { return }
+            currentCoverImage = image
+        }
+        guard let coverURL = candidate.coverURL else { return }
+        Task {
+            guard let data = await Self.downloadBounded(coverURL), !Task.isCancelled else { return }
+            fetchedCoverImage = NSImage(data: data)
+        }
+    }
+
+    /// Applies the chosen fields to the editor draft (no writes yet — Save is
+    /// the commit point) and keeps a pending cover for Save to apply.
+    private func confirmMerge(plan: MetadataMergePlan, candidate: MetadataCandidate) {
+        let result = MetadataMergePlan.apply(choices: mergeChoices, book: book, candidate: candidate)
+        let use: (MetadataMergeItem.Field) -> Bool = { mergeChoices[$0] == .useFetched }
+        if use(.title) {
+            title = candidate.title
+        }
+        if use(.authors) {
+            authorsText = candidate.authors.joined(separator: ", ")
+        }
+        if use(.publisher), let publisher = candidate.publisher {
+            self.publisher = publisher
+        }
+        if use(.publicationDate), let date = candidate.publicationDate {
+            hasPublicationDate = true
+            publicationDate = date
+        }
+        if use(.isbn), let isbn = candidate.isbn {
+            var identifiers = book.identifiers
+            identifiers["isbn"] = isbn
+            identifiersText = identifiers.map { "\($0.key)=\($0.value)" }.sorted().joined(separator: "\n")
+        }
+        if result.coverChosen, let coverURL = candidate.coverURL {
+            Task {
+                if let data = await Self.downloadBounded(coverURL) {
+                    pendingCoverData = data
+                } else {
+                    mergeError = "Cover download failed — the rest was applied to the form."
+                }
+            }
+        }
+        reviewStep = nil
+    }
+
+    /// Best-effort bounded download (10s) for review thumbnails and the
+    /// pending cover. Mirrors the session's enrichment download.
+    private static func downloadBounded(_ url: URL) async -> Data? {
+        let client = URLSessionMetadataHTTPClient()
+        let request = URLRequest(url: url)
+        do {
+            return try await withThrowingTaskGroup(of: Data.self) { group in
+                group.addTask { try await client.data(from: request) }
+                group.addTask {
+                    try await Task.sleep(for: .seconds(10))
+                    throw CancellationError()
+                }
+                guard let data = try await group.next() else {
+                    throw CancellationError()
+                }
+                group.cancelAll()
+                return data
+            }
+        } catch {
+            return nil
+        }
     }
 }

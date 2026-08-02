@@ -66,6 +66,7 @@
 		9769ECB6981710022C7B217A /* ScaffoldTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D80E3D97EA38642A0D352DA /* ScaffoldTests.swift */; };
 		983C436D170FBDE137BDBE92 /* LibraryRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B087736BE54EC57981680458 /* LibraryRepositoryTests.swift */; };
 		9C10720CAD6A1CD058205BE5 /* CalibreImportServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97FE4DDA5D650B5CCFA6A51D /* CalibreImportServiceTests.swift */; };
+		9D15D3667967207C1A72C66A /* MetadataMergeReviewSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9A6BD3BB3D5AE6C450E247B /* MetadataMergeReviewSheet.swift */; };
 		9D86CAE107CBE6D0D34B7301 /* ChangeStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F788726BC33346C140CF988F /* ChangeStore.swift */; };
 		A0CF78A35D5B9D189902DF1E /* BookManagerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B289E0169E06FC577EDE4155 /* BookManagerApp.swift */; };
 		A2B5CAB49BBCE42C57427012 /* MetadataSourceDecodingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F2E4D2767153BF0EAB33F35 /* MetadataSourceDecodingTests.swift */; };
@@ -228,6 +229,7 @@
 		B299D92FE747584FDD46D395 /* BookTableView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookTableView.swift; sourceTree = "<group>"; };
 		B73B13122D2268E5ECE2B45C /* BookManagerUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BookManagerUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B8F482AB5AA370AD5457130D /* ThumbnailCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThumbnailCache.swift; sourceTree = "<group>"; };
+		B9A6BD3BB3D5AE6C450E247B /* MetadataMergeReviewSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataMergeReviewSheet.swift; sourceTree = "<group>"; };
 		BCEE9E484F2ACD21E4012F92 /* BookManagerCoreTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BookManagerCoreTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C3182B6AF520D7EFC945903C /* SyncEventSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncEventSource.swift; sourceTree = "<group>"; };
 		C3EB714E6E2C57690A730F94 /* BookFolder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookFolder.swift; sourceTree = "<group>"; };
@@ -516,6 +518,7 @@
 				768C45F6FF1C77FFEA249DA5 /* ImportReportView.swift */,
 				FE22DC7A79DA7703CE5EF160 /* LibraryWelcomeView.swift */,
 				D71CFB152C85ECD05FAEE34F /* MetadataEditorView.swift */,
+				B9A6BD3BB3D5AE6C450E247B /* MetadataMergeReviewSheet.swift */,
 				53DCEA28EE0C12D03C85E45B /* MetadataReviewSheet.swift */,
 				2E1B0345E4E97988D789C4A5 /* SidebarView.swift */,
 			);
@@ -840,6 +843,7 @@
 				050B0C32F9422ED9DE8FBFB8 /* LibrarySession.swift in Sources */,
 				FB334598B1AEAE392B0A20D2 /* LibraryWelcomeView.swift in Sources */,
 				6CFD9DA7BA4FEED223E643F0 /* MetadataEditorView.swift in Sources */,
+				9D15D3667967207C1A72C66A /* MetadataMergeReviewSheet.swift in Sources */,
 				D0C63273D9B67978CDAD0909 /* MetadataReviewSheet.swift in Sources */,
 				F2598A85042DDF22B167FD18 /* SidebarView.swift in Sources */,
 				D62398DF22CF74C237F60AED /* ThumbnailCache.swift in Sources */,

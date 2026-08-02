@@ -100,8 +100,8 @@ struct ContentView: View {
             }
         }
         .sheet(item: $session.inspectorBook) { book in
-            MetadataEditorView(book: book, onSave: { edit in
-                Task { await session.saveEdit(edit, for: book.id) }
+            MetadataEditorView(book: book, session: session, onSave: { edit, coverData in
+                Task { await session.saveEdit(edit, coverData: coverData, for: book.id) }
                 session.inspectorBook = nil
             }, onCancel: {
                 session.inspectorBook = nil
