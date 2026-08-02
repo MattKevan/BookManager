@@ -39,6 +39,7 @@ struct MetadataEditorView: View {
     @State private var reviewStep: ReviewStep?
     @State private var mergeChoices: [MetadataMergeItem.Field: MetadataMergeChoice] = [:]
     @State private var pendingCoverData: Data?
+    @State private var coverPending = false
     @State private var isFetchingMetadata = false
     @State private var currentCoverImage: NSImage?
     @State private var fetchedCoverImage: NSImage?
@@ -84,6 +85,12 @@ struct MetadataEditorView: View {
                     onSave(collectEdit(), pendingCoverData)
                 }
                 .buttonStyle(.borderedProminent)
+                .disabled(coverPending)
+                if coverPending {
+                    ProgressView()
+                        .controlSize(.small)
+                        .help("Downloading the chosen cover…")
+                }
             }
             .padding()
         }
@@ -188,6 +195,12 @@ struct MetadataEditorView: View {
     private func fetchMetadata() {
         guard let session, !isFetchingMetadata else { return }
         isFetchingMetadata = true
+        // A fresh flow must not carry a stale cover or error from a previous
+        // merge (fetch → merge → cancel → Save would otherwise apply an old
+        // pending cover).
+        pendingCoverData = nil
+        coverPending = false
+        mergeError = nil
         Task {
             let candidates = await session.lookupMetadataCandidates(for: book.id)
             isFetchingMetadata = false
@@ -254,12 +267,16 @@ struct MetadataEditorView: View {
             identifiersText = identifiers.map { "\($0.key)=\($0.value)" }.sorted().joined(separator: "\n")
         }
         if result.coverChosen, let coverURL = candidate.coverURL {
+            // Keep Save disabled until the bounded download resolves, so Save
+            // can never beat the download and silently drop the chosen cover.
+            coverPending = true
             Task {
                 if let data = await Self.downloadBounded(coverURL) {
                     pendingCoverData = data
                 } else {
                     mergeError = "Cover download failed — the rest was applied to the form."
                 }
+                coverPending = false
             }
         }
         reviewStep = nil
