@@ -40,6 +40,9 @@ struct MobiToEpubConverterTests {
         #expect(container?.contains("content.opf") == true)
 
         let opf = entryData(archive, "content.opf").flatMap { String(data: $0, encoding: .utf8) } ?? ""
+        // The OPF must be XML-well-formed (epubcheck/strict parsers reject an
+        // unbound `opf:` prefix) — parse it and assert no error.
+        #expect(throws: Never.self) { try XMLDocument(xmlString: opf) }
         #expect(opf.contains("Test Book"))
         #expect(opf.contains("Alice"))
         #expect(opf.contains("Bob"))
