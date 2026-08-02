@@ -448,8 +448,12 @@ final class LibrarySession {
         }
         do {
             let updated = try await repository.updateBook(id: id, edit: edit)
-            inspectorBook = updated
             // Best-effort cover: a failure must not undo the metadata save.
+            // NOTE: `inspectorBook` is deliberately NOT reassigned here — the
+            // editor sheet's presentation is owned by its callers (onSave/
+            // onCancel set it to nil to dismiss); reassigning it on save would
+            // re-present the sheet. The updated book reaches the UI via
+            // `refreshAll()` → `session.books`.
             if let coverData {
                 do {
                     _ = try await repository.updateCover(coverData: coverData, for: id)
@@ -495,7 +499,8 @@ final class LibrarySession {
             let updated = try await repository.upsertResolved(
                 resolved, bookID: id, baseSnapshot: book.snapshot, changes: changes
             )
-            inspectorBook = updated
+            // Same contract as `saveEdit`: do NOT reassign `inspectorBook`
+            // (it would re-present the dismissed editor sheet).
         } catch {
             lastError = originalError.localizedDescription
         }
