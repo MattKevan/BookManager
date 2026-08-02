@@ -147,19 +147,25 @@ struct CoverGridView: View {
     }
 
     private func openFocused() {
-        if let focusedID {
-            Task { await session.open(id: focusedID) }
-        } else if let selected = session.selection.first {
+        // Selection-first: a mouse/marquee selection must win over a possibly
+        // stale keyboard focus (Finder semantics). The arrow-key flow keeps
+        // selection == [focusedID] in lockstep, so this never changes it.
+        if let selected = session.selection.first {
             Task { await session.open(id: selected) }
+        } else if let focusedID {
+            Task { await session.open(id: focusedID) }
         }
     }
 
     private func trashFocused() {
+        // Selection-first: trash what the user sees selected, not a stale
+        // focused book (a click + marquee leaves focus on the clicked book
+        // while the visible selection is the marquee set).
         let ids: Set<UUID>
-        if let focusedID {
-            ids = [focusedID]
-        } else if !session.selection.isEmpty {
+        if !session.selection.isEmpty {
             ids = session.selection
+        } else if let focusedID {
+            ids = [focusedID]
         } else {
             return
         }
