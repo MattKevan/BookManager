@@ -162,7 +162,7 @@ public struct MetadataMergePlan: Sendable, Equatable {
         let coverChosen = use(.cover) && candidate.coverURL != nil
 
         let edit = BookEdit(
-            title: use(.title) ? candidate.title : nil,
+            title: use(.title) && !candidate.title.isEmpty ? candidate.title : nil,
             authors: use(.authors) ? candidate.authors : nil,
             publisher: publisher,
             publicationDate: publicationDate,

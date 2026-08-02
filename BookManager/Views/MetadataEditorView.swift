@@ -40,6 +40,7 @@ struct MetadataEditorView: View {
     @State private var mergeChoices: [MetadataMergeItem.Field: MetadataMergeChoice] = [:]
     @State private var pendingCoverData: Data?
     @State private var coverPending = false
+    @State private var coverDownloadTask: Task<Void, Never>?
     @State private var isFetchingMetadata = false
     @State private var currentCoverImage: NSImage?
     @State private var fetchedCoverImage: NSImage?
@@ -195,6 +196,11 @@ struct MetadataEditorView: View {
     private func fetchMetadata() {
         guard let session, !isFetchingMetadata else { return }
         isFetchingMetadata = true
+        // Cancel any in-flight cover download BEFORE the reset: a stale
+        // download completing after this point must never repopulate the draft
+        // with a cover the user did not choose in the current flow.
+        coverDownloadTask?.cancel()
+        coverDownloadTask = nil
         // A fresh flow must not carry a stale cover or error from a previous
         // merge (fetch → merge → cancel → Save would otherwise apply an old
         // pending cover).
@@ -244,36 +250,46 @@ struct MetadataEditorView: View {
     }
 
     /// Applies the chosen fields to the editor draft (no writes yet — Save is
-    /// the commit point) and keeps a pending cover for Save to apply.
+    /// the commit point) and keeps a pending cover for Save to apply. The draft
+    /// is populated from `MetadataMergePlan.apply`'s edit (single source of
+    /// truth — no hand-mirrored field mapping).
     private func confirmMerge(plan: MetadataMergePlan, candidate: MetadataCandidate) {
         let result = MetadataMergePlan.apply(choices: mergeChoices, book: book, candidate: candidate)
-        let use: (MetadataMergeItem.Field) -> Bool = { mergeChoices[$0] == .useFetched }
-        if use(.title) {
-            title = candidate.title
+        if let newTitle = result.edit.title {
+            title = newTitle
         }
-        if use(.authors) {
-            authorsText = candidate.authors.joined(separator: ", ")
+        if let newAuthors = result.edit.authors {
+            authorsText = newAuthors.joined(separator: ", ")
         }
-        if use(.publisher), let publisher = candidate.publisher {
-            self.publisher = publisher
+        switch result.edit.publisher {
+        case .set(let value):
+            self.publisher = value
+        case .clear:
+            self.publisher = ""
+        case .keep:
+            break
         }
-        if use(.publicationDate), let date = candidate.publicationDate {
+        switch result.edit.publicationDate {
+        case .set(let date):
             hasPublicationDate = true
             publicationDate = date
+        case .clear:
+            hasPublicationDate = false
+            publicationDate = nil
+        case .keep:
+            break
         }
-        if use(.isbn), let isbn = candidate.isbn {
-            var identifiers = book.identifiers
-            identifiers["isbn"] = isbn
-            identifiersText = identifiers.map { "\($0.key)=\($0.value)" }.sorted().joined(separator: "\n")
+        if let newIdentifiers = result.edit.identifiers {
+            identifiersText = newIdentifiers.map { "\($0.key)=\($0.value)" }.sorted().joined(separator: "\n")
         }
         if result.coverChosen, let coverURL = candidate.coverURL {
             // Keep Save disabled until the bounded download resolves, so Save
             // can never beat the download and silently drop the chosen cover.
             coverPending = true
-            Task {
-                if let data = await Self.downloadBounded(coverURL) {
+            coverDownloadTask = Task {
+                if let data = await Self.downloadBounded(coverURL), !Task.isCancelled {
                     pendingCoverData = data
-                } else {
+                } else if !Task.isCancelled {
                     mergeError = "Cover download failed — the rest was applied to the form."
                 }
                 coverPending = false

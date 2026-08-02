@@ -112,4 +112,33 @@ struct MetadataMergePlanTests {
         #expect(cover?.fetchedValue == nil)
         #expect(cover?.defaultChoice == .keep)
     }
+
+    @Test
+    func chosenButNilPublisherClears() throws {
+        // Choosing "use fetched" for a field the candidate can't supply
+        // resolves to .clear (an empty draft clears the field on Save).
+        let result = MetadataMergePlan.apply(
+            choices: [.publisher: .useFetched],
+            book: book(), candidate: candidate(publisher: nil)
+        )
+        #expect(result.edit.publisher == .clear)
+    }
+
+    @Test
+    func coverChosenFalseWithoutCoverURL() throws {
+        let result = MetadataMergePlan.apply(
+            choices: [.cover: .useFetched],
+            book: book(), candidate: candidate(coverURL: nil)
+        )
+        #expect(result.coverChosen == false)
+    }
+
+    @Test
+    func emptyCandidateTitleDoesNotClearTheBookTitle() throws {
+        let result = MetadataMergePlan.apply(
+            choices: [.title: .useFetched],
+            book: book(), candidate: candidate(title: "")
+        )
+        #expect(result.edit.title == nil)
+    }
 }
