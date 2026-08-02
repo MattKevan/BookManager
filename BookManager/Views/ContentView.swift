@@ -3,12 +3,27 @@ import BookManagerCore
 import SwiftUI
 import UniformTypeIdentifiers
 
+/// Menu-command bridge to the search field's focus (Cmd-F). The browser view
+/// publishes its `@FocusState` binding here; the Find command in
+/// `BookManagerApp` sets it via the focused value.
+private struct SearchFocusKey: FocusedValueKey {
+    typealias Value = FocusState<Bool>.Binding
+}
+
+extension FocusedValues {
+    var searchFocus: FocusState<Bool>.Binding? {
+        get { self[SearchFocusKey.self] }
+        set { self[SearchFocusKey.self] = newValue }
+    }
+}
+
 struct ContentView: View {
     @Bindable var session: LibrarySession
     @State private var importURLs: [URL] = []
     @State private var showImportReport = false
     @State private var showDiagnostics = false
     @State private var showCalibreImport = false
+    @FocusState private var searchFocused: Bool
 
     var body: some View {
         Group {
@@ -154,8 +169,12 @@ struct ContentView: View {
                 }
                 .help("Show or hide the inspector")
                 Picker("View", selection: $session.viewMode) {
-                    Image(systemName: "list.bullet").tag(LibrarySession.ViewMode.table)
-                    Image(systemName: "square.grid.2x2").tag(LibrarySession.ViewMode.grid)
+                    Image(systemName: "list.bullet")
+                        .accessibilityLabel("Table")
+                        .tag(LibrarySession.ViewMode.table)
+                    Image(systemName: "square.grid.2x2")
+                        .accessibilityLabel("Cover grid")
+                        .tag(LibrarySession.ViewMode.grid)
                 }
                 .pickerStyle(.segmented)
                 .help("Table or cover grid")
@@ -210,6 +229,8 @@ struct ContentView: View {
             }
         }
         .searchable(text: $session.searchText, prompt: "Search books")
+        .searchFocused($searchFocused)
+        .focusedValue(\.searchFocus, $searchFocused)
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in
             handleDrop(providers)
         }
