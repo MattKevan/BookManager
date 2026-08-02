@@ -326,6 +326,7 @@ public actor LibraryRepository: LibraryRepositoryImporting {
 
     public func rebuildCatalog() async throws {
         try await catalog.clear()
+        var built: [IndexedBook] = []
         for bookID in try await changeStore.bookIDs() {
             let pending = try await changeStore.bookChanges(bookID: bookID)
             let document = try AutomergeBookDocument.empty(deviceID: deviceID)
@@ -353,7 +354,10 @@ public actor LibraryRepository: LibraryRepositoryImporting {
             let path = CanonicalPathBuilder.relativeDirectory(
                 bookID: bookID, title: resolved.title, authors: resolved.authors
             )
-            try await catalog.upsert(makeIndexedBook(document, relativePath: path))
+            built.append(try makeIndexedBook(document, relativePath: path))
+        }
+        if !built.isEmpty {
+            try await catalog.upsertBatch(built)
         }
     }
 

@@ -42,6 +42,7 @@ public actor SyncEngine {
         let applied = try state.appliedFingerprints()
         var newlyApplied = Set<String>()
         let bookIDs = try await store.bookIDs()
+        var built: [IndexedBook] = []
 
         for bookID in bookIDs {
             let files = try await store.bookChangeFiles(bookID: bookID)
@@ -98,13 +99,17 @@ public actor SyncEngine {
             let path = CanonicalPathBuilder.relativeDirectory(
                 bookID: bookID, title: resolved.title, authors: resolved.authors
             )
-            try await catalog.upsert(IndexedBookFactory.make(
+            built.append(try IndexedBookFactory.make(
                 resolved: resolved,
                 bookID: bookID,
                 path: path,
                 snapshot: document.snapshot()
             ))
             report.booksApplied += 1
+        }
+
+        if !built.isEmpty {
+            try await catalog.upsertBatch(built)
         }
 
         report.appliedChangeCount = newlyApplied.count

@@ -14,14 +14,29 @@ public actor LocalCatalog {
     }
 
     public func upsert(_ book: IndexedBook) throws {
+        try database.write { db in
+            try upsert(book, db: db)
+        }
+    }
+
+    /// Upserts many books in ONE transaction (rebuild/ingest hot path — 10k
+    /// per-book transactions become one).
+    public func upsertBatch(_ books: [IndexedBook]) throws {
+        try database.write { db in
+            for book in books {
+                try upsert(book, db: db)
+            }
+        }
+    }
+
+    private func upsert(_ book: IndexedBook, db: Database) throws {
         let authorsJSON = try JSONCoding.encode(book.authors)
         let tagsJSON = try JSONCoding.encode(book.tags)
         let languagesJSON = try JSONCoding.encode(book.languages)
         let identifiersJSON = try JSONCoding.encode(book.identifiers)
         let rawMetadataJSON = try book.rawMetadata.map(JSONCoding.encode)
         let formatsJSON = try JSONCoding.encode(book.formats)
-        try database.write { db in
-            try db.execute(
+        try db.execute(
                 sql: """
                     INSERT INTO book(id, title, authors, series, seriesIndex, tags, rating, publisher,
                         publicationMilliseconds, addedMilliseconds, languages, identifiers, comments,
@@ -77,7 +92,6 @@ public actor LocalCatalog {
                     arguments: [book.id.uuidString, format.kind, format.contentHash]
                 )
             }
-        }
     }
 
     public func allBooks() throws -> [IndexedBook] {
