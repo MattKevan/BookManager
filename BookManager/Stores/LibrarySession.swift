@@ -40,6 +40,12 @@ final class LibrarySession {
     /// cleared when `syncNow` drains the outbox.
     private(set) var pendingSyncCount = 0
 
+    /// Rebuild progress (0...1) while `isRebuilding`; nil otherwise.
+    private(set) var rebuildProgress: Double?
+    /// True while the Diagnostics rebuild is running (drives the progress UI).
+    private(set) var isRebuilding = false
+    private let cancelFlag = RebuildCancelFlag()
+
     /// Undecodable change files moved to the library quarantine by the last
     /// ingest — surfaced in Diagnostics so nothing silently disappears.
     private(set) var quarantinedChanges: [URL] = []
@@ -648,12 +654,32 @@ final class LibrarySession {
 
     func rebuildIndex() async {
         guard let repository else { return }
+        isRebuilding = true
+        rebuildProgress = 0
+        defer {
+            isRebuilding = false
+            rebuildProgress = nil
+            cancelFlag.requested = false
+        }
         do {
-            try await repository.rebuildCatalog()
+            try await repository.rebuildCatalog(
+                progress: { [weak self] value in
+                    Task { @MainActor in
+                        self?.rebuildProgress = value
+                    }
+                },
+                cancelled: { [cancelFlag] in cancelFlag.requested }
+            )
+        } catch LibraryRepositoryError.rebuildCancelled {
+            lastError = "Rebuild cancelled."
         } catch {
             lastError = error.localizedDescription
         }
         await refreshAll()
+    }
+
+    func cancelRebuild() {
+        cancelFlag.requested = true
     }
 
     func reloadDiagnostics() async {
@@ -675,5 +701,19 @@ final class LibrarySession {
             .appending(path: "Indexes", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         return root
+    }
+}
+
+/// Lock-protected boolean so the repository's synchronous `cancelled` closure
+/// (called from the repository actor) can read the MainActor session's cancel
+/// request without a data race (a stale read only delays cancellation by one
+/// book — benign for a rebuild-cancel flag).
+private final class RebuildCancelFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = false
+
+    var requested: Bool {
+        get { lock.withLock { value } }
+        set { lock.withLock { value = newValue } }
     }
 }

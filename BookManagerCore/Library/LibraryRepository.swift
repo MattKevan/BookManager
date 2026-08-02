@@ -324,10 +324,23 @@ public actor LibraryRepository: LibraryRepositoryImporting {
 
     // MARK: - Rebuild
 
-    public func rebuildCatalog() async throws {
+    /// Rebuilds the disposable catalog from the change store. Reports
+    /// `progress` (0...1, monotonic) between books and checks `cancelled`
+    /// before each book, throwing `LibraryRepositoryError.rebuildCancelled`
+    /// when a rebuild is cancelled. The defaulted closures keep existing
+    /// callers (`open()`, `rebuildIndex`) compiling unchanged.
+    public func rebuildCatalog(
+        progress: @Sendable (Double) -> Void = { _ in },
+        cancelled: @Sendable () -> Bool = { false }
+    ) async throws {
         try await catalog.clear()
+        let bookIDs = try await changeStore.bookIDs()
+        let total = max(bookIDs.count, 1)
         var built: [IndexedBook] = []
-        for bookID in try await changeStore.bookIDs() {
+        for (index, bookID) in bookIDs.enumerated() {
+            if cancelled() {
+                throw LibraryRepositoryError.rebuildCancelled
+            }
             let pending = try await changeStore.bookChanges(bookID: bookID)
             let document = try AutomergeBookDocument.empty(deviceID: deviceID)
             var remaining = pending
@@ -355,10 +368,12 @@ public actor LibraryRepository: LibraryRepositoryImporting {
                 bookID: bookID, title: resolved.title, authors: resolved.authors
             )
             built.append(try makeIndexedBook(document, relativePath: path))
+            progress(Double(index + 1) / Double(total))
         }
         if !built.isEmpty {
             try await catalog.upsertBatch(built)
         }
+        progress(1)
     }
 
     // MARK: - Sync integration
@@ -420,4 +435,5 @@ public enum LibraryRepositoryError: Error, Equatable {
     case unsupportedFormat(Int)
     case missingDependencies(UUID)
     case bookNotFound(UUID)
+    case rebuildCancelled
 }

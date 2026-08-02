@@ -15,8 +15,15 @@ struct DiagnosticsView: View {
                 Section("Library") {
                     LabeledContent("Library", value: session?.repository?.root.lastPathComponent ?? "—")
                     LabeledContent("Books", value: "\(session?.books.count ?? 0)")
-                    Button("Rebuild Local Index") {
-                        Task { await session?.rebuildIndex() }
+                    if session?.isRebuilding == true {
+                        ProgressView(value: session?.rebuildProgress ?? 0)
+                        Button("Cancel Rebuild") {
+                            session?.cancelRebuild()
+                        }
+                    } else {
+                        Button("Rebuild Local Index") {
+                            Task { await session?.rebuildIndex() }
+                        }
                     }
                 }
                 Section("Missing Format Files") {
