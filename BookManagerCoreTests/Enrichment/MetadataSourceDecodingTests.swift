@@ -37,8 +37,9 @@ struct MetadataSourceDecodingTests {
         #expect(Calendar(identifier: .gregorian).component(.year, from: try #require(first.publicationDate)) == 2019)
 
         let second = try #require(candidates.dropFirst().first)
-        // No ISBN/cover_i: id falls back to a title slug; cover falls back to the ISBN route only when an ISBN exists.
-        #expect(second.id == "openlibrary-the-talent-code")
+        // No ISBN/cover_i: id falls back to a title slug plus the doc index
+        // (unique ids for same-title docs), so the review sheet rows stay distinct.
+        #expect(second.id == "openlibrary-the-talent-code-1")
         #expect(second.coverURL == nil)
         #expect(second.publicationDate == nil)
     }

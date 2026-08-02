@@ -50,7 +50,7 @@ public struct OpenLibrarySource: MetadataSourceProviding {
             let cover_i: Int?
         }
         let response = try JSONDecoder().decode(Response.self, from: data)
-        return (response.docs ?? []).compactMap { doc in
+        return (response.docs ?? []).enumerated().compactMap { index, doc in
             guard let title = doc.title, !title.isEmpty else { return nil }
             let cover: URL?
             let idSuffix: String
@@ -61,7 +61,10 @@ public struct OpenLibrarySource: MetadataSourceProviding {
                 idSuffix = isbn
                 cover = URL(string: "https://covers.openlibrary.org/b/isbn/\(isbn)-M.jpg")
             } else {
-                idSuffix = MetadataScoring.slug(title)
+                // Same-title docs have no cover_i/isbn handle — the index keeps
+                // candidate ids unique so the review sheet's ForEach rows stay
+                // distinct (a duplicate id would let Apply target the wrong row).
+                idSuffix = "\(MetadataScoring.slug(title))-\(index)"
                 cover = nil
             }
             return MetadataCandidate(

@@ -10,19 +10,28 @@ struct MetadataLookupServiceTests {
         func recorded() -> [String] { calls }
     }
 
-    /// Records calls (for priority/cache assertions) and returns fixed results.
+    /// Records calls (for priority/cache assertions) and returns fixed results,
+    /// or throws when `error` is set (fall-through assertions).
     private final class RecordingSource: MetadataSourceProviding, @unchecked Sendable {
         let name: String
         let results: [MetadataCandidate]
+        let error: Error?
         let probe: SourceProbe?
-        init(name: String, results: [MetadataCandidate], probe: SourceProbe? = nil) {
+        init(
+            name: String,
+            results: [MetadataCandidate],
+            error: Error? = nil,
+            probe: SourceProbe? = nil
+        ) {
             self.name = name
             self.results = results
+            self.error = error
             self.probe = probe
         }
 
         func search(_ query: MetadataLookupQuery) async throws -> [MetadataCandidate] {
             await probe?.record(name)
+            if let error { throw error }
             return results
         }
     }
@@ -127,6 +136,52 @@ struct MetadataLookupServiceTests {
         )
         #expect(result.candidates.map(\.title) == ["Range"])
         #expect(await probe.recorded() == ["empty", "full"])
+    }
+
+    @Test
+    func throwingSourceFallsThroughToNextSource() async throws {
+        let probe = SourceProbe()
+        let registry = MetadataRegistry(sources: [
+            RecordingSource(name: "throwing", results: [], error: MetadataSourceError.badURL, probe: probe),
+            RecordingSource(name: "ok", results: [candidate("Range")], probe: probe),
+        ])
+        let service = MetadataLookupService(registry: registry)
+        let result = try await service.lookup(
+            MetadataLookupQuery(isbn: nil, title: "Range", authors: ["Alice"])
+        )
+        // A throwing source must not abort the lookup when a later source
+        // succeeds; the later source's candidates win.
+        #expect(result.candidates.map(\.title) == ["Range"])
+        #expect(await probe.recorded() == ["throwing", "ok"])
+    }
+
+    @Test
+    func marginBoundaryDeterminesAutoApply() async throws {
+        let query = MetadataLookupQuery(isbn: nil, title: "Range", authors: ["Alice", "Bob"])
+
+        // Two exact-title candidates with full author overlap tie at 100 —
+        // margin 0 < 20 → review, no auto-apply.
+        let tied = MetadataRegistry(sources: [
+            RecordingSource(name: "a", results: [
+                candidate("Range", authors: ["Alice", "Bob"], source: "a"),
+                candidate("Range", authors: ["Alice", "Bob"], source: "b"),
+            ]),
+        ])
+        let review = try await MetadataLookupService(registry: tied).lookup(query)
+        #expect(review.autoApply == nil)
+        #expect(review.candidates.count == 2)
+
+        // Top 100 (full overlap) vs runner-up 80 (half overlap) — margin
+        // exactly 20 → auto-apply the top.
+        let clear = MetadataRegistry(sources: [
+            RecordingSource(name: "a", results: [
+                candidate("Range", authors: ["Alice", "Bob"], source: "a"),
+                candidate("Range", authors: ["Alice"], source: "b"),
+            ]),
+        ])
+        let applied = try await MetadataLookupService(registry: clear).lookup(query)
+        #expect(applied.autoApply?.authors == ["Alice", "Bob"])
+        #expect(applied.candidates.count == 2)
     }
 
     @Test

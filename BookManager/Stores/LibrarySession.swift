@@ -100,7 +100,7 @@ final class LibrarySession {
     private(set) var isFetchingMetadata = false
     private var metadataService: MetadataLookupService?
 
-    private static let metadataUserAgent = "BookManager/1.0 (contact: dev@example.com)"
+    private static let metadataUserAgent = "BookManager/1.0"
     var diagnosticsPresented = false
 
     // Calibre import wizard state
