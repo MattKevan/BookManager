@@ -55,6 +55,20 @@ public actor FolderReconciler {
     // MARK: - Path reconciliation
 
     private func reconcilePath(_ book: IndexedBook, into report: inout ReconciliationReport, index: FolderIndex) async {
+        // A book with no materialized folder (empty relativePath) must never
+        // resolve to the library root — with empty formats `folderMatches` is
+        // vacuously true and the root would be renamed or forked as if it were
+        // the book folder (10k benchmark found a root-rename attempt). Surfaced
+        // in errors; left inert. Production always materializes folders, so
+        // this guard only sees malformed rows.
+        let actualResolved = await folder.bookDirectoryURL(relativePath: book.relativePath)
+            .resolvingSymlinksInPath().standardizedFileURL
+        let rootResolved = layout.root.resolvingSymlinksInPath().standardizedFileURL
+        guard !book.relativePath.isEmpty, actualResolved != rootResolved else {
+            report.errors.append("book \(book.id): empty relativePath")
+            return
+        }
+
         let canonical = CanonicalPathBuilder.relativeDirectory(
             bookID: book.id, title: book.title, authors: book.authors
         )

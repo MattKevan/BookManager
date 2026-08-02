@@ -235,6 +235,36 @@ struct FolderReconcilerTests {
     }
 
     @Test
+    func emptyRelativePathIsGuardedNotRenamed() async throws {
+        // A malformed row: no materialized folder (empty relativePath, no
+        // formats). Reconcile must never treat the library ROOT as the book
+        // folder — with empty formats `folderMatches` is vacuously true and the
+        // root would be renamed/forked as if it were the book (the 10k
+        // benchmark found a ~55s root-rename attempt). The row is surfaced in
+        // errors and left alone.
+        let h = try await Harness()
+        let malformed = IndexedBook(
+            id: UUID(), title: "Malformed", authors: ["Alice"],
+            relativePath: "",
+            modifiedMilliseconds: 1_000, isDeleted: false, snapshot: Data([1])
+        )
+        try await h.catalog.upsert(malformed)
+
+        let report = try await h.reconciler().reconcile()
+
+        #expect(report.errors.contains {
+            $0.contains("empty relativePath") && $0.contains(malformed.id.uuidString)
+        })
+        #expect(!report.missingFolders.contains(malformed.id))
+        #expect(report.renamed.isEmpty)
+        #expect(report.adopted.isEmpty)
+        #expect(report.conflictCopies.isEmpty)
+        // The library root was not renamed or moved.
+        #expect(FileManager.default.fileExists(atPath: h.root.path))
+        #expect(FileManager.default.fileExists(atPath: h.layout.controlRoot.path))
+    }
+
+    @Test
     func discoveryStillFindsStrayFoldersViaIndex() async throws {
         let h = try await Harness()
         let book = try await h.createBook(title: "Indexed")
