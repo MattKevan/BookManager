@@ -62,7 +62,10 @@ struct ContentView: View {
         .fileImporter(
             isPresented: $session.isPickerPresented,
             allowedContentTypes: session.pickerAction == .addBooks
-                ? [.epub, .pdf, .data]
+                ? [.epub, .pdf, .data,
+                   UTType(filenameExtension: "mobi") ?? .data,
+                   UTType(filenameExtension: "azw") ?? .data,
+                   UTType(filenameExtension: "azw3") ?? .data]
                 : [.folder],
             allowsMultipleSelection: true,
             onCompletion: { result in

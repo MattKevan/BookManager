@@ -57,6 +57,9 @@ public struct ImportReport: Sendable {
 public actor ImportService {
     private let folder: BookFolder
 
+    /// MOBI-family extensions converted to EPUB before the standard pipeline.
+    private static let mobiExtensions: Set<String> = ["mobi", "azw", "azw3"]
+
     public init(layout: LibraryLayout) {
         folder = BookFolder(layout: layout)
     }
@@ -67,18 +70,38 @@ public actor ImportService {
     ) async throws -> ImportReport {
         var items: [ImportItem] = []
         for source in sourceURLs {
-            guard let kind = MetadataExtractor.kind(for: source) else {
+            // MOBI/AZW/AZW3 sources convert to a temp EPUB first, then flow
+            // through the standard EPUB path against the temp file. The report
+            // item keeps the ORIGINAL source URL so the UI shows the MOBI file.
+            let prepared = Self.prepare(source)
+            defer {
+                if let temporaryDirectory = prepared.temporaryDirectory {
+                    try? FileManager.default.removeItem(at: temporaryDirectory)
+                }
+            }
+            guard let kind = prepared.kind else {
                 items.append(ImportItem(
                     sourceURL: source,
                     kind: .epub,
-                    status: .failed("Unsupported file type")
+                    status: .failed(prepared.failureMessage ?? "Unsupported file type")
                 ))
                 continue
             }
             do {
-                let metadata = try MetadataExtractor.extract(from: source, kind: kind)
-                let cover = try MetadataExtractor.extractCover(from: source, kind: kind)
-                let staged = try await folder.stage(from: source)
+                var metadata = try MetadataExtractor.extract(from: prepared.url, kind: kind)
+                if metadata.title.isEmpty, let fallback = prepared.fallbackTitle {
+                    metadata.title = fallback
+                }
+                // MOBI covers come from the reader (the converted EPUB's OPF
+                // does not declare a cover in its metadata/guide); non-MOBI
+                // sources keep the extractor path.
+                let cover: Data?
+                if let mobiCover = prepared.cover {
+                    cover = mobiCover
+                } else {
+                    cover = try MetadataExtractor.extractCover(from: prepared.url, kind: kind)
+                }
+                let staged = try await folder.stage(from: prepared.url)
                 // materialize() consumes the staged copy on success; every other
                 // exit (duplicate, throw) must remove it so the synced
                 // .bookmanager/staging area never leaks files or empty per-import
@@ -121,11 +144,84 @@ public actor ImportService {
             } catch {
                 items.append(ImportItem(
                     sourceURL: source, kind: kind,
-                    status: .failed(error.localizedDescription)
+                    status: .failed(Self.message(for: error))
                 ))
             }
         }
         return ImportReport(items: items)
+    }
+
+    // MARK: - MOBI conversion
+
+    private struct PreparedSource {
+        /// The file the standard pipeline imports (the converted temp EPUB for
+        /// MOBI sources, the original URL otherwise).
+        let url: URL
+        /// The import format; nil means the source can't be imported.
+        let kind: FormatKind?
+        /// A title to use when the extracted metadata title is empty (the
+        /// original file's stem for MOBI sources).
+        let fallbackTitle: String?
+        /// The cover extracted by the MOBI reader (used directly, since the
+        /// converted EPUB's OPF does not declare a cover).
+        let cover: Data?
+        /// A conversion failure message (DRM, unreadable) — the file is
+        /// reported as failed with this message.
+        let failureMessage: String?
+        /// The temp directory holding the converted EPUB; removed after import.
+        let temporaryDirectory: URL?
+    }
+
+    /// Resolves a source URL to the file the standard pipeline will import:
+    /// MOBI-family files are converted to a temp EPUB. Non-MOBI files pass
+    /// through unchanged.
+    private static func prepare(_ source: URL) -> PreparedSource {
+        guard mobiExtensions.contains(source.pathExtension.lowercased()) else {
+            return PreparedSource(
+                url: source,
+                kind: MetadataExtractor.kind(for: source),
+                fallbackTitle: nil,
+                cover: nil,
+                failureMessage: nil,
+                temporaryDirectory: nil
+            )
+        }
+        do {
+            let content = try MobiReader(url: source).extract()
+            let epubData = try MobiToEpubConverter.convert(content)
+            let directory = FileManager.default.temporaryDirectory
+                .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let baseName = source.deletingPathExtension().lastPathComponent
+            let epubURL = directory.appending(path: "\(baseName).epub")
+            try epubData.write(to: epubURL, options: .atomic)
+            return PreparedSource(
+                url: epubURL,
+                kind: .epub,
+                fallbackTitle: content.title.isEmpty ? baseName : nil,
+                cover: content.cover,
+                failureMessage: nil,
+                temporaryDirectory: directory
+            )
+        } catch {
+            return PreparedSource(
+                url: source,
+                kind: nil,
+                fallbackTitle: nil,
+                cover: nil,
+                failureMessage: Self.message(for: error),
+                temporaryDirectory: nil
+            )
+        }
+    }
+
+    /// A clear per-item failure message: DRM-protected MOBI files get an
+    /// explicit reason instead of the generic error description.
+    private static func message(for error: Error) -> String {
+        if case MobiReaderError.drmProtected = error {
+            return "DRM-protected book"
+        }
+        return error.localizedDescription
     }
 
     static func normalized(_ value: String) -> String {
