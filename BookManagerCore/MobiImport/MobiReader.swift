@@ -116,7 +116,9 @@ public struct MobiReader: Sendable {
     /// split on those boundaries. Older-style documents without fragment
     /// boundaries fall back to `<mbp:pagebreak>` markers. The per-fragment
     /// XHTML wrapper (`<?xml … </html>`) is stripped, leaving the content.
-    private static func chapters(from rawml: String) -> [MobiChapter] {
+    /// Internal (not private) so the decomposition is directly unit-tested
+    /// with synthetic rawml.
+    static func chapters(from rawml: String) -> [MobiChapter] {
         let fragments: [String]
         if rawml.contains("<?xml") {
             fragments = rawml.components(separatedBy: "<?xml")
@@ -137,11 +139,16 @@ public struct MobiReader: Sendable {
 
     /// Removes everything up to and including the fragment's XHTML wrapper
     /// (`</html>`), leaving the heading/paragraph content that follows it.
+    /// When the fragment's content sits INSIDE the wrapper (a typical
+    /// real-world MOBI: `<body>…</body></html>`) the after-strip is empty —
+    /// fall back to the trimmed fragment so the chapter is never silently
+    /// dropped.
     private static func strippedContent(_ fragment: String) -> String {
         let trimmed = fragment.trimmingCharacters(in: .whitespacesAndNewlines)
         if let range = trimmed.range(of: "</html>", options: .caseInsensitive) {
-            return String(trimmed[range.upperBound...])
+            let after = String(trimmed[range.upperBound...])
                 .trimmingCharacters(in: .whitespacesAndNewlines)
+            return after.isEmpty ? trimmed : after
         }
         return trimmed
     }

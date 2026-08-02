@@ -96,4 +96,41 @@ struct MobiReaderTests {
             _ = try MobiReader(url: missing)
         }
     }
+
+    // MARK: - Synthetic rawml decomposition (review round 1)
+
+    @Test
+    func bodyEmbeddedContentYieldsChapter() throws {
+        // A typical real-world rawml stores content INSIDE the html wrapper;
+        // the </html> strip must not silently empty the chapter (review fix 1).
+        let rawml = """
+        <?xml version="1.0"?>
+        <html><head><title>Chapter One</title></head>
+        <body><h1>Chapter One</h1><p>Real-world content inside the body.</p></body></html>
+        """
+        let chapters = MobiReader.chapters(from: rawml)
+        #expect(chapters.count == 1)
+        #expect(chapters[0].html.contains("Real-world content inside the body."))
+    }
+
+    @Test
+    func noSeparatorsYieldsSingleChapter() throws {
+        // A document without <?xml boundaries and without pagebreaks is a
+        // single chapter carrying the whole content.
+        let rawml = "<html><head><title>Only</title></head><body><p>Whole document without separators.</p></body></html>"
+        let chapters = MobiReader.chapters(from: rawml)
+        #expect(chapters.count == 1)
+        #expect(chapters[0].html.contains("Whole document without separators."))
+    }
+
+    @Test
+    func pagebreakFallbackStillSplits() throws {
+        // The no-<?xml fallback splits on <mbp:pagebreak> markers.
+        let rawml = "<p>Part one.</p><mbp:pagebreak/><p>Part two.</p><mbp:pagebreak/><p>Part three.</p>"
+        let chapters = MobiReader.chapters(from: rawml)
+        #expect(chapters.count == 3)
+        #expect(chapters[0].html.contains("Part one."))
+        #expect(chapters[1].html.contains("Part two."))
+        #expect(chapters[2].html.contains("Part three."))
+    }
 }
