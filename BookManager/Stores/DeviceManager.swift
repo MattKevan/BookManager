@@ -24,6 +24,9 @@ final class DeviceManager {
     private(set) var deviceBooks: [DeviceBookRecord] = []
     private(set) var isScanning = false
     private(set) var isListing = false
+    /// True while a transfer (import download or send-to-device) is in flight;
+    /// the detection tick skips while set so it can never interrupt a transfer.
+    private(set) var isTransferring = false
     /// Last device-layer error (connection, listing, transfer, eject).
     /// Settable by views so import failures can surface on the device screen.
     var deviceError: String?
@@ -33,6 +36,10 @@ final class DeviceManager {
 
     private let registry = DeviceRegistry()
     private let factory = MTPTransportFactory()
+    /// Background detection tick (started lazily from the first scan): keeps
+    /// the sidebar honest as devices arrive/leave. Session-innocent under the
+    /// reuse model — it never disconnects or reconnects anything.
+    private var monitorTask: Task<Void, Never>?
 
     /// The connected device the sidebar currently has selected, if any.
     var selectedDevice: ConnectedDevice? {
@@ -48,6 +55,8 @@ final class DeviceManager {
     /// selected book. Stores the report and presents it.
     func send(_ requests: [SendRequest], noCompatible: [SendItem] = []) async {
         guard let device = selectedDevice else { return }
+        isTransferring = true
+        defer { isTransferring = false }
         let service = DeviceSendService(transport: device.transport)
         var items = await service.send(
             requests, profile: device.profile, converter: IdentityConverter()
@@ -57,37 +66,44 @@ final class DeviceManager {
         sendReportPresented = true
     }
 
-    /// Re-enumerates the USB bus and opens a FRESH connection for every
-    /// candidate the registry resolves. Connections are never reused across
-    /// scans: the Kindle re-enumerates on the USB bus, so a session opened by
-    /// an earlier scan can go stale (listing then fails with a connection
-    /// error) — a fresh connect on each scan is the self-healing path.
-    /// Per-candidate error isolation: a candidate that fails to connect (e.g.
-    /// mid re-enumeration) is skipped, never aborting the whole scan.
+    /// Re-enumerates the USB bus and keeps ONE held session per connected
+    /// device — sessions are never churned. libmtp's documented model is to
+    /// hold a device session until unplug (devices can hang after disconnect
+    /// and require a replug), so a candidate whose `info` already matches a
+    /// connected device is reused as-is: no disconnect, no reconnect, no new
+    /// session. Only genuinely new devices get a fresh connect; devices no
+    /// longer on the bus are released and removed. Per-candidate isolation: a
+    /// candidate that fails to connect (e.g. mid re-enumeration) is skipped,
+    /// never aborting the whole scan. Stale sessions self-heal via the
+    /// failure-triggered reconnect in `refreshBooks`, not via scan churn.
     func scanForDevices() async {
         // Serialize scans: `isScanning` is set synchronously before any await,
         // so a second call (activation scan + user refresh) returns immediately
         // instead of opening a second MTP session.
         guard !isScanning else { return }
+        // Start the detection tick once, from the first scan.
+        if monitorTask == nil {
+            monitorTask = Task { [weak self] in
+                await self?.monitorLoop()
+            }
+        }
         isScanning = true
         defer { isScanning = false }
         deviceError = nil
-        // Release every held session before opening fresh ones: libmtp/libusb
-        // allows one interface claim per process, so a stale session would make
-        // the fresh connect fail with "USB connection failed".
-        for old in devices {
-            try? await old.transport.disconnect()
-        }
-        devices = []
         let candidates = (try? await factory.candidates()) ?? []
-        var fresh: [ConnectedDevice] = []
+        var kept: [ConnectedDevice] = []
         for info in candidates {
             guard registry.resolve(info) != nil else { continue }
+            // Reuse the held session when this device is already connected.
+            if let existing = devices.first(where: { $0.info == info }) {
+                kept.append(existing)
+                continue
+            }
             do {
                 let transport = try factory.makeTransport(for: info)
                 let connected = try await transport.connect()
                 guard let profile = registry.resolve(connected) else { continue }
-                fresh.append(ConnectedDevice(
+                kept.append(ConnectedDevice(
                     id: UUID(), name: connected.name, info: connected,
                     profile: profile, transport: transport
                 ))
@@ -96,11 +112,31 @@ final class DeviceManager {
                 continue
             }
         }
-        devices = fresh
+        // Release sessions for devices that are no longer on the bus (the one
+        // legitimate release: the device is gone).
+        for old in devices where !kept.contains(where: { $0.id == old.id }) {
+            try? await old.transport.disconnect()
+        }
+        devices = kept
         if let selected = selectedDeviceID, !devices.contains(where: { $0.id == selected }) {
             selectedDeviceID = nil
             deviceBooks = []
         }
+    }
+
+    /// Detection loop: re-scans the bus every 10s so the sidebar reflects
+    /// device arrival/removal without user action. With the reuse model a tick
+    /// is cheap (no session ops when nothing changed) and session-innocent.
+    private func monitorLoop() async {
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(10))
+            await tick()
+        }
+    }
+
+    private func tick() async {
+        guard !isScanning, !isTransferring, !isListing else { return }
+        await scanForDevices()
     }
 
     func select(_ id: UUID?) async {
@@ -122,13 +158,15 @@ final class DeviceManager {
             deviceBooks = try await DeviceBookScanner(transport: device.transport)
                 .list(in: device.profile.bookFolder)
         } catch {
-            // The Kindle re-enumerates on the USB bus; a session opened during
-            // an earlier scan can go stale between the scan and the click, so
-            // the listing fails with a connection error. Release the stale
-            // session (one interface claim per process), re-detect with a
-            // fresh connection, and retry once before surfacing the error.
-            try? await device.transport.disconnect()
+            // The Kindle re-enumerates on the USB bus; a session held from an
+            // earlier scan can go stale between the scan and the click, so the
+            // listing fails with a connection error. Remove the stale device
+            // from `devices` FIRST (so the reuse-by-info scan doesn't
+            // resurrect the stale session), release it, then re-detect with a
+            // fresh connection and retry once before surfacing the error.
             let info = device.info
+            devices.removeAll { $0.id == device.id }
+            try? await device.transport.disconnect()
             await scanForDevices()
             guard let fresh = devices.first(where: { $0.info == info }) else {
                 deviceError = "Device disconnected — try scanning again"
@@ -154,19 +192,25 @@ final class DeviceManager {
     func enrich(_ record: DeviceBookRecord) async {
         guard let id = selectedDeviceID,
               let device = devices.first(where: { $0.id == id }),
-              !record.isEnriched else { return }
-        guard let index = deviceBooks.firstIndex(where: { $0.id == record.id }) else { return }
+              !record.isEnriched,
+              let index = deviceBooks.firstIndex(where: { $0.id == record.id }),
+              !deviceBooks[index].isEnriched else { return }
+        let current = deviceBooks[index]
         let result: DeviceBookRecord
         if let enriched = try? await DeviceBookScanner(transport: device.transport)
-            .enrich(record) {
+            .enrich(current) {
             result = enriched
         } else {
             result = DeviceBookRecord(
-                file: record.file, title: record.title, authors: [],
-                format: record.format, isDRM: false, isEnriched: true
+                file: current.file, title: current.title, authors: [],
+                format: current.format, isDRM: false, isEnriched: true
             )
         }
-        deviceBooks[index] = result
+        // Re-check by id: the listing may have been replaced or the row
+        // enriched by another call while the download ran.
+        guard let freshIndex = deviceBooks.firstIndex(where: { $0.id == record.id }),
+              !deviceBooks[freshIndex].isEnriched else { return }
+        deviceBooks[freshIndex] = result
     }
 
     /// Downloads the given device files into a fresh temp directory and
@@ -176,6 +220,8 @@ final class DeviceManager {
               let device = devices.first(where: { $0.id == id }) else {
             throw DeviceManagerError.noDeviceSelected
         }
+        isTransferring = true
+        defer { isTransferring = false }
         let directory = FileManager.default.temporaryDirectory
             .appending(path: UUID().uuidString, directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
