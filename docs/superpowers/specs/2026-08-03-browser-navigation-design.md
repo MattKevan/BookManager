@@ -59,8 +59,12 @@ Replace `selectedFacet: FacetSelection?` with two pieces of state:
 Selection semantics:
 
 - Clicking a sidebar category sets `selectedCategory`; if the category
-  **changed**, clear `selectedFacetValue`.
-- Clicking a value in the middle column sets `selectedFacetValue`.
+  **changed**, clear `selectedFacetValue`. Clicking the already-active
+  category keeps it selected (clear via All Books) — Finder/Music sidebar
+  semantics.
+- Clicking a value in the middle column sets `selectedFacetValue`. Clicking
+  the already-selected value toggles it off, back to all books (preserves
+  today's `selectFacet` toggle semantics).
 - Clicking All Books clears both.
 - Selecting a device clears the category (existing `selectDevice` already
   clears the facet); selecting a category clears the device selection.
