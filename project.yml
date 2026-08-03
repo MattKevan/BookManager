@@ -22,8 +22,6 @@ packages:
   libmobi-swift:
     url: https://github.com/awxkee/libmobi-swift.git
     exactVersion: 1.0.2
-  MTPKit:
-    path: Vendor/MTPKit
 
 settings:
   base:
@@ -47,8 +45,6 @@ targets:
       - package: ZIPFoundation
       - package: libmobi-swift
         product: libmobi
-      - package: MTPKit
-        product: MTPKit
 
   BookManager:
     type: application

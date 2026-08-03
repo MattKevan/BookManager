@@ -1,11 +1,11 @@
 import Foundation
 
-/// `DeviceTransport` backed by a real USB MTP device via `MTPSession`. The UI and
+/// `MTPDeviceTransport` backed by a real USB MTP device via `MTPSession`. The UI and
 /// view models are unchanged — this simply slots in beneath the same abstraction the
 /// mock uses. Operations also emit `DeviceChange` optimistically so the list updates
 /// immediately; interrupt-endpoint events (Phase 3) will additionally cover changes
 /// made on the phone itself.
-public final class MTPTransport: DeviceTransport, @unchecked Sendable {
+public final class MTPTransport: MTPDeviceTransport, @unchecked Sendable {
     public let id: String
     public let displayName: String
     public let kind = TransportKind.usbMTP
@@ -105,7 +105,7 @@ public final class MTPTransport: DeviceTransport, @unchecked Sendable {
         for id in ids {
             let info = try await session.storageInfo(id)
             let name = info.storageDescription.isEmpty
-                ? (info.volumeIdentifier.isEmpty ? L("storage.generic") : info.volumeIdentifier)
+                ? (info.volumeIdentifier.isEmpty ? loc("storage.generic") : info.volumeIdentifier)
                 : info.storageDescription
             result.append(StorageInfo(id: String(id), name: name,
                                       capacityBytes: Int64(clamping: info.maxCapacity),
@@ -246,8 +246,8 @@ public final class MTPTransport: DeviceTransport, @unchecked Sendable {
     static func node(from info: MTPObjectInfo, handle: UInt32, sizeOverride: Int64? = nil) -> FileNode {
         let isRoot = info.parentObject == 0 || info.parentObject == mtpRootParentHandle
         let ext: String? = info.isDirectory ? nil : {
-            let e = (info.filename as NSString).pathExtension.lowercased()
-            return e.isEmpty ? nil : e
+            let ext = (info.filename as NSString).pathExtension.lowercased()
+            return ext.isEmpty ? nil : ext
         }()
         return FileNode(
             id: String(handle),

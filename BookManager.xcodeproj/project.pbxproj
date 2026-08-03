@@ -23,13 +23,16 @@
 		161CF45F8B8E33B703A8170E /* DeviceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 439CAE5BC99FD34EB367DECE /* DeviceManager.swift */; };
 		1680E06ADD1A537B0869D47F /* Automerge in Frameworks */ = {isa = PBXBuildFile; productRef = E73D1BC292F51DC0789C0A2A /* Automerge */; };
 		183696E853097A577B690223 /* BookTableView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B299D92FE747584FDD46D395 /* BookTableView.swift */; };
+		183F208649EF041D7CB4447A /* MTPContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA32B3E44727713FDCD07D6C /* MTPContainer.swift */; };
 		18D5B7E4B72E772DE7362FBD /* CalibreRawPresenterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA927B479D52396761EE4A89 /* CalibreRawPresenterTests.swift */; };
+		1B3C7CD316DBB5435BB5E74D /* MTPCodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE4164771CE7921402C06C82 /* MTPCodes.swift */; };
 		1EB7D845512F28CEB3309FEB /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 770243B41284AFCA8EC2E14D /* GRDB */; };
 		1ED0F97BCD77A7F64BD7C661 /* DeviceRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79EBAD1B11D265EC1C76762B /* DeviceRegistry.swift */; };
 		21DCF5333E7E6C600519B536 /* DeviceImportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D790C18B565FA9F3EDDA5F2 /* DeviceImportService.swift */; };
 		220E43EBA7E61CCF0E79E4D6 /* MetadataLookupServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4973027E235C62C6A61C0133 /* MetadataLookupServiceTests.swift */; };
 		2328811870023130047DB74C /* SyncStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07A96CD3BD432BB8D30724F0 /* SyncStateTests.swift */; };
 		25DDA9C20029305707541FC9 /* BookDocumentSchema.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37F9BBB1AC9D128C81F9BE1A /* BookDocumentSchema.swift */; };
+		28AB787BB11FF8D4176BB2D5 /* ByteOrder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41072F487657188BF5DB4B30 /* ByteOrder.swift */; };
 		2918DE3E2EF2ECDCCC9D71C3 /* fixture.mobi in Resources */ = {isa = PBXBuildFile; fileRef = FFDC0677C744390DB4F5CB35 /* fixture.mobi */; };
 		29EDCC6B877FC2870885AD1E /* MobiImportServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF7CB4109844BE855474503A /* MobiImportServiceTests.swift */; };
 		2AA7EAE05AE8D25B702E30CA /* DeviceBooksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7CBC51BD2A47AD934452F83 /* DeviceBooksView.swift */; };
@@ -40,7 +43,6 @@
 		3DDAFFF7CA4910DC6D42CFE1 /* LocalCatalogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BA162F96FEA4B520BEAED4B /* LocalCatalogTests.swift */; };
 		3E02ECDBF31FC3D2B102C6E2 /* CalibreModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 079C068688F6CB08D66D0E02 /* CalibreModels.swift */; };
 		3E0B4CA8C38FC8B5342116AC /* MetadataSourceProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03238F1DFA50DAF6674FEADF /* MetadataSourceProviding.swift */; };
-		3E6405355AA548594B3FE8CC /* MTPKit in Frameworks */ = {isa = PBXBuildFile; productRef = 2684F3D91C4B009F3E9D574C /* MTPKit */; };
 		3E8CB6221E500E8D0E2D83AF /* OpenLibrarySource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3946434A5738F2318D3DB0D6 /* OpenLibrarySource.swift */; };
 		3F72B39291984A1F8E406A53 /* PerformanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9849D0FE535CE38AD33777AD /* PerformanceTests.swift */; };
 		409E04ECB1ACF22D0BB109F8 /* HybridLogicalClock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 877A41E8DB9729E29518A7F2 /* HybridLogicalClock.swift */; };
@@ -52,6 +54,9 @@
 		460DEA70A0F96B23762F0A45 /* BookManagerCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = EA00130013634EE3D52C9CCF /* BookManagerCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		492DC8918261793A5F4D188D /* CalibreMetadataCacheTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E69AC8C98AF3647750233620 /* CalibreMetadataCacheTests.swift */; };
 		4ACDD55DE290A18AF7204E1B /* LibraryBookmarkStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10C0171D18484766BD7A3C27 /* LibraryBookmarkStore.swift */; };
+		4CF8D09F5B0E87E774E8C0E2 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = E7D26EB3BF8960D7AA051718 /* README.md */; };
+		51E759D9F8B7A5FCC420C15F /* MTPTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FBEA50FD52914B2ED8598AC /* MTPTransport.swift */; };
+		53FD12F1219352C57A837162 /* MTPDeviceTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62031ABF28E393C0A685FEB7 /* MTPDeviceTransport.swift */; };
 		54DE3555646097AA3C44B87B /* DeviceSendService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14DB9A03220A653427F85867 /* DeviceSendService.swift */; };
 		56CDE45433D411226EA911D7 /* CalibreImportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D641BF004408EB3B9B77D94 /* CalibreImportService.swift */; };
 		59C5DAA00E6DA2A0AE77B9C0 /* MTPTransportError.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3DDD536D28427F9E1EC0AAA /* MTPTransportError.swift */; };
@@ -60,6 +65,8 @@
 		614F0F5C1822825B76C51004 /* LibraryLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEFDAE49CAE9FF70035E4F38 /* LibraryLayout.swift */; };
 		620DE3A55974B7D0A1F0DE51 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = 3818F9695548F67FF6E86321 /* ZIPFoundation */; };
 		642B072594C3F0AF2813768C /* MobiToEpubConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60D29F574EE7BF4507D9A9DB /* MobiToEpubConverter.swift */; };
+		677F2CA4C17375C989D8B67F /* MTPError+Message.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E68F7BBE2D3F313652E6393 /* MTPError+Message.swift */; };
+		694407839E1A8C1784A2E6F4 /* USBDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 982BF0D0E16394347FAB24C7 /* USBDiagnostics.swift */; };
 		6C54676875279A32CC2E612D /* CalibreReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 802704BFE3CB300D0F43F579 /* CalibreReader.swift */; };
 		6CFD9DA7BA4FEED223E643F0 /* MetadataEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D71CFB152C85ECD05FAEE34F /* MetadataEditorView.swift */; };
 		6E3CA17CFD3E05B07E9227D8 /* OutboxTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08E88890969521523F616EA1 /* OutboxTests.swift */; };
@@ -72,12 +79,15 @@
 		749A78570335D7AA0AC3C08F /* LibraryBookmarkStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15750DA3DBE4AA0973C9D96E /* LibraryBookmarkStoreTests.swift */; };
 		787EB9CDC6E3CBB1CDBBD640 /* SyncEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15CCDEA23484F35FAA7931CE /* SyncEngine.swift */; };
 		795CB75D48A16F3E2FF4C68C /* DeviceRegistryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43EA202AE9BDB7D5CA811756 /* DeviceRegistryTests.swift */; };
+		7C3659EC6F7BA38CC376223A /* MTPEventReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3D9593B1B09844AC09A072D /* MTPEventReader.swift */; };
 		7D7CCE30B141C2FF6B84FBA6 /* SendReportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C54B8B51C276C362152C6141 /* SendReportView.swift */; };
+		7E57EF94AC08D25186A0D9C6 /* USBDevice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97E11359EE96EFC87A3703B2 /* USBDevice.swift */; };
 		7F14EE7197CF8AEC00B99EE8 /* CalibreRawPresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85DFE90B2620F49E3523D712 /* CalibreRawPresenter.swift */; };
 		80BE13BB3F9011EE10E4B2C0 /* OpfGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87B108E9D043C28A0ACA5B55 /* OpfGenerator.swift */; };
 		8148952FF9AF030878F61555 /* AutomergeBookDocumentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0097D35A33C980715FF58C71 /* AutomergeBookDocumentTests.swift */; };
 		82535D46D81E075403A06588 /* MetadataRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 651CC44426DB5A06A9FAD739 /* MetadataRegistry.swift */; };
 		831C278B8D9BC7CD1599A1D6 /* LibraryRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A3D22208D73EACF693FC0B7 /* LibraryRepository.swift */; };
+		83354809C8A67A00D250BAD6 /* MTPSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 994033FA800D76DB95924C8A /* MTPSession.swift */; };
 		8790F01632265076BF031B97 /* LocalCatalogV3Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F61061962E1A09D8CDFC2E0 /* LocalCatalogV3Tests.swift */; };
 		8BA90F9BB1175B44D7AC2490 /* MetadataModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5A6CBF7371DBCFE0E1C2878 /* MetadataModels.swift */; };
 		8CEC76754C14E7E2C9499F86 /* GoogleBooksSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCE9B149EF006C42E615AE2E /* GoogleBooksSource.swift */; };
@@ -86,6 +96,7 @@
 		8EB7D97645D61A20D4C0F898 /* BookManagerCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = EA00130013634EE3D52C9CCF /* BookManagerCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		8FB7D9B5E54B66EAF28DA4E1 /* SendReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 800F16E7F8AF7EFF8A5FD0AB /* SendReport.swift */; };
 		9183F4EC121E5930C3EC68B5 /* BookManagerCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EFBA8EB5B9ADFEB3ACDE0B7 /* BookManagerCore.swift */; };
+		91D2F31540E56D4B0CFD2074 /* MTPDataTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A671BE6DF62BDC3C4B47EC0 /* MTPDataTypes.swift */; };
 		94FD51FDFCCD95FA5C820D7B /* CalibreMetadataCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C46F7B45045AD369F5DC102 /* CalibreMetadataCache.swift */; };
 		9769ECB6981710022C7B217A /* ScaffoldTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D80E3D97EA38642A0D352DA /* ScaffoldTests.swift */; };
 		983C436D170FBDE137BDBE92 /* LibraryRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B087736BE54EC57981680458 /* LibraryRepositoryTests.swift */; };
@@ -93,6 +104,7 @@
 		9C10720CAD6A1CD058205BE5 /* CalibreImportServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97FE4DDA5D650B5CCFA6A51D /* CalibreImportServiceTests.swift */; };
 		9D15D3667967207C1A72C66A /* MetadataMergeReviewSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9A6BD3BB3D5AE6C450E247B /* MetadataMergeReviewSheet.swift */; };
 		9D86CAE107CBE6D0D34B7301 /* ChangeStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F788726BC33346C140CF988F /* ChangeStore.swift */; };
+		9E677998D59EE494F3A7571F /* MTPEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4C5CE9EA1220B48135FD702 /* MTPEvent.swift */; };
 		A0CF78A35D5B9D189902DF1E /* BookManagerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B289E0169E06FC577EDE4155 /* BookManagerApp.swift */; };
 		A2B5CAB49BBCE42C57427012 /* MetadataSourceDecodingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F2E4D2767153BF0EAB33F35 /* MetadataSourceDecodingTests.swift */; };
 		A2B9362E46338E80EE4993CD /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = 1BE2846B48AD04727891E7C4 /* ZIPFoundation */; };
@@ -101,6 +113,7 @@
 		A8B6BEB211835C8B192DA408 /* Outbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 831A8F5A9C65AC141D9489A3 /* Outbox.swift */; };
 		AAA35E52FC377DDDCEA02B18 /* MobiToEpubConverterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F482B06B8D21616958ACE5D6 /* MobiToEpubConverterTests.swift */; };
 		B0A7E25FDC54B9CAE94B1798 /* HybridLogicalClockTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A06A187727B29B451ABE5C75 /* HybridLogicalClockTests.swift */; };
+		B27D25CAEF2646F21A9337F5 /* USBWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16FAB74B0D7F8F3FE736A3D4 /* USBWatcher.swift */; };
 		B6EC808209FD3D64302B0152 /* DeviceServicesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 567FF81984C0719EB7E11C99 /* DeviceServicesTests.swift */; };
 		B7A5203046D0B8362189BF97 /* GridSelectionSemanticsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EE9D33E3A89CB5F811661DF /* GridSelectionSemanticsTests.swift */; };
 		B867C92933B7AAAEABB6F6EC /* LocalCatalogV2Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 341FA2B572ABD1C178DBD749 /* LocalCatalogV2Tests.swift */; };
@@ -205,6 +218,7 @@
 		15750DA3DBE4AA0973C9D96E /* LibraryBookmarkStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryBookmarkStoreTests.swift; sourceTree = "<group>"; };
 		15CCDEA23484F35FAA7931CE /* SyncEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncEngine.swift; sourceTree = "<group>"; };
 		16E1EA0FB51BAD838C8A802E /* SchemaV2Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SchemaV2Tests.swift; sourceTree = "<group>"; };
+		16FAB74B0D7F8F3FE736A3D4 /* USBWatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = USBWatcher.swift; sourceTree = "<group>"; };
 		18B93C18F17691B633BC2D72 /* IndexedBook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IndexedBook.swift; sourceTree = "<group>"; };
 		1925053B04DC6EE30396716D /* MobiReaderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobiReaderTests.swift; sourceTree = "<group>"; };
 		1AF1F9FA4EA58B5175954F01 /* MetadataMergePlanTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataMergePlanTests.swift; sourceTree = "<group>"; };
@@ -224,6 +238,7 @@
 		3946434A5738F2318D3DB0D6 /* OpenLibrarySource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenLibrarySource.swift; sourceTree = "<group>"; };
 		3DF69781560F6A54FAD6CAA1 /* SendPlanTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendPlanTests.swift; sourceTree = "<group>"; };
 		40F349DC5B3BC95D5E3FC6D6 /* GridSelectionSemantics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GridSelectionSemantics.swift; sourceTree = "<group>"; };
+		41072F487657188BF5DB4B30 /* ByteOrder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ByteOrder.swift; sourceTree = "<group>"; };
 		41AE1CF600A8CDAC31E619E5 /* DeviceBookScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceBookScanner.swift; sourceTree = "<group>"; };
 		439CAE5BC99FD34EB367DECE /* DeviceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceManager.swift; sourceTree = "<group>"; };
 		43EA202AE9BDB7D5CA811756 /* DeviceRegistryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceRegistryTests.swift; sourceTree = "<group>"; };
@@ -234,16 +249,18 @@
 		53DCEA28EE0C12D03C85E45B /* MetadataReviewSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataReviewSheet.swift; sourceTree = "<group>"; };
 		567FF81984C0719EB7E11C99 /* DeviceServicesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceServicesTests.swift; sourceTree = "<group>"; };
 		5A3D22208D73EACF693FC0B7 /* LibraryRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryRepository.swift; sourceTree = "<group>"; };
+		5A671BE6DF62BDC3C4B47EC0 /* MTPDataTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MTPDataTypes.swift; sourceTree = "<group>"; };
 		5D641BF004408EB3B9B77D94 /* CalibreImportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalibreImportService.swift; sourceTree = "<group>"; };
 		5EFBA8EB5B9ADFEB3ACDE0B7 /* BookManagerCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookManagerCore.swift; sourceTree = "<group>"; };
 		5F2E4D2767153BF0EAB33F35 /* MetadataSourceDecodingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataSourceDecodingTests.swift; sourceTree = "<group>"; };
 		6076F102DADAF8E9CB9DEC47 /* AutomergeBookDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutomergeBookDocument.swift; sourceTree = "<group>"; };
 		60D29F574EE7BF4507D9A9DB /* MobiToEpubConverter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobiToEpubConverter.swift; sourceTree = "<group>"; };
+		62031ABF28E393C0A685FEB7 /* MTPDeviceTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MTPDeviceTransport.swift; sourceTree = "<group>"; };
 		62FDDA6D5AACAA7BB66B6919 /* LocalCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalCatalog.swift; sourceTree = "<group>"; };
 		63AD723FE46B91B5A9434459 /* BookManager.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BookManager.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		651CC44426DB5A06A9FAD739 /* MetadataRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataRegistry.swift; sourceTree = "<group>"; };
-		68D0DA1125E55C4FB6F83D07 /* MTPKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = MTPKit; path = Vendor/MTPKit; sourceTree = SOURCE_ROOT; };
 		6BA162F96FEA4B520BEAED4B /* LocalCatalogTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalCatalogTests.swift; sourceTree = "<group>"; };
+		6E68F7BBE2D3F313652E6393 /* MTPError+Message.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MTPError+Message.swift"; sourceTree = "<group>"; };
 		73AA6C7CC5DA69B3AD083C22 /* BookValues.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookValues.swift; sourceTree = "<group>"; };
 		768C45F6FF1C77FFEA249DA5 /* ImportReportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportReportView.swift; sourceTree = "<group>"; };
 		79EBAD1B11D265EC1C76762B /* DeviceRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceRegistry.swift; sourceTree = "<group>"; };
@@ -265,10 +282,14 @@
 		8D80E3D97EA38642A0D352DA /* ScaffoldTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScaffoldTests.swift; sourceTree = "<group>"; };
 		922F216A8DB77886FEE7AC6E /* CoverGridView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverGridView.swift; sourceTree = "<group>"; };
 		95E635A094EA0EBACB33FE09 /* CalibreFixture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalibreFixture.swift; sourceTree = "<group>"; };
+		97E11359EE96EFC87A3703B2 /* USBDevice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = USBDevice.swift; sourceTree = "<group>"; };
 		97FE4DDA5D650B5CCFA6A51D /* CalibreImportServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalibreImportServiceTests.swift; sourceTree = "<group>"; };
+		982BF0D0E16394347FAB24C7 /* USBDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = USBDiagnostics.swift; sourceTree = "<group>"; };
 		9849D0FE535CE38AD33777AD /* PerformanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceTests.swift; sourceTree = "<group>"; };
+		994033FA800D76DB95924C8A /* MTPSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MTPSession.swift; sourceTree = "<group>"; };
 		9C42E39F44285DAA32EA9B93 /* RebuildProgressTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RebuildProgressTests.swift; sourceTree = "<group>"; };
 		9C46F7B45045AD369F5DC102 /* CalibreMetadataCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalibreMetadataCache.swift; sourceTree = "<group>"; };
+		9FBEA50FD52914B2ED8598AC /* MTPTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MTPTransport.swift; sourceTree = "<group>"; };
 		A06A187727B29B451ABE5C75 /* HybridLogicalClockTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HybridLogicalClockTests.swift; sourceTree = "<group>"; };
 		A081C69F8BA6B08E869CAA8D /* BookFolderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookFolderTests.swift; sourceTree = "<group>"; };
 		A230E717F0A049BE946E41FF /* LibrarySession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibrarySession.swift; sourceTree = "<group>"; };
@@ -281,6 +302,7 @@
 		B145AF9C49E7AC45E606A6A2 /* SyncEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncEngineTests.swift; sourceTree = "<group>"; };
 		B289E0169E06FC577EDE4155 /* BookManagerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookManagerApp.swift; sourceTree = "<group>"; };
 		B299D92FE747584FDD46D395 /* BookTableView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookTableView.swift; sourceTree = "<group>"; };
+		B4C5CE9EA1220B48135FD702 /* MTPEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MTPEvent.swift; sourceTree = "<group>"; };
 		B57FA284528C430E6501BA8F /* MockTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockTransport.swift; sourceTree = "<group>"; };
 		B73B13122D2268E5ECE2B45C /* BookManagerUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BookManagerUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B8F482AB5AA370AD5457130D /* ThumbnailCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThumbnailCache.swift; sourceTree = "<group>"; };
@@ -296,6 +318,7 @@
 		CAA97EB7CDB42EFE46F1706D /* ImportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportService.swift; sourceTree = "<group>"; };
 		CD9A70512BF0E2BD885A0A06 /* LibraryMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryMonitor.swift; sourceTree = "<group>"; };
 		CE55CCEAE5F9B6D05CFCD1FD /* CalibreImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalibreImportView.swift; sourceTree = "<group>"; };
+		D3D9593B1B09844AC09A072D /* MTPEventReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MTPEventReader.swift; sourceTree = "<group>"; };
 		D4DFC6EB19C484A316D3607E /* CalibreSchema.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalibreSchema.swift; sourceTree = "<group>"; };
 		D71CFB152C85ECD05FAEE34F /* MetadataEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataEditorView.swift; sourceTree = "<group>"; };
 		D97D5E795D3B6648EF62BB68 /* SendPlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendPlan.swift; sourceTree = "<group>"; };
@@ -304,9 +327,11 @@
 		E58E824C700C1F72F39EF611 /* MetadataExtractorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataExtractorTests.swift; sourceTree = "<group>"; };
 		E69AC8C98AF3647750233620 /* CalibreMetadataCacheTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalibreMetadataCacheTests.swift; sourceTree = "<group>"; };
 		E7CBC51BD2A47AD934452F83 /* DeviceBooksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceBooksView.swift; sourceTree = "<group>"; };
+		E7D26EB3BF8960D7AA051718 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		E828C0124F1B0E570B6BB023 /* OfflineBookEditTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineBookEditTests.swift; sourceTree = "<group>"; };
 		E84E5F580EC7EE78C56E7E93 /* LocalCatalogBatchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalCatalogBatchTests.swift; sourceTree = "<group>"; };
 		EA00130013634EE3D52C9CCF /* BookManagerCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = BookManagerCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		EA32B3E44727713FDCD07D6C /* MTPContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MTPContainer.swift; sourceTree = "<group>"; };
 		EA4B86F12214E06370756A8C /* MetadataLookupService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataLookupService.swift; sourceTree = "<group>"; };
 		EEFDAE49CAE9FF70035E4F38 /* LibraryLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryLayout.swift; sourceTree = "<group>"; };
 		F423D17FB570A461C7A9F6C2 /* Notices.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = Notices.md; sourceTree = "<group>"; };
@@ -316,6 +341,7 @@
 		FCE9B149EF006C42E615AE2E /* GoogleBooksSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleBooksSource.swift; sourceTree = "<group>"; };
 		FCEEC7381A553046ADC227C6 /* MetadataMergePlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataMergePlan.swift; sourceTree = "<group>"; };
 		FE22DC7A79DA7703CE5EF160 /* LibraryWelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryWelcomeView.swift; sourceTree = "<group>"; };
+		FE4164771CE7921402C06C82 /* MTPCodes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MTPCodes.swift; sourceTree = "<group>"; };
 		FF7CB4109844BE855474503A /* MobiImportServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobiImportServiceTests.swift; sourceTree = "<group>"; };
 		FFDC0677C744390DB4F5CB35 /* fixture.mobi */ = {isa = PBXFileReference; path = fixture.mobi; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -340,7 +366,6 @@
 				C0330A6A992BC0A8C6BFCC73 /* GRDB in Frameworks */,
 				A2B9362E46338E80EE4993CD /* ZIPFoundation in Frameworks */,
 				00533F7C898020A76C4C2B97 /* libmobi in Frameworks */,
-				3E6405355AA548594B3FE8CC /* MTPKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -355,14 +380,6 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		08FF36F612368E071DA7F9F4 /* Packages */ = {
-			isa = PBXGroup;
-			children = (
-				68D0DA1125E55C4FB6F83D07 /* MTPKit */,
-			);
-			name = Packages;
-			sourceTree = "<group>";
-		};
 		19592F55293CD526C10F3A9B /* Sync */ = {
 			isa = PBXGroup;
 			children = (
@@ -410,7 +427,6 @@
 				B8044857859E00D0D2BDC0A4 /* BookManagerCore */,
 				A8569F69402B86FD45315CED /* BookManagerCoreTests */,
 				75127D2EFD273BE02FDD5E33 /* BookManagerUITests */,
-				08FF36F612368E071DA7F9F4 /* Packages */,
 				D4969B27EA279A717E3FEA6F /* Products */,
 			);
 			sourceTree = "<group>";
@@ -576,6 +592,35 @@
 			path = Persistence;
 			sourceTree = "<group>";
 		};
+		946D6CAFC1243663E7A8F726 /* MTPKit */ = {
+			isa = PBXGroup;
+			children = (
+				41072F487657188BF5DB4B30 /* ByteOrder.swift */,
+				FE4164771CE7921402C06C82 /* MTPCodes.swift */,
+				EA32B3E44727713FDCD07D6C /* MTPContainer.swift */,
+				5A671BE6DF62BDC3C4B47EC0 /* MTPDataTypes.swift */,
+				62031ABF28E393C0A685FEB7 /* MTPDeviceTransport.swift */,
+				6E68F7BBE2D3F313652E6393 /* MTPError+Message.swift */,
+				B4C5CE9EA1220B48135FD702 /* MTPEvent.swift */,
+				D3D9593B1B09844AC09A072D /* MTPEventReader.swift */,
+				994033FA800D76DB95924C8A /* MTPSession.swift */,
+				9FBEA50FD52914B2ED8598AC /* MTPTransport.swift */,
+				E7D26EB3BF8960D7AA051718 /* README.md */,
+				97E11359EE96EFC87A3703B2 /* USBDevice.swift */,
+				982BF0D0E16394347FAB24C7 /* USBDiagnostics.swift */,
+				16FAB74B0D7F8F3FE736A3D4 /* USBWatcher.swift */,
+			);
+			path = MTPKit;
+			sourceTree = "<group>";
+		};
+		9FB89B9B2C573D9B4689FF3D /* Vendored */ = {
+			isa = PBXGroup;
+			children = (
+				946D6CAFC1243663E7A8F726 /* MTPKit */,
+			);
+			path = Vendored;
+			sourceTree = "<group>";
+		};
 		A279AED195942E6985F09203 /* Security */ = {
 			isa = PBXGroup;
 			children = (
@@ -646,6 +691,7 @@
 				DF93D02A02E6625709DAF790 /* Security */,
 				CD24E25AF4B388457ED2C0E7 /* Selection */,
 				75D5D4AF4DB8C5B106A0E311 /* Sync */,
+				9FB89B9B2C573D9B4689FF3D /* Vendored */,
 			);
 			path = BookManagerCore;
 			sourceTree = "<group>";
@@ -775,6 +821,7 @@
 			buildConfigurationList = B41833F854DF794EECC076A0 /* Build configuration list for PBXNativeTarget "BookManagerCore" */;
 			buildPhases = (
 				1BA5542F139C84E197D07F62 /* Sources */,
+				31254B783059406200C011EA /* Resources */,
 				7C4AC0C63A079830FD99B0A4 /* Frameworks */,
 			);
 			buildRules = (
@@ -787,7 +834,6 @@
 				2F280E3BD3CAFCA30F17AC99 /* GRDB */,
 				1BE2846B48AD04727891E7C4 /* ZIPFoundation */,
 				A3B7696ECD66EDD998821F5C /* libmobi */,
-				2684F3D91C4B009F3E9D574C /* MTPKit */,
 			);
 			productName = BookManagerCore;
 			productReference = EA00130013634EE3D52C9CCF /* BookManagerCore.framework */;
@@ -888,7 +934,6 @@
 				B15CFCE30AD86161C178C8C3 /* XCRemoteSwiftPackageReference "GRDB.swift" */,
 				44635DEC287817240082396B /* XCRemoteSwiftPackageReference "ZIPFoundation" */,
 				CCA3476DA7C649DCF69BDF4C /* XCRemoteSwiftPackageReference "libmobi-swift" */,
-				ADB06B752C820D8F3BB9A4A2 /* XCLocalSwiftPackageReference "Vendor/MTPKit" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D4969B27EA279A717E3FEA6F /* Products */;
@@ -913,6 +958,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		31254B783059406200C011EA /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4CF8D09F5B0E87E774E8C0E2 /* README.md in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		D18A4C6CF34D92A2E574FF9D /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -933,6 +986,7 @@
 				D0A566804E7EB2792EA61B9B /* BookFolder.swift in Sources */,
 				9183F4EC121E5930C3EC68B5 /* BookManagerCore.swift in Sources */,
 				39438DD4434B1AAEB59D16C2 /* BookValues.swift in Sources */,
+				28AB787BB11FF8D4176BB2D5 /* ByteOrder.swift in Sources */,
 				56CDE45433D411226EA911D7 /* CalibreImportService.swift in Sources */,
 				94FD51FDFCCD95FA5C820D7B /* CalibreMetadataCache.swift in Sources */,
 				3E02ECDBF31FC3D2B102C6E2 /* CalibreModels.swift in Sources */,
@@ -963,7 +1017,16 @@
 				831C278B8D9BC7CD1599A1D6 /* LibraryRepository.swift in Sources */,
 				CB4C2B0FABFAB738F11A1BAC /* LibraryRootCapabilities.swift in Sources */,
 				D71D91C038D0BB6C876154B5 /* LocalCatalog.swift in Sources */,
+				1B3C7CD316DBB5435BB5E74D /* MTPCodes.swift in Sources */,
+				183F208649EF041D7CB4447A /* MTPContainer.swift in Sources */,
+				91D2F31540E56D4B0CFD2074 /* MTPDataTypes.swift in Sources */,
+				53FD12F1219352C57A837162 /* MTPDeviceTransport.swift in Sources */,
+				677F2CA4C17375C989D8B67F /* MTPError+Message.swift in Sources */,
+				9E677998D59EE494F3A7571F /* MTPEvent.swift in Sources */,
+				7C3659EC6F7BA38CC376223A /* MTPEventReader.swift in Sources */,
 				0C61A8ACB4491EADC288511E /* MTPKitTransport.swift in Sources */,
+				83354809C8A67A00D250BAD6 /* MTPSession.swift in Sources */,
+				51E759D9F8B7A5FCC420C15F /* MTPTransport.swift in Sources */,
 				59C5DAA00E6DA2A0AE77B9C0 /* MTPTransportError.swift in Sources */,
 				089BEE925C9BEC5CAAF0D77A /* MetadataExtractor.swift in Sources */,
 				CC62884E91FC02938D5BD6FA /* MetadataLookupService.swift in Sources */,
@@ -982,6 +1045,9 @@
 				787EB9CDC6E3CBB1CDBBD640 /* SyncEngine.swift in Sources */,
 				07351E5DB1A68205C5719835 /* SyncEventSource.swift in Sources */,
 				019F7EC80783974F626D160C /* SyncState.swift in Sources */,
+				7E57EF94AC08D25186A0D9C6 /* USBDevice.swift in Sources */,
+				694407839E1A8C1784A2E6F4 /* USBDiagnostics.swift in Sources */,
+				B27D25CAEF2646F21A9337F5 /* USBWatcher.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1418,13 +1484,6 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCLocalSwiftPackageReference section */
-		ADB06B752C820D8F3BB9A4A2 /* XCLocalSwiftPackageReference "Vendor/MTPKit" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = Vendor/MTPKit;
-		};
-/* End XCLocalSwiftPackageReference section */
-
 /* Begin XCRemoteSwiftPackageReference section */
 		44635DEC287817240082396B /* XCRemoteSwiftPackageReference "ZIPFoundation" */ = {
 			isa = XCRemoteSwiftPackageReference;
@@ -1465,10 +1524,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 44635DEC287817240082396B /* XCRemoteSwiftPackageReference "ZIPFoundation" */;
 			productName = ZIPFoundation;
-		};
-		2684F3D91C4B009F3E9D574C /* MTPKit */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = MTPKit;
 		};
 		2F280E3BD3CAFCA30F17AC99 /* GRDB */ = {
 			isa = XCSwiftPackageProductDependency;

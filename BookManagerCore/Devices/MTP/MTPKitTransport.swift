@@ -1,5 +1,4 @@
 import Foundation
-import MTPKit
 
 /// Discovers MTP devices and builds `MTPKitTransport` instances backed by
 /// MTPKit (pure Swift, native IOUSBHost — no libusb, no libmtp).
@@ -17,7 +16,7 @@ public struct MTPKitTransportFactory: Sendable {
     /// USB-watcher-driven model belongs to real integration (the app is not
     /// switched to this backend yet, so discovery cadence is not exercised).
     public func candidates() async -> [DeviceInfo] {
-        guard let device = await MTPKit.MTPTransport.discover() else { return [] }
+        guard let device = await MTPTransport.discover() else { return [] }
         let info = MTPKitTransport.deviceInfo(from: device)
         await device.close()
         return [info]
@@ -37,7 +36,7 @@ public struct MTPKitTransportFactory: Sendable {
 /// (~7-15s per walk on Kindle MTP, measured).
 public actor MTPKitTransport: DeviceTransport {
     private let requestedInfo: DeviceInfo?
-    private var device: MTPKit.MTPTransport?
+    private var device: MTPTransport?
 
     public init(info: DeviceInfo?) {
         self.requestedInfo = info
@@ -49,7 +48,7 @@ public actor MTPKitTransport: DeviceTransport {
         if let device {
             return Self.deviceInfo(from: device)
         }
-        guard let found = await MTPKit.MTPTransport.discover() else {
+        guard let found = await MTPTransport.discover() else {
             throw MTPTransportError.noDeviceAttached
         }
         let info = Self.deviceInfo(from: found)
@@ -177,8 +176,8 @@ public actor MTPKitTransport: DeviceTransport {
     /// backend; Kindle exposes the book folder as lowercase "documents".
     private func folderInfo(
         _ folder: DeviceFolder,
-        on device: MTPKit.MTPTransport
-    ) async throws -> (storage: MTPKit.StorageInfo, dir: MTPKit.FileNode)? {
+        on device: MTPTransport
+    ) async throws -> (storage: StorageInfo, dir: FileNode)? {
         let storages = (try? await device.storages()) ?? []
         for storage in storages {
             let root = (try? await device.listChildren(of: nil, in: storage.id)) ?? []
@@ -195,8 +194,8 @@ public actor MTPKitTransport: DeviceTransport {
     /// name match) — for device-level files like Calibre's `metadata.calibre`.
     private func rootFileInfo(
         _ name: String,
-        on device: MTPKit.MTPTransport
-    ) async throws -> (storage: MTPKit.StorageInfo, file: MTPKit.FileNode)? {
+        on device: MTPTransport
+    ) async throws -> (storage: StorageInfo, file: FileNode)? {
         let storages = (try? await device.storages()) ?? []
         for storage in storages {
             let root = (try? await device.listChildren(of: nil, in: storage.id)) ?? []
@@ -212,8 +211,8 @@ public actor MTPKitTransport: DeviceTransport {
     /// Finds `file` by walking its containing folder (one-level listings only).
     private func fileInfo(
         _ file: DeviceFile,
-        on device: MTPKit.MTPTransport
-    ) async throws -> (storage: MTPKit.StorageInfo, node: MTPKit.FileNode) {
+        on device: MTPTransport
+    ) async throws -> (storage: StorageInfo, node: FileNode) {
         // NSString keeps the path relative ("Documents/x.mobi" → "Documents")
         // so folderInfo can match it case-insensitively; URL would prepend "/".
         let containing = (file.path as NSString).deletingLastPathComponent
@@ -238,14 +237,14 @@ public actor MTPKitTransport: DeviceTransport {
         return (vendor, product)
     }
 
-    static func deviceInfo(from device: MTPKit.MTPTransport) -> DeviceInfo {
+    static func deviceInfo(from device: MTPTransport) -> DeviceInfo {
         let ids = parsedVendorProduct(device.id)
         let name = device.displayName.isEmpty ? "MTP Device" : device.displayName
         return DeviceInfo(name: name, vendorID: ids?.vendor, productID: ids?.product)
     }
 
     static func message(_ error: Error) -> String {
-        if let transport = error as? MTPKit.TransportError {
+        if let transport = error as? TransportError {
             switch transport {
             case .notConnected: return "Device is not connected"
             case .notFound(let id): return "Object not found on device: \(id)"

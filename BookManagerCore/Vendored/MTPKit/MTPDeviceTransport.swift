@@ -14,7 +14,7 @@ public enum TransportKind: String, Sendable {
 ///
 /// `id` is an opaque, transport-specific token. For MTP it is the StorageID
 /// rendered as a string; for a future wireless backend it might be a mount path.
-/// Keeping it opaque is what lets `DeviceTransport` stay transport-agnostic.
+/// Keeping it opaque is what lets `MTPDeviceTransport` stay transport-agnostic.
 public struct StorageInfo: Identifiable, Hashable, Sendable {
     public let id: String
     public var name: String
@@ -107,13 +107,15 @@ public enum TransportError: Error, Sendable {
 
 public typealias ProgressHandler = @Sendable (TransferProgress) -> Void
 
-// MARK: - DeviceTransport
+// MARK: - MTPDeviceTransport
 
 /// The single abstraction every connection type implements. The UI and view models
 /// talk only to this protocol, so a USB/MTP backend and a future wireless/ADB
 /// backend are interchangeable. All methods are `async` because the underlying I/O
 /// (USB bulk transfers, network) is inherently asynchronous and serialized.
-public protocol DeviceTransport: Sendable {
+/// Renamed from `DeviceTransport` on vendoring: BookManagerCore already defines
+/// its own `DeviceTransport` (the app-facing device protocol).
+public protocol MTPDeviceTransport: Sendable {
     /// Stable identifier for this connected device (for sidebar identity, reconnection).
     var id: String { get }
     /// Human-readable name shown in the sidebar (e.g. "Pixel 8").
@@ -158,7 +160,7 @@ public protocol DeviceTransport: Sendable {
     var changes: AsyncStream<DeviceChange> { get }
 }
 
-public extension DeviceTransport {
+public extension MTPDeviceTransport {
     /// Cheap "what handles are in this folder" query used by the polling fallback to
     /// detect device-side adds/removes without fetching full metadata for every child.
     /// Default maps over `listChildren`; transports can override with something cheaper.
