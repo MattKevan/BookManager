@@ -25,6 +25,9 @@ packages:
   swift-mtp:
     url: https://github.com/CleanCocoa/swift-mtp.git
     exactVersion: 0.12.0
+  MTPKit:
+    url: https://github.com/5j54d93/MTPKit.git
+    from: 0.1.4
 
 settings:
   base:
@@ -50,6 +53,8 @@ targets:
         product: libmobi
       - package: swift-mtp
         product: SwiftMTPAsync
+      - package: MTPKit
+        product: MTPKit
 
   BookManager:
     type: application
