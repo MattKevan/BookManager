@@ -1,5 +1,5 @@
 {
-  "originHash" : "f36b7054e6ecba4bdc64bd12521ed82936fcff27876fe2a1589e6571b5f7c89a",
+  "originHash" : "c2fbbd1388934678203853e700b7ef73e3ed79162a51e6eacde6ffd93de4c58b",
   "pins" : [
     {
       "identity" : "automerge-swift",
@@ -26,6 +26,15 @@
       "state" : {
         "revision" : "bbe180f247527f24be18526856a35473a2ad3fe6",
         "version" : "1.0.2"
+      }
+    },
+    {
+      "identity" : "mtpkit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/5j54d93/MTPKit.git",
+      "state" : {
+        "revision" : "7ad0c0f3a0a6443408f2b3721a58594a1641d242",
+        "version" : "0.1.4"
       }
     },
     {
