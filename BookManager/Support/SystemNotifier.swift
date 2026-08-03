@@ -2,6 +2,21 @@ import BookManagerCore
 import Foundation
 import UserNotifications
 
+/// Presents banners while the app is frontmost (macOS suppresses foreground
+/// notifications by default). Retained for the process by `shared`; assigned
+/// to the notification center before every post (idempotent).
+final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate, @unchecked Sendable {
+    static let shared = NotificationDelegate()
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .sound])
+    }
+}
+
 /// Posts completion feedback as standard macOS system notifications.
 /// Authorization is requested lazily on first use; every post returns false
 /// when notifications are not authorized so callers can fall back to their
@@ -30,6 +45,7 @@ enum SystemNotifier {
     @discardableResult
     static func post(title: String, body: String) async -> Bool {
         guard await requestAuthorizationIfNeeded() else { return false }
+        UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body

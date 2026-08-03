@@ -134,6 +134,11 @@ final class DeviceManager {
 
     private let registry = DeviceRegistry()
     private let factory = MTPKitTransportFactory()
+    /// Local per-device listing cache (Application Support): shows the last
+    /// listing instantly on re-select or relaunch (zero device I/O); the fresh
+    /// MTPKit refresh replaces it within ~1s.
+    private let localCache = LocalDeviceCache(directory: DeviceManager.deviceCacheDirectory)
+
     /// Background detection tick (started lazily from the first scan): keeps
     /// the sidebar honest as devices arrive/leave. Session-innocent under the
     /// reuse model — it never disconnects or reconnects anything.
@@ -374,6 +379,13 @@ final class DeviceManager {
     private func performRefresh() async {
         guard let id = selectedDeviceID,
               let device = devices.first(where: { $0.id == id }) else { return }
+        // Instant display from the local cache (zero device I/O). The fresh
+        // listing below replaces it within ~1s; if the refresh fails, the
+        // cached listing stays so the view is never empty.
+        if deviceBooks.isEmpty,
+           let snapshot = try? localCache.load(key: localCacheKey(for: device)) {
+            deviceBooks = snapshot.records.map { $0.asDeviceBookRecord() }
+        }
         deviceError = nil
         isListing = true
         defer { isListing = false }
@@ -381,6 +393,7 @@ final class DeviceManager {
             deviceBooks = try await DeviceBookScanner(transport: device.transport)
                 .list(in: device.profile.bookFolder)
             await applyDeviceCache(to: device)
+            saveLocalCache(for: device)
         } catch {
             // The Kindle re-enumerates on the USB bus; a session held from an
             // earlier scan can go stale between the scan and the click, so the
@@ -403,6 +416,7 @@ final class DeviceManager {
                 deviceBooks = try await DeviceBookScanner(transport: fresh.transport)
                     .list(in: fresh.profile.bookFolder)
                 await applyDeviceCache(to: fresh)
+                saveLocalCache(for: fresh)
                 deviceError = nil
             } catch {
                 deviceError = error.localizedDescription
@@ -543,5 +557,32 @@ final class DeviceManager {
         } catch {
             deviceError = error.localizedDescription
         }
+    }
+}
+
+// MARK: - Local listing cache helpers
+
+private extension DeviceManager {
+    /// Persists the current listing (after the device-side `metadata.calibre`
+    /// cache is applied, so real titles/authors/DRM survive a relaunch) for
+    /// instant display next time. Best-effort.
+    func saveLocalCache(for device: ConnectedDevice) {
+        try? localCache.save(LocalDeviceSnapshot(
+            key: localCacheKey(for: device),
+            records: deviceBooks.map { LocalCachedBook(record: $0) },
+            savedAt: Date()
+        ))
+    }
+
+    /// Cache key derives from vendor/product ids (DeviceInfo has no serial;
+    /// single-device reality). Numeric, so sanitization is a safety net.
+    func localCacheKey(for device: ConnectedDevice) -> String {
+        "\(device.info.vendorID ?? 0)-\(device.info.productID ?? 0)"
+    }
+
+    static var deviceCacheDirectory: URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
+        return base.appending(path: "BookManager/device-cache", directoryHint: .isDirectory)
     }
 }
