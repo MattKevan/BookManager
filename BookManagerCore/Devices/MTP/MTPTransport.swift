@@ -204,13 +204,13 @@ public actor MTPTransport: DeviceTransport {
         return await session.storages()
     }
 
-    /// Finds `folder` across all storages (by path, then by root-children
-    /// directory name). Returns the storage it lives on and its FileInfo.
+    /// Finds `folder` across all storages by one-level root-children
+    /// enumeration (case-insensitive directory name). `resolvePath` is
+    /// deliberately avoided: it walks the device's ENTIRE object tree
+    /// (~15-20s on Kindle MTP — measured), while `connect` is ~50ms, proving
+    /// raw MTP ops are fast. One root listing per storage is all this needs.
     private func folderInfo(_ folder: DeviceFolder) async throws -> (storage: Storage, info: FileInfo)? {
         for storage in await storages() {
-            if let resolved = try await storage.resolvePath(folder.path), resolved.isDirectory {
-                return (storage, resolved)
-            }
             let root = (try? await storage.contents(of: .root)) ?? []
             // Kindle exposes the book folder as lowercase "documents" at the
             // storage root; compare case-insensitively against the canonical
@@ -238,14 +238,11 @@ public actor MTPTransport: DeviceTransport {
         return nil
     }
 
-    /// Finds `file` across all storages (by path, then by walking its
-    /// containing folder).
+    /// Finds `file` by walking its containing folder (one-level listings
+    /// only). `resolvePath` is deliberately avoided here too: it walks the
+    /// device's ENTIRE object tree (~15-20s on Kindle MTP, measured) and was
+    /// paid by every download before the one-level path below replaced it.
     private func fileInfo(_ file: DeviceFile) async throws -> (storage: Storage, info: FileInfo) {
-        for storage in await storages() {
-            if let resolved = try await storage.resolvePath(file.path) {
-                return (storage, resolved)
-            }
-        }
         // URL(fileURLWithPath:) prepends a leading slash ("Documents" →
         // "/Documents") that never matches the device folder; NSString keeps
         // the path relative so folderInfo can match it case-insensitively.
