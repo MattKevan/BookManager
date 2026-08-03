@@ -185,24 +185,29 @@ struct ContentView: View {
                 } label: {
                     Label("Add Books", systemImage: "plus")
                 }
-                Button {
-                    openSelection()
-                } label: {
-                    Label("Open", systemImage: "book")
+                // The library-selection actions (Open / Reveal / Edit
+                // Metadata) act on the library book selection, which is stale
+                // in device mode — hide them while a device is selected.
+                if session.selectedDeviceID == nil {
+                    Button {
+                        openSelection()
+                    } label: {
+                        Label("Open", systemImage: "book")
+                    }
+                    .disabled(session.selection.isEmpty)
+                    Button {
+                        revealSelection()
+                    } label: {
+                        Label("Reveal in Finder", systemImage: "folder")
+                    }
+                    .disabled(session.selection.isEmpty)
+                    Button {
+                        editSelection()
+                    } label: {
+                        Label("Edit Metadata", systemImage: "pencil")
+                    }
+                    .disabled(session.isLibraryUnavailable || session.selection.count != 1)
                 }
-                .disabled(session.selection.isEmpty)
-                Button {
-                    revealSelection()
-                } label: {
-                    Label("Reveal in Finder", systemImage: "folder")
-                }
-                .disabled(session.selection.isEmpty)
-                Button {
-                    editSelection()
-                } label: {
-                    Label("Edit Metadata", systemImage: "pencil")
-                }
-                .disabled(session.isLibraryUnavailable || session.selection.count != 1)
                 if session.selectedDeviceID == nil {
                     Button {
                         session.inspectorPresented.toggle()

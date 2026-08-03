@@ -2,10 +2,33 @@ import BookManagerCore
 import Foundation
 import Observation
 
+/// One discrete device operation currently running (or most recently shown).
+/// Published by `DeviceManager` so the UI can show the current activity with
+/// detail and progress, plus how many operations are queued behind it.
+struct DeviceActivity: Identifiable, Equatable {
+    enum Kind: Equatable {
+        case scan, list, enrich, importBooks, send, eject
+    }
+
+    let id: UUID
+    let title: String
+    var detail: String?
+    var progress: Double? // 0...1; nil = indeterminate
+    let kind: Kind
+}
+
 /// Owns the connected-device state for the UI: scans for supported devices,
 /// publishes the sidebar list, lists a selected device's books, downloads
 /// device files for import, and ejects. All device I/O is async; the store
 /// stays on the main actor and drives SwiftUI observation.
+///
+/// Every device operation runs through a SERIAL queue (`enqueue`): one
+/// operation at a time, in order, with the current operation published as
+/// `currentActivity` and the backlog as `pendingCount`. Serialization makes
+/// the former ad-hoc "never run X while Y is in flight" flag guards largely
+/// redundant and structurally eliminates the concurrency hazards (concurrent
+/// enrichs, a monitor tick enumerating mid-transfer, a refresh interrupting
+/// an import).
 @MainActor
 @Observable
 final class DeviceManager {
@@ -31,17 +54,77 @@ final class DeviceManager {
     /// (and any stray scan) skips while set so the bus is never enumerated
     /// mid-transfer.
     private var isEnriching = false
-    /// True while an import (device-file download phase) is in flight; drives
-    /// the device-view progress banner.
-    private(set) var isImporting = false
-    /// Download-phase progress 0...1; nil when not importing.
-    private(set) var importProgress: Double?
     /// Last device-layer error (connection, listing, transfer, eject).
     /// Settable by views so import failures can surface on the device screen.
     var deviceError: String?
     /// The most recent send-to-device run; presented by the send-report sheet.
     private(set) var sendReport: SendReport?
     var sendReportPresented = false
+
+    // MARK: - Activity queue
+
+    /// The operation currently running, if any. `detail`/`progress` are
+    /// updated by the running operation as it progresses.
+    private(set) var currentActivity: DeviceActivity?
+    /// How many operations are queued behind the current one.
+    private(set) var pendingCount = 0
+
+    /// True when the queue is non-empty (current op running or ops queued).
+    var isBusy: Bool { currentActivity != nil || pendingCount > 0 }
+
+    /// A human-readable connection-status line for the device UI.
+    var connectionStatus: String {
+        if let error = deviceError { return error }
+        if isScanning { return "Scanning for devices…" }
+        if let device = selectedDevice ?? devices.first { return "\(device.name) — connected" }
+        return "Not connected"
+    }
+
+    private struct PendingOp: Sendable {
+        let title: String
+        let kind: DeviceActivity.Kind
+        let work: @MainActor () async -> Void
+        let resume: @MainActor () -> Void
+    }
+
+    private var pendingOps: [PendingOp] = []
+    private var isProcessingOp = false
+
+    /// Appends an operation to the serial queue and waits until it completes.
+    /// Callers (public device methods) await the whole operation. The queue is
+    /// strictly FIFO and serial: the drain runs the head operation to
+    /// completion before starting the next. Internal cross-calls between
+    /// operations must use the `performX` methods directly — never `enqueue`
+    /// from inside a queued operation (that would deadlock on the queue).
+    private func enqueue(
+        _ title: String,
+        kind: DeviceActivity.Kind,
+        _ work: @escaping @MainActor () async -> Void
+    ) async {
+        await withCheckedContinuation { continuation in
+            pendingOps.append(PendingOp(
+                title: title, kind: kind, work: work,
+                resume: { continuation.resume() }
+            ))
+            pendingCount = pendingOps.count
+            Task { @MainActor in await self.drainQueue() }
+        }
+    }
+
+    private func drainQueue() async {
+        guard !isProcessingOp, !pendingOps.isEmpty else { return }
+        isProcessingOp = true
+        let op = pendingOps.removeFirst()
+        pendingCount = pendingOps.count
+        currentActivity = DeviceActivity(
+            id: UUID(), title: op.title, detail: nil, progress: nil, kind: op.kind
+        )
+        await op.work()
+        currentActivity = nil
+        isProcessingOp = false
+        op.resume()
+        await drainQueue()
+    }
 
     private let registry = DeviceRegistry()
     private let factory = MTPTransportFactory()
@@ -60,6 +143,8 @@ final class DeviceManager {
         return devices.first { $0.id == id }
     }
 
+    // MARK: - Operations
+
     /// Sends the given requests to the selected device's Documents folder via
     /// its transport, using the device profile's format support and the
     /// identity converter (v1: native-format copy only). `noCompatible` items
@@ -67,7 +152,14 @@ final class DeviceManager {
     /// appended to the report so the user sees an explicit row for every
     /// selected book. Stores the report and presents it.
     func send(_ requests: [SendRequest], noCompatible: [SendItem] = []) async {
+        await enqueue("Sending to device…", kind: .send) { [weak self] in
+            await self?.performSend(requests, noCompatible: noCompatible)
+        }
+    }
+
+    private func performSend(_ requests: [SendRequest], noCompatible: [SendItem]) async {
         guard let device = selectedDevice else { return }
+        currentActivity?.detail = requests.count == 1 ? "1 book" : "\(requests.count) books"
         isTransferring = true
         defer { isTransferring = false }
         let service = DeviceSendService(transport: device.transport)
@@ -133,6 +225,12 @@ final class DeviceManager {
     /// never aborting the whole scan. Stale sessions self-heal via the
     /// failure-triggered reconnect in `refreshBooks`, not via scan churn.
     func scanForDevices() async {
+        await enqueue("Scanning for devices…", kind: .scan) { [weak self] in
+            await self?.performScan()
+        }
+    }
+
+    private func performScan() async {
         // Serialize scans: `isScanning` is set synchronously before any await,
         // so a second call (activation scan + user refresh) returns immediately
         // instead of opening a second MTP session. Also never enumerate while
@@ -200,7 +298,10 @@ final class DeviceManager {
         // libusb enumeration mid-transfer disturbs the held MTP session and
         // drops the connection (hardware-reproduced: clicking a book to enrich
         // downloaded it ~8s while the 10s tick fired, and the device reset).
-        guard !isScanning, !isListing, !isTransferring, !isEnriching else { return }
+        // The queue's activity state is the authoritative gate; the legacy
+        // flags are kept as belt-and-braces during the transition.
+        guard currentActivity == nil, pendingOps.isEmpty,
+              !isScanning, !isListing, !isTransferring, !isEnriching else { return }
         // Calibre-exact idle model: with a device connected the tick does
         // NOTHING — the held session is the connection's maintenance (a probe
         // holding the session alone survived 120s+ idle, and idle enumeration
@@ -210,8 +311,9 @@ final class DeviceManager {
         // real operation via refreshBooks' failure-retry + the error state.
         if devices.isEmpty {
             // No connected device: enumerate to detect arrivals. Safe — nothing
-            // is claimed, so nothing can be disturbed.
-            await scanForDevices()
+            // is claimed, so nothing can be disturbed. Runs directly (not via
+            // the queue) so background scans don't accumulate queue entries.
+            await performScan()
         }
     }
 
@@ -228,6 +330,12 @@ final class DeviceManager {
     }
 
     func refreshBooks() async {
+        await enqueue("Listing books…", kind: .list) { [weak self] in
+            await self?.performRefresh()
+        }
+    }
+
+    private func performRefresh() async {
         guard let id = selectedDeviceID,
               let device = devices.first(where: { $0.id == id }) else { return }
         deviceError = nil
@@ -244,10 +352,12 @@ final class DeviceManager {
             // from `devices` FIRST (so the reuse-by-info scan doesn't
             // resurrect the stale session), release it, then re-detect with a
             // fresh connection and retry once before surfacing the error.
+            // Uses `performScan` directly — this retry is inside a queued op,
+            // and re-entering the queue here would deadlock.
             let info = device.info
             devices.removeAll { $0.id == device.id }
             try? await device.transport.disconnect()
-            await scanForDevices()
+            await performScan()
             guard let fresh = devices.first(where: { $0.info == info }) else {
                 deviceError = "Device disconnected — try scanning again"
                 return
@@ -298,11 +408,18 @@ final class DeviceManager {
     /// ~71 minutes for a 178-book device). On failure, degrades to the
     /// filename-only record marked enriched so the UI stops retrying.
     func enrich(_ record: DeviceBookRecord) async {
+        await enqueue("Loading book details…", kind: .enrich) { [weak self] in
+            await self?.performEnrich(record)
+        }
+    }
+
+    private func performEnrich(_ record: DeviceBookRecord) async {
         guard let id = selectedDeviceID,
               let device = devices.first(where: { $0.id == id }),
               !record.isEnriched,
               let index = deviceBooks.firstIndex(where: { $0.id == record.id }),
               !deviceBooks[index].isEnriched else { return }
+        currentActivity?.detail = record.title
         // Guard the detection tick (and any stray scan) away from the download:
         // enumeration mid-transfer drops the connection (hardware-reproduced).
         isEnriching = true
@@ -326,37 +443,46 @@ final class DeviceManager {
     }
 
     /// Downloads the given device files into a fresh temp directory and
-    /// returns the local URLs for the import pipeline. The per-file loop is
-    /// inlined (rather than delegating to `DeviceImportService`) so the
-    /// progress banner can report book N of M; the core service remains for
-    /// tests and stays behaviorally identical.
-    func download(_ files: [DeviceFile]) async throws -> [URL] {
-        guard let id = selectedDeviceID,
-              let device = devices.first(where: { $0.id == id }) else {
-            throw DeviceManagerError.noDeviceSelected
+    /// returns the local URLs for the import pipeline, then hands them to the
+    /// `convert` closure (the library import/conversion phase). The whole
+    /// import runs as ONE queued operation so the activity strip shows the
+    /// download phase ("Book N of M") and the conversion phase, and no other
+    /// device operation can interleave. On download failure the error surfaces
+    /// on the device screen.
+    func importBooks(
+        _ files: [DeviceFile],
+        then convert: @escaping @MainActor ([URL]) async -> Void
+    ) async {
+        await enqueue("Importing books…", kind: .importBooks) { [weak self] in
+            guard let self, let device = self.selectedDevice else { return }
+            let directory = FileManager.default.temporaryDirectory
+                .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+            do {
+                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+                var urls: [URL] = []
+                for (index, file) in files.enumerated() {
+                    self.currentActivity?.detail = "Book \(index + 1) of \(files.count)"
+                    self.currentActivity?.progress = Double(index + 1) / Double(files.count)
+                    let destination = directory.appending(path: file.name)
+                    try await device.transport.download(file, to: destination)
+                    urls.append(destination)
+                }
+                self.currentActivity?.detail = "Converting to library format…"
+                self.currentActivity?.progress = nil
+                await convert(urls)
+            } catch {
+                self.deviceError = error.localizedDescription
+            }
         }
-        isTransferring = true
-        isImporting = true
-        importProgress = files.isEmpty ? 1 : 0
-        defer {
-            isTransferring = false
-            isImporting = false
-            importProgress = nil
-        }
-        let directory = FileManager.default.temporaryDirectory
-            .appending(path: UUID().uuidString, directoryHint: .isDirectory)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        var urls: [URL] = []
-        for (index, file) in files.enumerated() {
-            let destination = directory.appending(path: file.name)
-            try await device.transport.download(file, to: destination)
-            urls.append(destination)
-            importProgress = Double(index + 1) / Double(files.count)
-        }
-        return urls
     }
 
     func eject(_ id: UUID) async {
+        await enqueue("Ejecting…", kind: .eject) { [weak self] in
+            await self?.performEject(id)
+        }
+    }
+
+    private func performEject(_ id: UUID) async {
         guard let device = devices.first(where: { $0.id == id }) else { return }
         do {
             try await device.transport.eject()
@@ -371,8 +497,4 @@ final class DeviceManager {
             deviceError = error.localizedDescription
         }
     }
-}
-
-enum DeviceManagerError: Error {
-    case noDeviceSelected
 }

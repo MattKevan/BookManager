@@ -3,18 +3,12 @@ import SwiftUI
 
 /// Browser for a connected device's books: table with DRM badges, Import
 /// Selected/All (through the existing library import pipeline), Refresh, and
-/// Eject. `onImported` lets the host flip its import-report sheet after a
-/// device import completes.
+/// Eject. A status strip along the bottom shows the connection status and the
+/// serial activity queue (current operation + queued count). `onImported`
+/// lets the host flip its import-report sheet after a device import completes.
 struct DeviceBooksView: View {
     @Bindable var session: LibrarySession
     @State private var selection = Set<String>() // DeviceBookRecord ids
-    /// True while imported books convert through the library pipeline (after
-    /// the device download phase); drives the progress banner's conversion
-    /// message. Cleared when the import task finishes.
-    @State private var isConverting = false
-    /// Number of files in the current import — used to render
-    /// "Importing book N of M…" from `DeviceManager.importProgress`.
-    @State private var importTotal = 0
     var onImported: () -> Void = {}
 
     var body: some View {
@@ -76,14 +70,14 @@ struct DeviceBooksView: View {
         .toolbar {
             ToolbarItemGroup {
                 Button("Import Selected") { importSelected() }
-                    .disabled(selection.isEmpty || session.devices.isListing || isImportingOrConverting)
+                    .disabled(selection.isEmpty || session.devices.isBusy)
                     .help(
                         selection.isEmpty
                             ? "Select a book on the device to import it into the library"
                             : "Import the selected book(s) into the library"
                     )
                 Button("Import All") { importAll() }
-                    .disabled(session.devices.deviceBooks.isEmpty || isImportingOrConverting)
+                    .disabled(session.devices.deviceBooks.isEmpty || session.devices.isBusy)
                     .help(
                         session.devices.deviceBooks.isEmpty
                             ? "No books on the device to import"
@@ -92,57 +86,84 @@ struct DeviceBooksView: View {
                 Button {
                     if let id = session.selectedDeviceID { Task { await session.devices.refreshBooks() } }
                 } label: { Label("Refresh", systemImage: "arrow.clockwise") }
+                .disabled(session.devices.isBusy)
                 Button {
                     if let id = session.selectedDeviceID { Task { await session.devices.eject(id) } }
                 } label: { Label("Eject", systemImage: "eject") }
+                .disabled(session.devices.isBusy)
             }
         }
-        .overlay(alignment: .top) {
-            if isImportingOrConverting {
-                importBanner
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            // Status strip: hidden when idle and connected (no noise). Visible
+            // while the queue is busy or a device error is pending.
+            if session.devices.isBusy || session.devices.deviceError != nil {
+                statusStrip
             }
         }
     }
 
-    private var isImportingOrConverting: Bool {
-        session.devices.isImporting || isConverting
-    }
+    // MARK: - Status strip
 
-    private var importBanner: some View {
-        HStack(spacing: 8) {
-            ProgressView()
-                .controlSize(.small)
-            Text(importBannerText)
+    private var statusStrip: some View {
+        HStack(spacing: 10) {
+            connectionStatusView
+            if let activity = session.devices.currentActivity {
+                Divider()
+                activityView(activity)
+            }
+            if session.devices.pendingCount > 0 {
+                Text("+\(session.devices.pendingCount) queued")
+                    .foregroundStyle(.secondary)
+            }
             Spacer()
         }
-        .padding(10)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
-        .padding()
+        .font(.caption)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(.bar)
     }
 
-    private var importBannerText: String {
-        if isConverting { return "Converting to library format…" }
-        guard let progress = session.devices.importProgress, importTotal > 0 else {
-            return "Importing…"
+    private var connectionStatusView: some View {
+        HStack(spacing: 6) {
+            Image(systemName: session.devices.deviceError != nil
+                ? "exclamationmark.triangle"
+                : "externaldrive")
+                .foregroundStyle(session.devices.deviceError != nil ? .orange : .secondary)
+            Text(session.devices.connectionStatus)
+                .lineLimit(1)
         }
-        let done = min(Int((progress * Double(importTotal)).rounded()), importTotal)
-        return "Importing book \(done) of \(importTotal)…"
     }
+
+    private func activityView(_ activity: DeviceActivity) -> some View {
+        HStack(spacing: 6) {
+            if let progress = activity.progress {
+                ProgressView(value: progress)
+                    .frame(width: 80)
+            } else {
+                ProgressView()
+                    .controlSize(.small)
+            }
+            Text(activity.title)
+            if let detail = activity.detail {
+                Text(detail)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
+    }
+
+    // MARK: - Import
 
     private func importFiles(_ files: [DeviceFile]) {
         guard !files.isEmpty else { return }
         Task {
-            importTotal = files.count
-            isConverting = false
-            defer { isConverting = false }
-            do {
-                let urls = try await session.devices.download(files)
-                isConverting = true
+            // The download + conversion phases run as ONE queued device
+            // operation; the status strip shows "Importing books…" with
+            // per-book progress, then "Converting to library format…".
+            await session.devices.importBooks(files) { urls in
                 await session.importFiles(urls: urls)
-                onImported()
-            } catch {
-                session.devices.deviceError = error.localizedDescription
             }
+            onImported()
         }
     }
 
