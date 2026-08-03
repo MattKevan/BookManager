@@ -98,6 +98,31 @@ struct DeviceServicesTests {
         #expect(SendReport(items: items).summary.contains("1 failed"))
     }
 
+    @Test
+    func filenameSanitizesHostileTitles() {
+        let request = SendRequest(
+            title: "A/B\\C:D\u{7}E",
+            sourceURL: URL(fileURLWithPath: "/tmp/unused.epub"),
+            format: "epub"
+        )
+        let name = DeviceSendService.filename(for: request, format: "epub")
+        #expect(!name.contains("/"))
+        #expect(!name.contains("\\"))
+        #expect(!name.contains(":"))
+        #expect(name.rangeOfCharacter(from: .controlCharacters) == nil)
+        #expect(name.hasSuffix(".epub"))
+    }
+
+    @Test
+    func filenameFallsBackToBookForEmptyTitles() {
+        let request = SendRequest(
+            title: "  ",
+            sourceURL: URL(fileURLWithPath: "/tmp/unused.pdf"),
+            format: "pdf"
+        )
+        #expect(DeviceSendService.filename(for: request, format: "pdf") == "book.pdf")
+    }
+
     // MARK: - Import
 
     @Test

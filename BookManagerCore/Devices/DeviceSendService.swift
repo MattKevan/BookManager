@@ -55,11 +55,18 @@ public struct DeviceSendService: Sendable {
         return items
     }
 
+    /// Builds the on-device filename from a request title. Device file systems
+    /// reject path separators and control characters in names, so every
+    /// reserved character is replaced with a space before the extension.
     static func filename(for request: SendRequest, format: String) -> String {
+        var illegal = CharacterSet(charactersIn: "/:\\")
+        illegal.formUnion(.controlCharacters)
         let base = request.title
-            .replacingOccurrences(of: "/", with: " ")
-            .replacingOccurrences(of: ":", with: " ")
+            .components(separatedBy: illegal)
+            .joined(separator: " ")
             .trimmingCharacters(in: .whitespaces)
-        return base.isEmpty ? "book" : "\(base).\(format)"
+        // Keep the extension even for empty titles: an extension-less upload
+        // would be unrecognizable as a book on the device.
+        return base.isEmpty ? "book.\(format)" : "\(base).\(format)"
     }
 }
