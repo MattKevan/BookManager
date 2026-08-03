@@ -10,6 +10,7 @@
 		00533F7C898020A76C4C2B97 /* libmobi in Frameworks */ = {isa = PBXBuildFile; productRef = A3B7696ECD66EDD998821F5C /* libmobi */; };
 		019F7EC80783974F626D160C /* SyncState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FD4E85652ACB9A8051E10ED /* SyncState.swift */; };
 		0247EB090E6DFB171714915D /* SendPlanTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DF69781560F6A54FAD6CAA1 /* SendPlanTests.swift */; };
+		028AFE7DC025F5D5D081347A /* MTPTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = C905BCFF7A2420DAE51E33E6 /* MTPTransport.swift */; };
 		050B0C32F9422ED9DE8FBFB8 /* LibrarySession.swift in Sources */ = {isa = PBXBuildFile; fileRef = A230E717F0A049BE946E41FF /* LibrarySession.swift */; };
 		07351E5DB1A68205C5719835 /* SyncEventSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3182B6AF520D7EFC945903C /* SyncEventSource.swift */; };
 		082DEE0D492D2C77CC763261 /* ImportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAA97EB7CDB42EFE46F1706D /* ImportService.swift */; };
@@ -37,6 +38,7 @@
 		3DDAFFF7CA4910DC6D42CFE1 /* LocalCatalogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BA162F96FEA4B520BEAED4B /* LocalCatalogTests.swift */; };
 		3E02ECDBF31FC3D2B102C6E2 /* CalibreModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 079C068688F6CB08D66D0E02 /* CalibreModels.swift */; };
 		3E0B4CA8C38FC8B5342116AC /* MetadataSourceProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03238F1DFA50DAF6674FEADF /* MetadataSourceProviding.swift */; };
+		3E6405355AA548594B3FE8CC /* SwiftMTPAsync in Frameworks */ = {isa = PBXBuildFile; productRef = 6DD7D77391BABA00A2C94561 /* SwiftMTPAsync */; };
 		3E8CB6221E500E8D0E2D83AF /* OpenLibrarySource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3946434A5738F2318D3DB0D6 /* OpenLibrarySource.swift */; };
 		3F72B39291984A1F8E406A53 /* PerformanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9849D0FE535CE38AD33777AD /* PerformanceTests.swift */; };
 		409E04ECB1ACF22D0BB109F8 /* HybridLogicalClock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 877A41E8DB9729E29518A7F2 /* HybridLogicalClock.swift */; };
@@ -79,6 +81,7 @@
 		8EB7D97645D61A20D4C0F898 /* BookManagerCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = EA00130013634EE3D52C9CCF /* BookManagerCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		8FB7D9B5E54B66EAF28DA4E1 /* SendReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 800F16E7F8AF7EFF8A5FD0AB /* SendReport.swift */; };
 		9183F4EC121E5930C3EC68B5 /* BookManagerCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EFBA8EB5B9ADFEB3ACDE0B7 /* BookManagerCore.swift */; };
+		933282CEA75382DA278BDB0B /* MTPTransportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86DA2E7BBD3D46D48403B424 /* MTPTransportTests.swift */; };
 		9769ECB6981710022C7B217A /* ScaffoldTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D80E3D97EA38642A0D352DA /* ScaffoldTests.swift */; };
 		983C436D170FBDE137BDBE92 /* LibraryRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B087736BE54EC57981680458 /* LibraryRepositoryTests.swift */; };
 		9BE4FC702C069B76A295F442 /* Notices.md in Resources */ = {isa = PBXBuildFile; fileRef = F423D17FB570A461C7A9F6C2 /* Notices.md */; };
@@ -247,6 +250,7 @@
 		84DE217284395F24110DEF8B /* MobiSmokeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobiSmokeTests.swift; sourceTree = "<group>"; };
 		85DFE90B2620F49E3523D712 /* CalibreRawPresenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalibreRawPresenter.swift; sourceTree = "<group>"; };
 		8633065E1E28A56C11EAF21A /* FolderReconcilerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderReconcilerTests.swift; sourceTree = "<group>"; };
+		86DA2E7BBD3D46D48403B424 /* MTPTransportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MTPTransportTests.swift; sourceTree = "<group>"; };
 		877A41E8DB9729E29518A7F2 /* HybridLogicalClock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HybridLogicalClock.swift; sourceTree = "<group>"; };
 		87B108E9D043C28A0ACA5B55 /* OpfGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpfGenerator.swift; sourceTree = "<group>"; };
 		8AB6243EDA7B5EAFD4AB27C9 /* DiagnosticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticsView.swift; sourceTree = "<group>"; };
@@ -278,6 +282,7 @@
 		C3182B6AF520D7EFC945903C /* SyncEventSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncEventSource.swift; sourceTree = "<group>"; };
 		C3EB714E6E2C57690A730F94 /* BookFolder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookFolder.swift; sourceTree = "<group>"; };
 		C658484E2B3B70B7D3858968 /* ImportServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportServiceTests.swift; sourceTree = "<group>"; };
+		C905BCFF7A2420DAE51E33E6 /* MTPTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MTPTransport.swift; sourceTree = "<group>"; };
 		CA4DE265111712DFFE44F5CE /* LibraryStorageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryStorageTests.swift; sourceTree = "<group>"; };
 		CAA97EB7CDB42EFE46F1706D /* ImportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportService.swift; sourceTree = "<group>"; };
 		CD9A70512BF0E2BD885A0A06 /* LibraryMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryMonitor.swift; sourceTree = "<group>"; };
@@ -324,6 +329,7 @@
 				C0330A6A992BC0A8C6BFCC73 /* GRDB in Frameworks */,
 				A2B9362E46338E80EE4993CD /* ZIPFoundation in Frameworks */,
 				00533F7C898020A76C4C2B97 /* libmobi in Frameworks */,
+				3E6405355AA548594B3FE8CC /* SwiftMTPAsync in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -408,6 +414,7 @@
 				567FF81984C0719EB7E11C99 /* DeviceServicesTests.swift */,
 				4540BF1FE4AA0CBEA1429A76 /* DeviceTransportTests.swift */,
 				B57FA284528C430E6501BA8F /* MockTransport.swift */,
+				86DA2E7BBD3D46D48403B424 /* MTPTransportTests.swift */,
 				3DF69781560F6A54FAD6CAA1 /* SendPlanTests.swift */,
 			);
 			path = Devices;
@@ -587,6 +594,14 @@
 			path = BookManagerCoreTests;
 			sourceTree = "<group>";
 		};
+		AA69942E16682B988E31F71A /* MTP */ = {
+			isa = PBXGroup;
+			children = (
+				C905BCFF7A2420DAE51E33E6 /* MTPTransport.swift */,
+			);
+			path = MTP;
+			sourceTree = "<group>";
+		};
 		B569D370623BB2E8C047EC93 /* Selection */ = {
 			isa = PBXGroup;
 			children = (
@@ -708,6 +723,7 @@
 				0FCD8104FD5D44DD32AA2AAB /* FormatConverter.swift */,
 				D97D5E795D3B6648EF62BB68 /* SendPlan.swift */,
 				800F16E7F8AF7EFF8A5FD0AB /* SendReport.swift */,
+				AA69942E16682B988E31F71A /* MTP */,
 			);
 			path = Devices;
 			sourceTree = "<group>";
@@ -746,6 +762,7 @@
 				2F280E3BD3CAFCA30F17AC99 /* GRDB */,
 				1BE2846B48AD04727891E7C4 /* ZIPFoundation */,
 				A3B7696ECD66EDD998821F5C /* libmobi */,
+				6DD7D77391BABA00A2C94561 /* SwiftMTPAsync */,
 			);
 			productName = BookManagerCore;
 			productReference = EA00130013634EE3D52C9CCF /* BookManagerCore.framework */;
@@ -846,6 +863,7 @@
 				B15CFCE30AD86161C178C8C3 /* XCRemoteSwiftPackageReference "GRDB.swift" */,
 				44635DEC287817240082396B /* XCRemoteSwiftPackageReference "ZIPFoundation" */,
 				CCA3476DA7C649DCF69BDF4C /* XCRemoteSwiftPackageReference "libmobi-swift" */,
+				59B87C0328B4918A7F6B0165 /* XCRemoteSwiftPackageReference "swift-mtp" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D4969B27EA279A717E3FEA6F /* Products */;
@@ -919,6 +937,7 @@
 				831C278B8D9BC7CD1599A1D6 /* LibraryRepository.swift in Sources */,
 				CB4C2B0FABFAB738F11A1BAC /* LibraryRootCapabilities.swift in Sources */,
 				D71D91C038D0BB6C876154B5 /* LocalCatalog.swift in Sources */,
+				028AFE7DC025F5D5D081347A /* MTPTransport.swift in Sources */,
 				089BEE925C9BEC5CAAF0D77A /* MetadataExtractor.swift in Sources */,
 				CC62884E91FC02938D5BD6FA /* MetadataLookupService.swift in Sources */,
 				5FE5C12E6FC3F759C1CC34F4 /* MetadataMergePlan.swift in Sources */,
@@ -977,6 +996,7 @@
 				3DDAFFF7CA4910DC6D42CFE1 /* LocalCatalogTests.swift in Sources */,
 				B867C92933B7AAAEABB6F6EC /* LocalCatalogV2Tests.swift in Sources */,
 				8790F01632265076BF031B97 /* LocalCatalogV3Tests.swift in Sources */,
+				933282CEA75382DA278BDB0B /* MTPTransportTests.swift in Sources */,
 				D5658B0F5AE2B7F1A4FE8AB2 /* MetadataExtractorTests.swift in Sources */,
 				220E43EBA7E61CCF0E79E4D6 /* MetadataLookupServiceTests.swift in Sources */,
 				08991F91CCEC88D2B617E8C4 /* MetadataMergePlanTests.swift in Sources */,
@@ -1375,6 +1395,14 @@
 				version = 0.9.19;
 			};
 		};
+		59B87C0328B4918A7F6B0165 /* XCRemoteSwiftPackageReference "swift-mtp" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/CleanCocoa/swift-mtp.git";
+			requirement = {
+				kind = exactVersion;
+				version = 0.12.0;
+			};
+		};
 		A0D7C7F521C2750001B7D268 /* XCRemoteSwiftPackageReference "automerge-swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/automerge/automerge-swift.git";
@@ -1416,6 +1444,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 44635DEC287817240082396B /* XCRemoteSwiftPackageReference "ZIPFoundation" */;
 			productName = ZIPFoundation;
+		};
+		6DD7D77391BABA00A2C94561 /* SwiftMTPAsync */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 59B87C0328B4918A7F6B0165 /* XCRemoteSwiftPackageReference "swift-mtp" */;
+			productName = SwiftMTPAsync;
 		};
 		770243B41284AFCA8EC2E14D /* GRDB */ = {
 			isa = XCSwiftPackageProductDependency;

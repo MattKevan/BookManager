@@ -22,6 +22,9 @@ packages:
   libmobi-swift:
     url: https://github.com/awxkee/libmobi-swift.git
     exactVersion: 1.0.2
+  swift-mtp:
+    url: https://github.com/CleanCocoa/swift-mtp.git
+    exactVersion: 0.12.0
 
 settings:
   base:
@@ -45,6 +48,8 @@ targets:
       - package: ZIPFoundation
       - package: libmobi-swift
         product: libmobi
+      - package: swift-mtp
+        product: SwiftMTPAsync
 
   BookManager:
     type: application
@@ -60,7 +65,8 @@ targets:
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: N7J3BYZ94H
         INFOPLIST_KEY_CFBundleDisplayName: Book Manager
-        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
+        INFOPLIST_KEY_LSApplicationCategoryType: >-
+          public.app-category.productivity
     dependencies:
       - target: BookManagerCore
 
