@@ -42,14 +42,18 @@ final class DeviceManager {
 
     /// Sends the given requests to the selected device's Documents folder via
     /// its transport, using the device profile's format support and the
-    /// identity converter (v1: native-format copy only). Stores the report and
-    /// presents it.
-    func send(_ requests: [SendRequest]) async {
+    /// identity converter (v1: native-format copy only). `noCompatible` items
+    /// (books with no supported stored format, resolved by the caller) are
+    /// appended to the report so the user sees an explicit row for every
+    /// selected book. Stores the report and presents it.
+    func send(_ requests: [SendRequest], noCompatible: [SendItem] = []) async {
         guard let device = selectedDevice else { return }
         let service = DeviceSendService(transport: device.transport)
-        sendReport = SendReport(items: await service.send(
+        var items = await service.send(
             requests, profile: device.profile, converter: IdentityConverter()
-        ))
+        )
+        items.append(contentsOf: noCompatible)
+        sendReport = SendReport(items: items)
         sendReportPresented = true
     }
 

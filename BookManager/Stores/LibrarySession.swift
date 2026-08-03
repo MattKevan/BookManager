@@ -394,14 +394,16 @@ final class LibrarySession {
 
     /// Resolves each selected book's best stored format file (in the selected
     /// device's format-priority order) and sends them to the device. Books
-    /// with no supported stored format are omitted here and surface as "no
-    /// compatible format" rows in the send report.
+    /// with no supported stored format get an explicit "no compatible format"
+    /// row in the send report.
     func sendSelectionToDevice() async {
         guard let repository else { return }
         let folder = BookFolder(layout: .init(root: repository.root))
         let selectedBooks = books.filter { selection.contains($0.id) }
         var requests: [SendRequest] = []
+        var noCompatible: [SendItem] = []
         for book in selectedBooks {
+            var hasSupportedFormat = false
             for format in devices.selectedDevice?.profile.supportedFormats ?? [] {
                 guard let record = book.formats.first(where: { $0.kind.lowercased() == format }) else {
                     continue
@@ -409,11 +411,15 @@ final class LibrarySession {
                 let url = await folder.formatFileURL(relativePath: book.relativePath, filename: record.filename)
                 if FileManager.default.fileExists(atPath: url.path) {
                     requests.append(SendRequest(title: book.title, sourceURL: url, format: format))
+                    hasSupportedFormat = true
                     break
                 }
             }
+            if !hasSupportedFormat {
+                noCompatible.append(SendItem(title: book.title, status: .noCompatibleFormat))
+            }
         }
-        await devices.send(requests)
+        await devices.send(requests, noCompatible: noCompatible)
     }
 
     /// Sends files dropped onto a sidebar device row (Finder-style drag). Each
