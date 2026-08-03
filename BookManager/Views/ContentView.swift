@@ -25,6 +25,7 @@ struct ContentView: View {
     @State private var showDiagnostics = false
     @State private var showCalibreImport = false
     @State private var showActivityPopover = false
+    @State private var columnVisibility: NavigationSplitViewVisibility = .doubleColumn
     @FocusState private var searchFocused: Bool
 
     var body: some View {
@@ -164,9 +165,13 @@ struct ContentView: View {
     }
 
     private var loadedBody: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
             SidebarView(session: session)
                 .navigationTitle(session.repository?.root.lastPathComponent ?? "Library")
+        } content: {
+            if session.facetNavigation.category != nil {
+                FacetListView(session: session)
+            }
         } detail: {
             Group {
                 if session.selectedDeviceID != nil {
@@ -178,6 +183,9 @@ struct ContentView: View {
                         .navigationTitle(session.facetNavigation.value ?? "All Books")
                 }
             }
+        }
+        .onChange(of: session.facetNavigation.category) { _, category in
+            columnVisibility = (category == nil) ? .doubleColumn : .all
         }
         // The inspector shows LIBRARY book metadata; the device view has no
         // inspector detail, so suppress it while a device is selected (a stale
