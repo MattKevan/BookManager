@@ -21,6 +21,7 @@ struct ContentView: View {
     @Bindable var session: LibrarySession
     @State private var importURLs: [URL] = []
     @State private var showImportReport = false
+    @State private var showSendReport = false
     @State private var showDiagnostics = false
     @State private var showCalibreImport = false
     @State private var showActivityPopover = false
@@ -63,6 +64,17 @@ struct ContentView: View {
                 session.inspectorPresented = true
             }
         }
+        // Send-to-device completion: post a system notification instead of a
+        // modal sheet (the sheet is the fallback when notifications are not
+        // authorized). The DeviceManager flag is reset so a later send
+        // re-triggers this observation.
+        .onChange(of: session.devices.sendReportPresented) { _, presented in
+            guard presented, let report = session.devices.sendReport else { return }
+            Task {
+                if await !SystemNotifier.postSendCompletion(report: report) { showSendReport = true }
+                session.devices.sendReportPresented = false
+            }
+        }
         .fileImporter(
             isPresented: $session.isPickerPresented,
             allowedContentTypes: session.pickerAction == .addBooks
@@ -88,7 +100,7 @@ struct ContentView: View {
                 case .addBooks:
                     Task {
                         await session.importFiles(urls: urls)
-                        showImportReport = session.importReport != nil
+                        await presentImportFeedback()
                     }
                 case .calibre:
                     Task {
@@ -106,12 +118,9 @@ struct ContentView: View {
                 ImportReportView(report: report) { showImportReport = false }
             }
         }
-        .sheet(isPresented: Binding(
-            get: { session.devices.sendReportPresented },
-            set: { session.devices.sendReportPresented = $0 }
-        )) {
+        .sheet(isPresented: $showSendReport) {
             if let report = session.devices.sendReport {
-                SendReportView(report: report) { session.devices.sendReportPresented = false }
+                SendReportView(report: report) { showSendReport = false }
             }
         }
         .sheet(item: $session.inspectorBook) { book in
@@ -162,7 +171,7 @@ struct ContentView: View {
             Group {
                 if session.selectedDeviceID != nil {
                     DeviceBooksView(session: session) {
-                        showImportReport = true
+                        Task { await presentImportFeedback() }
                     }
                 } else {
                     browser
@@ -355,6 +364,13 @@ struct ContentView: View {
         }
     }
 
+    /// Posts a system notification for the completed import; falls back to the
+    /// report sheet when notifications are not authorized.
+    private func presentImportFeedback() async {
+        guard let report = session.importReport else { return }
+        if await !SystemNotifier.postImportCompletion(report: report) { showImportReport = true }
+    }
+
     private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
         Task { @MainActor in
             var urls: [URL] = []
@@ -365,7 +381,7 @@ struct ContentView: View {
             }
             guard !urls.isEmpty else { return }
             await session.importFiles(urls: urls)
-            showImportReport = session.importReport != nil
+            await presentImportFeedback()
         }
         return true
     }

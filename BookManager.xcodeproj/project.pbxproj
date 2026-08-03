@@ -104,6 +104,7 @@
 		9C10720CAD6A1CD058205BE5 /* CalibreImportServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97FE4DDA5D650B5CCFA6A51D /* CalibreImportServiceTests.swift */; };
 		9D15D3667967207C1A72C66A /* MetadataMergeReviewSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9A6BD3BB3D5AE6C450E247B /* MetadataMergeReviewSheet.swift */; };
 		9D86CAE107CBE6D0D34B7301 /* ChangeStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F788726BC33346C140CF988F /* ChangeStore.swift */; };
+		9E427691A87BAE765BCE38E9 /* SystemNotifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDA06802E566F4C1410712E3 /* SystemNotifier.swift */; };
 		9E677998D59EE494F3A7571F /* MTPEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4C5CE9EA1220B48135FD702 /* MTPEvent.swift */; };
 		A0CF78A35D5B9D189902DF1E /* BookManagerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B289E0169E06FC577EDE4155 /* BookManagerApp.swift */; };
 		A2B5CAB49BBCE42C57427012 /* MetadataSourceDecodingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F2E4D2767153BF0EAB33F35 /* MetadataSourceDecodingTests.swift */; };
@@ -293,6 +294,7 @@
 		A06A187727B29B451ABE5C75 /* HybridLogicalClockTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HybridLogicalClockTests.swift; sourceTree = "<group>"; };
 		A081C69F8BA6B08E869CAA8D /* BookFolderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookFolderTests.swift; sourceTree = "<group>"; };
 		A230E717F0A049BE946E41FF /* LibrarySession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibrarySession.swift; sourceTree = "<group>"; };
+		A2DBD436B47EECB7CFF8A362 /* LICENSE */ = {isa = PBXFileReference; path = LICENSE; sourceTree = "<group>"; };
 		A5A6CBF7371DBCFE0E1C2878 /* MetadataModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataModels.swift; sourceTree = "<group>"; };
 		A6E24C22DC0D497C119E3503 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		AA927B479D52396761EE4A89 /* CalibreRawPresenterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalibreRawPresenterTests.swift; sourceTree = "<group>"; };
@@ -340,6 +342,7 @@
 		F82F4B392AF4CDF2362131D9 /* DeviceTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceTransport.swift; sourceTree = "<group>"; };
 		FCE9B149EF006C42E615AE2E /* GoogleBooksSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleBooksSource.swift; sourceTree = "<group>"; };
 		FCEEC7381A553046ADC227C6 /* MetadataMergePlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataMergePlan.swift; sourceTree = "<group>"; };
+		FDA06802E566F4C1410712E3 /* SystemNotifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemNotifier.swift; sourceTree = "<group>"; };
 		FE22DC7A79DA7703CE5EF160 /* LibraryWelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryWelcomeView.swift; sourceTree = "<group>"; };
 		FE4164771CE7921402C06C82 /* MTPCodes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MTPCodes.swift; sourceTree = "<group>"; };
 		FF7CB4109844BE855474503A /* MobiImportServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobiImportServiceTests.swift; sourceTree = "<group>"; };
@@ -477,6 +480,14 @@
 			path = Library;
 			sourceTree = "<group>";
 		};
+		47BC63A07EB4D605511D8FAE /* Support */ = {
+			isa = PBXGroup;
+			children = (
+				FDA06802E566F4C1410712E3 /* SystemNotifier.swift */,
+			);
+			path = Support;
+			sourceTree = "<group>";
+		};
 		4B7FB85F60ED0A19711138F9 /* App */ = {
 			isa = PBXGroup;
 			children = (
@@ -576,6 +587,7 @@
 				4B7FB85F60ED0A19711138F9 /* App */,
 				85FAE4F71C8702C0BB905DEF /* Resources */,
 				D7DA8F7B33155B208F428C14 /* Stores */,
+				47BC63A07EB4D605511D8FAE /* Support */,
 				BF14474B68085C32ED73E167 /* Views */,
 			);
 			path = BookManager;
@@ -596,6 +608,7 @@
 			isa = PBXGroup;
 			children = (
 				41072F487657188BF5DB4B30 /* ByteOrder.swift */,
+				A2DBD436B47EECB7CFF8A362 /* LICENSE */,
 				FE4164771CE7921402C06C82 /* MTPCodes.swift */,
 				EA32B3E44727713FDCD07D6C /* MTPContainer.swift */,
 				5A671BE6DF62BDC3C4B47EC0 /* MTPDataTypes.swift */,
@@ -1132,6 +1145,7 @@
 				D0C63273D9B67978CDAD0909 /* MetadataReviewSheet.swift in Sources */,
 				7D7CCE30B141C2FF6B84FBA6 /* SendReportView.swift in Sources */,
 				F2598A85042DDF22B167FD18 /* SidebarView.swift in Sources */,
+				9E427691A87BAE765BCE38E9 /* SystemNotifier.swift in Sources */,
 				D62398DF22CF74C237F60AED /* ThumbnailCache.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
