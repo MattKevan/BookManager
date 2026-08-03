@@ -169,7 +169,13 @@ struct ContentView: View {
                 }
             }
         }
-        .inspector(isPresented: $session.inspectorPresented) {
+        // The inspector shows LIBRARY book metadata; the device view has no
+        // inspector detail, so suppress it while a device is selected (a stale
+        // library book must never appear alongside a device-book selection).
+        .inspector(isPresented: Binding(
+            get: { session.inspectorPresented && session.selectedDeviceID == nil },
+            set: { session.inspectorPresented = $0 }
+        )) {
             BookInspectorView(session: session)
         }
         .toolbar {
@@ -197,22 +203,28 @@ struct ContentView: View {
                     Label("Edit Metadata", systemImage: "pencil")
                 }
                 .disabled(session.isLibraryUnavailable || session.selection.count != 1)
-                Button {
-                    session.inspectorPresented.toggle()
-                } label: {
-                    Label("Inspector", systemImage: "sidebar.trailing")
+                if session.selectedDeviceID == nil {
+                    Button {
+                        session.inspectorPresented.toggle()
+                    } label: {
+                        Label("Inspector", systemImage: "sidebar.trailing")
+                    }
+                    .help("Show or hide the inspector")
                 }
-                .help("Show or hide the inspector")
-                Picker("View", selection: $session.viewMode) {
-                    Image(systemName: "list.bullet")
-                        .accessibilityLabel("Table")
-                        .tag(LibrarySession.ViewMode.table)
-                    Image(systemName: "square.grid.2x2")
-                        .accessibilityLabel("Cover grid")
-                        .tag(LibrarySession.ViewMode.grid)
+                // The Table/Grid picker only affects the library browser; the
+                // device view is table-only, so hide it in device mode.
+                if session.selectedDeviceID == nil {
+                    Picker("View", selection: $session.viewMode) {
+                        Image(systemName: "list.bullet")
+                            .accessibilityLabel("Table")
+                            .tag(LibrarySession.ViewMode.table)
+                        Image(systemName: "square.grid.2x2")
+                            .accessibilityLabel("Cover grid")
+                            .tag(LibrarySession.ViewMode.grid)
+                    }
+                    .pickerStyle(.segmented)
+                    .help("Table or cover grid")
                 }
-                .pickerStyle(.segmented)
-                .help("Table or cover grid")
                 if session.devices.devices.isEmpty {
                     EmptyView()
                 } else if let device = session.devices.devices.first, session.devices.devices.count == 1 {

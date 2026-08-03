@@ -77,8 +77,18 @@ struct DeviceBooksView: View {
             ToolbarItemGroup {
                 Button("Import Selected") { importSelected() }
                     .disabled(selection.isEmpty || session.devices.isListing || isImportingOrConverting)
+                    .help(
+                        selection.isEmpty
+                            ? "Select a book on the device to import it into the library"
+                            : "Import the selected book(s) into the library"
+                    )
                 Button("Import All") { importAll() }
                     .disabled(session.devices.deviceBooks.isEmpty || isImportingOrConverting)
+                    .help(
+                        session.devices.deviceBooks.isEmpty
+                            ? "No books on the device to import"
+                            : "Import every book on the device into the library"
+                    )
                 Button {
                     if let id = session.selectedDeviceID { Task { await session.devices.refreshBooks() } }
                 } label: { Label("Refresh", systemImage: "arrow.clockwise") }
