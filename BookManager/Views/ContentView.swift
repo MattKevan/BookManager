@@ -23,6 +23,7 @@ struct ContentView: View {
     @State private var showImportReport = false
     @State private var showDiagnostics = false
     @State private var showCalibreImport = false
+    @State private var showActivityPopover = false
     @FocusState private var searchFocused: Bool
 
     var body: some View {
@@ -260,6 +261,18 @@ struct ContentView: View {
                     }
                     .disabled(session.selection.isEmpty)
                 }
+                if !session.devices.devices.isEmpty {
+                    Button {
+                        showActivityPopover.toggle()
+                    } label: {
+                        activityToolbarLabel
+                            .frame(width: 22, height: 22)
+                    }
+                    .help("Device activity")
+                    .popover(isPresented: $showActivityPopover, arrowEdge: .bottom) {
+                        DeviceActivityPopover(session: session)
+                    }
+                }
                 Button {
                     showDiagnostics = true
                 } label: {
@@ -298,6 +311,30 @@ struct ContentView: View {
                 }
                 .help("Import a copy of an existing Calibre library")
             }
+        }
+    }
+
+    /// Toolbar label for device activity: a determinate circular ring while a
+    /// sized operation (import download) runs, an indeterminate spinner for
+    /// unsized operations, an error badge when a device error is pending, and
+    /// the plain drive icon when idle. Fixed 22x22 frame (applied at the call
+    /// site) keeps the toolbar from jumping between states.
+    @ViewBuilder
+    private var activityToolbarLabel: some View {
+        if let activity = session.devices.currentActivity {
+            if let progress = activity.progress {
+                Circle()
+                    .trim(from: 0, to: max(0.02, progress))
+                    .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+            } else {
+                ProgressView()
+                    .controlSize(.small)
+            }
+        } else if session.devices.deviceError != nil {
+            Image(systemName: "externaldrive.badge.exclamationmark")
+        } else {
+            Image(systemName: "externaldrive")
         }
     }
 
@@ -349,6 +386,75 @@ struct ContentView: View {
         if let id = session.selection.first,
            let book = session.books.first(where: { $0.id == id }) {
             session.inspectorBook = book
+        }
+    }
+}
+
+/// Toolbar popover showing device connection status, the current queue
+/// operation (with detail and progress), and the queued backlog — the
+/// Safari-Downloads style activity surface. Activity is secondary chrome in
+/// the toolbar; the main content view stays stable.
+private struct DeviceActivityPopover: View {
+    @Bindable var session: LibrarySession
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Image(systemName: session.devices.deviceError != nil
+                    ? "exclamationmark.triangle"
+                    : "externaldrive")
+                    .foregroundStyle(session.devices.deviceError != nil ? .orange : .secondary)
+                Text(session.devices.connectionStatus)
+                    .lineLimit(1)
+            }
+            .font(.headline)
+            if let activity = session.devices.currentActivity {
+                activityRow(activity)
+            }
+            if session.devices.pendingCount > 0 {
+                Divider()
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Queued (\(session.devices.pendingCount))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    ForEach(Array(session.devices.pendingTitles.enumerated()), id: \.offset) { _, title in
+                        HStack(spacing: 6) {
+                            ProgressView()
+                                .controlSize(.mini)
+                            Text(title)
+                        }
+                        .font(.caption)
+                    }
+                }
+            }
+            Divider()
+            HStack {
+                Spacer()
+                Button("Done") { dismiss() }
+            }
+        }
+        .padding(14)
+        .frame(minWidth: 300)
+    }
+
+    private func activityRow(_ activity: DeviceActivity) -> some View {
+        HStack(spacing: 8) {
+            if let progress = activity.progress {
+                ProgressView(value: progress)
+                    .frame(width: 90)
+            } else {
+                ProgressView()
+                    .controlSize(.small)
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(activity.title)
+                if let detail = activity.detail {
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
         }
     }
 }

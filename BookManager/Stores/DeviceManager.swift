@@ -68,6 +68,10 @@ final class DeviceManager {
     private(set) var currentActivity: DeviceActivity?
     /// How many operations are queued behind the current one.
     private(set) var pendingCount = 0
+    /// The titles of queued operations, in FIFO order (for the activity
+    /// popover's queued list). Kept as a stored property so the popover's
+    /// observation updates when the backlog changes.
+    private(set) var pendingTitles: [String] = []
 
     /// True when the queue is non-empty (current op running or ops queued).
     var isBusy: Bool { currentActivity != nil || pendingCount > 0 }
@@ -107,6 +111,7 @@ final class DeviceManager {
                 resume: { continuation.resume() }
             ))
             pendingCount = pendingOps.count
+            pendingTitles = pendingOps.map(\.title)
             Task { @MainActor in await self.drainQueue() }
         }
     }
@@ -116,6 +121,7 @@ final class DeviceManager {
         isProcessingOp = true
         let op = pendingOps.removeFirst()
         pendingCount = pendingOps.count
+        pendingTitles = pendingOps.map(\.title)
         currentActivity = DeviceActivity(
             id: UUID(), title: op.title, detail: nil, progress: nil, kind: op.kind
         )
@@ -260,7 +266,7 @@ final class DeviceManager {
             }
             do {
                 let transport = try factory.makeTransport(for: info)
-                let connected = try await transport.connect()
+                let connected = try await connectWithRetry(transport)
                 guard let profile = registry.resolve(connected) else { continue }
                 kept.append(ConnectedDevice(
                     id: UUID(), name: connected.name, info: connected,
@@ -281,6 +287,34 @@ final class DeviceManager {
             selectedDeviceID = nil
             deviceBooks = []
         }
+    }
+
+    /// Opens the transport's MTP session with bounded retries. libmtp open
+    /// failures (e.g. the "LIBMTP PANIC: Unable to find interface & endpoints
+    /// of device" class) are documented as intermittent — interface contention
+    /// from other apps or the Image Capture daemon (icdd) is transient — and
+    /// usually clear on a fresh attempt, so retry a few times with short
+    /// backoff before giving up on the candidate. Never reaches already-
+    /// connected devices: the reuse-by-info path above returns first, so this
+    /// only ever opens genuinely new (or freshly re-enumerated) sessions.
+    private func connectWithRetry(_ transport: any DeviceTransport) async throws -> DeviceInfo {
+        var lastError: (any Error)?
+        for delay in [
+            Duration.milliseconds(500),
+            Duration.milliseconds(1000),
+            Duration.milliseconds(2000)
+        ] {
+            do {
+                return try await transport.connect()
+            } catch {
+                lastError = error
+                // Swallow sleep cancellation: if the scan is being torn down a
+                // final attempt is harmless, and never bubbling up keeps the
+                // per-candidate isolation intact.
+                try? await Task.sleep(for: delay)
+            }
+        }
+        throw lastError ?? DeviceManagerError.connectFailed
     }
 
     /// Detection loop: re-scans the bus every 10s so the sidebar reflects
@@ -481,6 +515,10 @@ final class DeviceManager {
             }
         }
         return didConvert
+    }
+
+    enum DeviceManagerError: Error {
+        case connectFailed
     }
 
     func eject(_ id: UUID) async {

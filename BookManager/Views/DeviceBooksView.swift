@@ -3,8 +3,9 @@ import SwiftUI
 
 /// Browser for a connected device's books: table with DRM badges, Import
 /// Selected/All (through the existing library import pipeline), Refresh, and
-/// Eject. A status strip along the bottom shows the connection status and the
-/// serial activity queue (current operation + queued count). `onImported`
+/// Eject. The main content is a stable table / empty / error state — activity
+/// (connection status, current operation, queued backlog) lives in the
+/// toolbar activity popover (ContentView), never over the content. `onImported`
 /// lets the host flip its import-report sheet after a device import completes.
 struct DeviceBooksView: View {
     @Bindable var session: LibrarySession
@@ -93,63 +94,6 @@ struct DeviceBooksView: View {
                 .disabled(session.devices.isBusy)
             }
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            // Status strip: hidden when idle and connected (no noise). Visible
-            // while the queue is busy or a device error is pending.
-            if session.devices.isBusy || session.devices.deviceError != nil {
-                statusStrip
-            }
-        }
-    }
-
-    // MARK: - Status strip
-
-    private var statusStrip: some View {
-        HStack(spacing: 10) {
-            connectionStatusView
-            if let activity = session.devices.currentActivity {
-                Divider()
-                activityView(activity)
-            }
-            if session.devices.pendingCount > 0 {
-                Text("+\(session.devices.pendingCount) queued")
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-        }
-        .font(.caption)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(.bar)
-    }
-
-    private var connectionStatusView: some View {
-        HStack(spacing: 6) {
-            Image(systemName: session.devices.deviceError != nil
-                ? "exclamationmark.triangle"
-                : "externaldrive")
-                .foregroundStyle(session.devices.deviceError != nil ? .orange : .secondary)
-            Text(session.devices.connectionStatus)
-                .lineLimit(1)
-        }
-    }
-
-    private func activityView(_ activity: DeviceActivity) -> some View {
-        HStack(spacing: 6) {
-            if let progress = activity.progress {
-                ProgressView(value: progress)
-                    .frame(width: 80)
-            } else {
-                ProgressView()
-                    .controlSize(.small)
-            }
-            Text(activity.title)
-            if let detail = activity.detail {
-                Text(detail)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-        }
     }
 
     // MARK: - Import
@@ -158,8 +102,9 @@ struct DeviceBooksView: View {
         guard !files.isEmpty else { return }
         Task {
             // The download + conversion phases run as ONE queued device
-            // operation; the status strip shows "Importing books…" with
-            // per-book progress, then "Converting to library format…".
+            // operation; the toolbar activity popover shows "Importing
+            // books…" with per-book progress, then "Converting to library
+            // format…".
             let converted = await session.devices.importBooks(files) { urls in
                 await session.importFiles(urls: urls)
             }
