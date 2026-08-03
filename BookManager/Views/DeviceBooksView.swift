@@ -34,8 +34,15 @@ struct DeviceBooksView: View {
                 Table(session.devices.deviceBooks, selection: $selection) {
                     TableColumn("Title") { record in
                         HStack(spacing: 6) {
-                            if record.isDRM { Image(systemName: "lock").foregroundStyle(.secondary) }
+                            if record.isEnriched && record.isDRM {
+                                Image(systemName: "lock").foregroundStyle(.secondary)
+                            }
                             Text(record.title)
+                            if !record.isEnriched && selection.contains(record.id) {
+                                ProgressView()
+                                    .controlSize(.small)
+                                    .help("Fetching book details…")
+                            }
                             if record.format == "KFX" {
                                 Text("unsupported").font(.caption).foregroundStyle(.orange)
                             }
@@ -50,6 +57,15 @@ struct DeviceBooksView: View {
             }
         }
         .navigationTitle(session.devices.devices.first { $0.id == session.selectedDeviceID }?.name ?? "Device")
+        .onChange(of: selection) { _, newSelection in
+            // Lazy detail: fetching metadata downloads the file (~24s per book
+            // on the Kindle), so enrich only the selected row, never the whole
+            // list. The spinner in the row stays until isEnriched flips.
+            guard let first = newSelection.first,
+                  let record = session.devices.deviceBooks.first(where: { $0.id == first }),
+                  !record.isEnriched else { return }
+            Task { await session.devices.enrich(record) }
+        }
         .toolbar {
             ToolbarItemGroup {
                 Button("Import Selected") { importSelected() }

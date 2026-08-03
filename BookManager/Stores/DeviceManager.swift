@@ -65,9 +65,20 @@ final class DeviceManager {
     /// Per-candidate error isolation: a candidate that fails to connect (e.g.
     /// mid re-enumeration) is skipped, never aborting the whole scan.
     func scanForDevices() async {
+        // Serialize scans: `isScanning` is set synchronously before any await,
+        // so a second call (activation scan + user refresh) returns immediately
+        // instead of opening a second MTP session.
+        guard !isScanning else { return }
         isScanning = true
         defer { isScanning = false }
         deviceError = nil
+        // Release every held session before opening fresh ones: libmtp/libusb
+        // allows one interface claim per process, so a stale session would make
+        // the fresh connect fail with "USB connection failed".
+        for old in devices {
+            try? await old.transport.disconnect()
+        }
+        devices = []
         let candidates = (try? await factory.candidates()) ?? []
         var fresh: [ConnectedDevice] = []
         for info in candidates {
@@ -109,12 +120,14 @@ final class DeviceManager {
         defer { isListing = false }
         do {
             deviceBooks = try await DeviceBookScanner(transport: device.transport)
-                .scan(in: device.profile.bookFolder)
+                .list(in: device.profile.bookFolder)
         } catch {
             // The Kindle re-enumerates on the USB bus; a session opened during
             // an earlier scan can go stale between the scan and the click, so
-            // the listing fails with a connection error. Retry once through a
-            // fresh scan (fresh transport + connect), then surface the error.
+            // the listing fails with a connection error. Release the stale
+            // session (one interface claim per process), re-detect with a
+            // fresh connection, and retry once before surfacing the error.
+            try? await device.transport.disconnect()
             let info = device.info
             await scanForDevices()
             guard let fresh = devices.first(where: { $0.info == info }) else {
@@ -124,12 +137,36 @@ final class DeviceManager {
             selectedDeviceID = fresh.id
             do {
                 deviceBooks = try await DeviceBookScanner(transport: fresh.transport)
-                    .scan(in: fresh.profile.bookFolder)
+                    .list(in: fresh.profile.bookFolder)
                 deviceError = nil
             } catch {
                 deviceError = error.localizedDescription
             }
         }
+    }
+
+    /// Lazily fetches full metadata (real title/authors/DRM flag) for one book
+    /// by downloading + parsing it, replacing the record in place. Browse shows
+    /// the fast filename list; this runs only for the user-selected row (each
+    /// MTP op on the Kindle costs ~24s, so the full-pass alternative takes
+    /// ~71 minutes for a 178-book device). On failure, degrades to the
+    /// filename-only record marked enriched so the UI stops retrying.
+    func enrich(_ record: DeviceBookRecord) async {
+        guard let id = selectedDeviceID,
+              let device = devices.first(where: { $0.id == id }),
+              !record.isEnriched else { return }
+        guard let index = deviceBooks.firstIndex(where: { $0.id == record.id }) else { return }
+        let result: DeviceBookRecord
+        if let enriched = try? await DeviceBookScanner(transport: device.transport)
+            .enrich(record) {
+            result = enriched
+        } else {
+            result = DeviceBookRecord(
+                file: record.file, title: record.title, authors: [],
+                format: record.format, isDRM: false, isEnriched: true
+            )
+        }
+        deviceBooks[index] = result
     }
 
     /// Downloads the given device files into a fresh temp directory and
