@@ -449,10 +449,15 @@ final class DeviceManager {
     /// download phase ("Book N of M") and the conversion phase, and no other
     /// device operation can interleave. On download failure the error surfaces
     /// on the device screen.
+    /// Returns `true` only when the convert phase actually ran (downloads
+    /// succeeded AND `convert` was invoked). `false` when the download failed
+    /// or the selected device vanished before the op started — callers must
+    /// not present an import report in those cases.
     func importBooks(
         _ files: [DeviceFile],
         then convert: @escaping @MainActor ([URL]) async -> Void
-    ) async {
+    ) async -> Bool {
+        var didConvert = false
         await enqueue("Importing books…", kind: .importBooks) { [weak self] in
             guard let self, let device = self.selectedDevice else { return }
             let directory = FileManager.default.temporaryDirectory
@@ -470,10 +475,12 @@ final class DeviceManager {
                 self.currentActivity?.detail = "Converting to library format…"
                 self.currentActivity?.progress = nil
                 await convert(urls)
+                didConvert = true
             } catch {
                 self.deviceError = error.localizedDescription
             }
         }
+        return didConvert
     }
 
     func eject(_ id: UUID) async {

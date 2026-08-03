@@ -160,10 +160,13 @@ struct DeviceBooksView: View {
             // The download + conversion phases run as ONE queued device
             // operation; the status strip shows "Importing books…" with
             // per-book progress, then "Converting to library format…".
-            await session.devices.importBooks(files) { urls in
+            let converted = await session.devices.importBooks(files) { urls in
                 await session.importFiles(urls: urls)
             }
-            onImported()
+            // Only flip the host's import-report sheet when conversion actually
+            // ran; a failed download surfaces via the device error, not a blank
+            // or stale report.
+            if converted { onImported() }
         }
     }
 
