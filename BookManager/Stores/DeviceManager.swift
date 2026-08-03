@@ -57,37 +57,38 @@ final class DeviceManager {
         sendReportPresented = true
     }
 
-    /// Re-enumerates the USB bus, keeps devices the registry still resolves,
-    /// connects new ones, and drops ones that vanished. Clears the selection
-    /// if the selected device is gone.
+    /// Re-enumerates the USB bus and opens a FRESH connection for every
+    /// candidate the registry resolves. Connections are never reused across
+    /// scans: the Kindle re-enumerates on the USB bus, so a session opened by
+    /// an earlier scan can go stale (listing then fails with a connection
+    /// error) — a fresh connect on each scan is the self-healing path.
+    /// Per-candidate error isolation: a candidate that fails to connect (e.g.
+    /// mid re-enumeration) is skipped, never aborting the whole scan.
     func scanForDevices() async {
         isScanning = true
         defer { isScanning = false }
         deviceError = nil
-        do {
-            let candidates = try await factory.candidates()
-            var fresh: [ConnectedDevice] = []
-            for info in candidates {
-                guard registry.resolve(info) != nil else { continue }
-                if let existing = devices.first(where: { $0.info == info }) {
-                    fresh.append(existing)
-                } else {
-                    let transport = try factory.makeTransport(for: info)
-                    let connected = try await transport.connect()
-                    guard let profile = registry.resolve(connected) else { continue }
-                    fresh.append(ConnectedDevice(
-                        id: UUID(), name: connected.name, info: connected,
-                        profile: profile, transport: transport
-                    ))
-                }
+        let candidates = (try? await factory.candidates()) ?? []
+        var fresh: [ConnectedDevice] = []
+        for info in candidates {
+            guard registry.resolve(info) != nil else { continue }
+            do {
+                let transport = try factory.makeTransport(for: info)
+                let connected = try await transport.connect()
+                guard let profile = registry.resolve(connected) else { continue }
+                fresh.append(ConnectedDevice(
+                    id: UUID(), name: connected.name, info: connected,
+                    profile: profile, transport: transport
+                ))
+            } catch {
+                // Device unreachable at this instant — skip it, keep scanning.
+                continue
             }
-            devices = fresh
-            if let selected = selectedDeviceID, !devices.contains(where: { $0.id == selected }) {
-                selectedDeviceID = nil
-                deviceBooks = []
-            }
-        } catch {
-            deviceError = error.localizedDescription
+        }
+        devices = fresh
+        if let selected = selectedDeviceID, !devices.contains(where: { $0.id == selected }) {
+            selectedDeviceID = nil
+            deviceBooks = []
         }
     }
 
@@ -110,7 +111,24 @@ final class DeviceManager {
             deviceBooks = try await DeviceBookScanner(transport: device.transport)
                 .scan(in: device.profile.bookFolder)
         } catch {
-            deviceError = error.localizedDescription
+            // The Kindle re-enumerates on the USB bus; a session opened during
+            // an earlier scan can go stale between the scan and the click, so
+            // the listing fails with a connection error. Retry once through a
+            // fresh scan (fresh transport + connect), then surface the error.
+            let info = device.info
+            await scanForDevices()
+            guard let fresh = devices.first(where: { $0.info == info }) else {
+                deviceError = "Device disconnected — try scanning again"
+                return
+            }
+            selectedDeviceID = fresh.id
+            do {
+                deviceBooks = try await DeviceBookScanner(transport: fresh.transport)
+                    .scan(in: fresh.profile.bookFolder)
+                deviceError = nil
+            } catch {
+                deviceError = error.localizedDescription
+            }
         }
     }
 
