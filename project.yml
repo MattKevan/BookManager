@@ -27,7 +27,7 @@ packages:
     exactVersion: 0.12.0
   MTPKit:
     url: https://github.com/5j54d93/MTPKit.git
-    from: 0.1.4
+    exactVersion: 0.1.4
 
 settings:
   base:

@@ -59,12 +59,18 @@ public actor MTPKitTransport: DeviceTransport {
             let vendorMatches = requested.vendorID.map { $0 == info.vendorID } ?? true
             let productMatches = requested.productID.map { $0 == info.productID } ?? true
             guard vendorMatches && productMatches else {
+                // MTPKit has no deinit: its event-reader thread holds the
+                // session and the USB interface stays claimed until close()
+                // — leaking it here would make every later connect() fail
+                // with interface-in-use.
+                await found.close()
                 throw MTPTransportError.deviceNotFound
             }
         }
         do {
             _ = try await found.storages()
         } catch {
+            await found.close()
             throw MTPTransportError.operationFailed(Self.message(error))
         }
         device = found
