@@ -133,7 +133,7 @@ final class DeviceManager {
     }
 
     private let registry = DeviceRegistry()
-    private let factory = MTPTransportFactory()
+    private let factory = MTPKitTransportFactory()
     /// Background detection tick (started lazily from the first scan): keeps
     /// the sidebar honest as devices arrive/leave. Session-innocent under the
     /// reuse model — it never disconnects or reconnects anything.
@@ -221,15 +221,16 @@ final class DeviceManager {
     }
 
     /// Re-enumerates the USB bus and keeps ONE held session per connected
-    /// device — sessions are never churned. libmtp's documented model is to
-    /// hold a device session until unplug (devices can hang after disconnect
-    /// and require a replug), so a candidate whose `info` already matches a
-    /// connected device is reused as-is: no disconnect, no reconnect, no new
-    /// session. Only genuinely new devices get a fresh connect; devices no
-    /// longer on the bus are released and removed. Per-candidate isolation: a
-    /// candidate that fails to connect (e.g. mid re-enumeration) is skipped,
-    /// never aborting the whole scan. Stale sessions self-heal via the
-    /// failure-triggered reconnect in `refreshBooks`, not via scan churn.
+    /// device — sessions are never churned. The MTP model is to hold a device
+    /// session until unplug (some devices can hang after disconnect and
+    /// require a replug — libmtp documented this caveat), so a candidate whose
+    /// `info` already matches a connected device is reused as-is: no
+    /// disconnect, no reconnect, no new session. Only genuinely new devices
+    /// get a fresh connect; devices no longer on the bus are released and
+    /// removed. Per-candidate isolation: a candidate that fails to connect
+    /// (e.g. mid re-enumeration) is skipped, never aborting the whole scan.
+    /// Stale sessions self-heal via the failure-triggered reconnect in
+    /// `refreshBooks`, not via scan churn.
     func scanForDevices() async {
         await enqueue("Scanning for devices…", kind: .scan) { [weak self] in
             await self?.performScan()
@@ -255,7 +256,7 @@ final class DeviceManager {
         isScanning = true
         defer { isScanning = false }
         deviceError = nil
-        let candidates = (try? await factory.candidates()) ?? []
+        let candidates = await factory.candidates()
         var kept: [ConnectedDevice] = []
         for info in candidates {
             guard registry.resolve(info) != nil else { continue }
@@ -289,14 +290,15 @@ final class DeviceManager {
         }
     }
 
-    /// Opens the transport's MTP session with bounded retries. libmtp open
-    /// failures (e.g. the "LIBMTP PANIC: Unable to find interface & endpoints
-    /// of device" class) are documented as intermittent — interface contention
-    /// from other apps or the Image Capture daemon (icdd) is transient — and
-    /// usually clear on a fresh attempt, so retry a few times with short
-    /// backoff before giving up on the candidate. Never reaches already-
-    /// connected devices: the reuse-by-info path above returns first, so this
-    /// only ever opens genuinely new (or freshly re-enumerated) sessions.
+    /// Opens the transport's MTP session with bounded retries. MTP open
+    /// failures from interface contention (another app, or the Image Capture
+    /// daemon (icdd), holding the interface — libmtp's "LIBMTP PANIC: Unable
+    /// to find interface & endpoints of device" class) are documented as
+    /// transient and usually clear on a fresh attempt, so retry a few times
+    /// with short backoff before giving up on the candidate. Never reaches
+    /// already-connected devices: the reuse-by-info path above returns first,
+    /// so this only ever opens genuinely new (or freshly re-enumerated)
+    /// sessions.
     private func connectWithRetry(_ transport: any DeviceTransport) async throws -> DeviceInfo {
         var lastError: (any Error)?
         for delay in [

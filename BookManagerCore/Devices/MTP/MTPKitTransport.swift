@@ -4,12 +4,10 @@ import MTPKit
 /// Discovers MTP devices and builds `MTPKitTransport` instances backed by
 /// MTPKit (pure Swift, native IOUSBHost — no libusb, no libmtp).
 ///
-/// The app currently stays on the libmtp backend (`MTPTransportFactory`); this
-/// factory exists so the MTPKit backend can be A/B-tested on hardware behind
-/// the same `DeviceTransport` protocol (libmtp/libusb is fragile on macOS —
-/// "USBInterfaceOpen: another process" and intermittent
-/// "Unable to find interface & endpoints of device" PANICs — while MTPKit
-/// speaks MTP directly over IOUSBHost).
+/// The app's default backend (libmtp/libusb was dropped — it is fragile on
+/// macOS: "USBInterfaceOpen: another process" and "Unable to find interface
+/// & endpoints of device" PANICs; MTPKit speaks MTP directly over IOUSBHost
+/// and was measured ~10x faster with stable sessions on the Kindle).
 public struct MTPKitTransportFactory: Sendable {
     public init() {}
 

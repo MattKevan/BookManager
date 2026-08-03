@@ -10,7 +10,6 @@
 		00533F7C898020A76C4C2B97 /* libmobi in Frameworks */ = {isa = PBXBuildFile; productRef = A3B7696ECD66EDD998821F5C /* libmobi */; };
 		019F7EC80783974F626D160C /* SyncState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FD4E85652ACB9A8051E10ED /* SyncState.swift */; };
 		0247EB090E6DFB171714915D /* SendPlanTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DF69781560F6A54FAD6CAA1 /* SendPlanTests.swift */; };
-		028AFE7DC025F5D5D081347A /* MTPTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = C905BCFF7A2420DAE51E33E6 /* MTPTransport.swift */; };
 		050B0C32F9422ED9DE8FBFB8 /* LibrarySession.swift in Sources */ = {isa = PBXBuildFile; fileRef = A230E717F0A049BE946E41FF /* LibrarySession.swift */; };
 		07351E5DB1A68205C5719835 /* SyncEventSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3182B6AF520D7EFC945903C /* SyncEventSource.swift */; };
 		082DEE0D492D2C77CC763261 /* ImportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAA97EB7CDB42EFE46F1706D /* ImportService.swift */; };
@@ -22,7 +21,6 @@
 		11C3140491DF9252BABB852C /* FormatConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FCD8104FD5D44DD32AA2AAB /* FormatConverter.swift */; };
 		15A2A1C2A92042F7CD15541D /* LibraryRootCapabilitiesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF714235D6DA039272631C7E /* LibraryRootCapabilitiesTests.swift */; };
 		161CF45F8B8E33B703A8170E /* DeviceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 439CAE5BC99FD34EB367DECE /* DeviceManager.swift */; };
-		165FF254C4D1D19E8ED6B468 /* MTPKit in Frameworks */ = {isa = PBXBuildFile; productRef = 2684F3D91C4B009F3E9D574C /* MTPKit */; };
 		1680E06ADD1A537B0869D47F /* Automerge in Frameworks */ = {isa = PBXBuildFile; productRef = E73D1BC292F51DC0789C0A2A /* Automerge */; };
 		183696E853097A577B690223 /* BookTableView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B299D92FE747584FDD46D395 /* BookTableView.swift */; };
 		18D5B7E4B72E772DE7362FBD /* CalibreRawPresenterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA927B479D52396761EE4A89 /* CalibreRawPresenterTests.swift */; };
@@ -42,7 +40,7 @@
 		3DDAFFF7CA4910DC6D42CFE1 /* LocalCatalogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BA162F96FEA4B520BEAED4B /* LocalCatalogTests.swift */; };
 		3E02ECDBF31FC3D2B102C6E2 /* CalibreModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 079C068688F6CB08D66D0E02 /* CalibreModels.swift */; };
 		3E0B4CA8C38FC8B5342116AC /* MetadataSourceProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03238F1DFA50DAF6674FEADF /* MetadataSourceProviding.swift */; };
-		3E6405355AA548594B3FE8CC /* SwiftMTPAsync in Frameworks */ = {isa = PBXBuildFile; productRef = 6DD7D77391BABA00A2C94561 /* SwiftMTPAsync */; };
+		3E6405355AA548594B3FE8CC /* MTPKit in Frameworks */ = {isa = PBXBuildFile; productRef = 2684F3D91C4B009F3E9D574C /* MTPKit */; };
 		3E8CB6221E500E8D0E2D83AF /* OpenLibrarySource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3946434A5738F2318D3DB0D6 /* OpenLibrarySource.swift */; };
 		3F72B39291984A1F8E406A53 /* PerformanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9849D0FE535CE38AD33777AD /* PerformanceTests.swift */; };
 		409E04ECB1ACF22D0BB109F8 /* HybridLogicalClock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 877A41E8DB9729E29518A7F2 /* HybridLogicalClock.swift */; };
@@ -56,6 +54,7 @@
 		4ACDD55DE290A18AF7204E1B /* LibraryBookmarkStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10C0171D18484766BD7A3C27 /* LibraryBookmarkStore.swift */; };
 		54DE3555646097AA3C44B87B /* DeviceSendService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14DB9A03220A653427F85867 /* DeviceSendService.swift */; };
 		56CDE45433D411226EA911D7 /* CalibreImportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D641BF004408EB3B9B77D94 /* CalibreImportService.swift */; };
+		59C5DAA00E6DA2A0AE77B9C0 /* MTPTransportError.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3DDD536D28427F9E1EC0AAA /* MTPTransportError.swift */; };
 		5FE5C12E6FC3F759C1CC34F4 /* MetadataMergePlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCEEC7381A553046ADC227C6 /* MetadataMergePlan.swift */; };
 		606B0D81546CCAE5CDA94706 /* LocalCatalogBatchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E84E5F580EC7EE78C56E7E93 /* LocalCatalogBatchTests.swift */; };
 		614F0F5C1822825B76C51004 /* LibraryLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEFDAE49CAE9FF70035E4F38 /* LibraryLayout.swift */; };
@@ -87,7 +86,6 @@
 		8EB7D97645D61A20D4C0F898 /* BookManagerCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = EA00130013634EE3D52C9CCF /* BookManagerCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		8FB7D9B5E54B66EAF28DA4E1 /* SendReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 800F16E7F8AF7EFF8A5FD0AB /* SendReport.swift */; };
 		9183F4EC121E5930C3EC68B5 /* BookManagerCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EFBA8EB5B9ADFEB3ACDE0B7 /* BookManagerCore.swift */; };
-		933282CEA75382DA278BDB0B /* MTPTransportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86DA2E7BBD3D46D48403B424 /* MTPTransportTests.swift */; };
 		94FD51FDFCCD95FA5C820D7B /* CalibreMetadataCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C46F7B45045AD369F5DC102 /* CalibreMetadataCache.swift */; };
 		9769ECB6981710022C7B217A /* ScaffoldTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D80E3D97EA38642A0D352DA /* ScaffoldTests.swift */; };
 		983C436D170FBDE137BDBE92 /* LibraryRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B087736BE54EC57981680458 /* LibraryRepositoryTests.swift */; };
@@ -244,6 +242,7 @@
 		62FDDA6D5AACAA7BB66B6919 /* LocalCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalCatalog.swift; sourceTree = "<group>"; };
 		63AD723FE46B91B5A9434459 /* BookManager.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BookManager.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		651CC44426DB5A06A9FAD739 /* MetadataRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataRegistry.swift; sourceTree = "<group>"; };
+		68D0DA1125E55C4FB6F83D07 /* MTPKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = MTPKit; path = Vendor/MTPKit; sourceTree = SOURCE_ROOT; };
 		6BA162F96FEA4B520BEAED4B /* LocalCatalogTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalCatalogTests.swift; sourceTree = "<group>"; };
 		73AA6C7CC5DA69B3AD083C22 /* BookValues.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookValues.swift; sourceTree = "<group>"; };
 		768C45F6FF1C77FFEA249DA5 /* ImportReportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportReportView.swift; sourceTree = "<group>"; };
@@ -258,7 +257,6 @@
 		84DE217284395F24110DEF8B /* MobiSmokeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobiSmokeTests.swift; sourceTree = "<group>"; };
 		85DFE90B2620F49E3523D712 /* CalibreRawPresenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalibreRawPresenter.swift; sourceTree = "<group>"; };
 		8633065E1E28A56C11EAF21A /* FolderReconcilerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderReconcilerTests.swift; sourceTree = "<group>"; };
-		86DA2E7BBD3D46D48403B424 /* MTPTransportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MTPTransportTests.swift; sourceTree = "<group>"; };
 		877A41E8DB9729E29518A7F2 /* HybridLogicalClock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HybridLogicalClock.swift; sourceTree = "<group>"; };
 		87B108E9D043C28A0ACA5B55 /* OpfGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpfGenerator.swift; sourceTree = "<group>"; };
 		8AB6243EDA7B5EAFD4AB27C9 /* DiagnosticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticsView.swift; sourceTree = "<group>"; };
@@ -290,10 +288,10 @@
 		BC6DB53650FE45D45A29B718 /* MTPKitTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MTPKitTransport.swift; sourceTree = "<group>"; };
 		BCEE9E484F2ACD21E4012F92 /* BookManagerCoreTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BookManagerCoreTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C3182B6AF520D7EFC945903C /* SyncEventSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncEventSource.swift; sourceTree = "<group>"; };
+		C3DDD536D28427F9E1EC0AAA /* MTPTransportError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MTPTransportError.swift; sourceTree = "<group>"; };
 		C3EB714E6E2C57690A730F94 /* BookFolder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookFolder.swift; sourceTree = "<group>"; };
 		C54B8B51C276C362152C6141 /* SendReportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendReportView.swift; sourceTree = "<group>"; };
 		C658484E2B3B70B7D3858968 /* ImportServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportServiceTests.swift; sourceTree = "<group>"; };
-		C905BCFF7A2420DAE51E33E6 /* MTPTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MTPTransport.swift; sourceTree = "<group>"; };
 		CA4DE265111712DFFE44F5CE /* LibraryStorageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryStorageTests.swift; sourceTree = "<group>"; };
 		CAA97EB7CDB42EFE46F1706D /* ImportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportService.swift; sourceTree = "<group>"; };
 		CD9A70512BF0E2BD885A0A06 /* LibraryMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryMonitor.swift; sourceTree = "<group>"; };
@@ -342,8 +340,7 @@
 				C0330A6A992BC0A8C6BFCC73 /* GRDB in Frameworks */,
 				A2B9362E46338E80EE4993CD /* ZIPFoundation in Frameworks */,
 				00533F7C898020A76C4C2B97 /* libmobi in Frameworks */,
-				3E6405355AA548594B3FE8CC /* SwiftMTPAsync in Frameworks */,
-				165FF254C4D1D19E8ED6B468 /* MTPKit in Frameworks */,
+				3E6405355AA548594B3FE8CC /* MTPKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -358,6 +355,14 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		08FF36F612368E071DA7F9F4 /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				68D0DA1125E55C4FB6F83D07 /* MTPKit */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
 		19592F55293CD526C10F3A9B /* Sync */ = {
 			isa = PBXGroup;
 			children = (
@@ -405,6 +410,7 @@
 				B8044857859E00D0D2BDC0A4 /* BookManagerCore */,
 				A8569F69402B86FD45315CED /* BookManagerCoreTests */,
 				75127D2EFD273BE02FDD5E33 /* BookManagerUITests */,
+				08FF36F612368E071DA7F9F4 /* Packages */,
 				D4969B27EA279A717E3FEA6F /* Products */,
 			);
 			sourceTree = "<group>";
@@ -429,7 +435,6 @@
 				567FF81984C0719EB7E11C99 /* DeviceServicesTests.swift */,
 				4540BF1FE4AA0CBEA1429A76 /* DeviceTransportTests.swift */,
 				B57FA284528C430E6501BA8F /* MockTransport.swift */,
-				86DA2E7BBD3D46D48403B424 /* MTPTransportTests.swift */,
 				3DF69781560F6A54FAD6CAA1 /* SendPlanTests.swift */,
 			);
 			path = Devices;
@@ -613,7 +618,7 @@
 			isa = PBXGroup;
 			children = (
 				BC6DB53650FE45D45A29B718 /* MTPKitTransport.swift */,
-				C905BCFF7A2420DAE51E33E6 /* MTPTransport.swift */,
+				C3DDD536D28427F9E1EC0AAA /* MTPTransportError.swift */,
 			);
 			path = MTP;
 			sourceTree = "<group>";
@@ -782,7 +787,6 @@
 				2F280E3BD3CAFCA30F17AC99 /* GRDB */,
 				1BE2846B48AD04727891E7C4 /* ZIPFoundation */,
 				A3B7696ECD66EDD998821F5C /* libmobi */,
-				6DD7D77391BABA00A2C94561 /* SwiftMTPAsync */,
 				2684F3D91C4B009F3E9D574C /* MTPKit */,
 			);
 			productName = BookManagerCore;
@@ -882,10 +886,9 @@
 			packageReferences = (
 				A0D7C7F521C2750001B7D268 /* XCRemoteSwiftPackageReference "automerge-swift" */,
 				B15CFCE30AD86161C178C8C3 /* XCRemoteSwiftPackageReference "GRDB.swift" */,
-				6BD31C5A21CB3CFB74E6A5DB /* XCRemoteSwiftPackageReference "MTPKit" */,
 				44635DEC287817240082396B /* XCRemoteSwiftPackageReference "ZIPFoundation" */,
 				CCA3476DA7C649DCF69BDF4C /* XCRemoteSwiftPackageReference "libmobi-swift" */,
-				59B87C0328B4918A7F6B0165 /* XCRemoteSwiftPackageReference "swift-mtp" */,
+				ADB06B752C820D8F3BB9A4A2 /* XCLocalSwiftPackageReference "Vendor/MTPKit" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D4969B27EA279A717E3FEA6F /* Products */;
@@ -961,7 +964,7 @@
 				CB4C2B0FABFAB738F11A1BAC /* LibraryRootCapabilities.swift in Sources */,
 				D71D91C038D0BB6C876154B5 /* LocalCatalog.swift in Sources */,
 				0C61A8ACB4491EADC288511E /* MTPKitTransport.swift in Sources */,
-				028AFE7DC025F5D5D081347A /* MTPTransport.swift in Sources */,
+				59C5DAA00E6DA2A0AE77B9C0 /* MTPTransportError.swift in Sources */,
 				089BEE925C9BEC5CAAF0D77A /* MetadataExtractor.swift in Sources */,
 				CC62884E91FC02938D5BD6FA /* MetadataLookupService.swift in Sources */,
 				5FE5C12E6FC3F759C1CC34F4 /* MetadataMergePlan.swift in Sources */,
@@ -1021,7 +1024,6 @@
 				3DDAFFF7CA4910DC6D42CFE1 /* LocalCatalogTests.swift in Sources */,
 				B867C92933B7AAAEABB6F6EC /* LocalCatalogV2Tests.swift in Sources */,
 				8790F01632265076BF031B97 /* LocalCatalogV3Tests.swift in Sources */,
-				933282CEA75382DA278BDB0B /* MTPTransportTests.swift in Sources */,
 				D5658B0F5AE2B7F1A4FE8AB2 /* MetadataExtractorTests.swift in Sources */,
 				220E43EBA7E61CCF0E79E4D6 /* MetadataLookupServiceTests.swift in Sources */,
 				08991F91CCEC88D2B617E8C4 /* MetadataMergePlanTests.swift in Sources */,
@@ -1416,6 +1418,13 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCLocalSwiftPackageReference section */
+		ADB06B752C820D8F3BB9A4A2 /* XCLocalSwiftPackageReference "Vendor/MTPKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Vendor/MTPKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
 /* Begin XCRemoteSwiftPackageReference section */
 		44635DEC287817240082396B /* XCRemoteSwiftPackageReference "ZIPFoundation" */ = {
 			isa = XCRemoteSwiftPackageReference;
@@ -1423,22 +1432,6 @@
 			requirement = {
 				kind = exactVersion;
 				version = 0.9.19;
-			};
-		};
-		59B87C0328B4918A7F6B0165 /* XCRemoteSwiftPackageReference "swift-mtp" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/CleanCocoa/swift-mtp.git";
-			requirement = {
-				kind = exactVersion;
-				version = 0.12.0;
-			};
-		};
-		6BD31C5A21CB3CFB74E6A5DB /* XCRemoteSwiftPackageReference "MTPKit" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/5j54d93/MTPKit.git";
-			requirement = {
-				kind = exactVersion;
-				version = 0.1.4;
 			};
 		};
 		A0D7C7F521C2750001B7D268 /* XCRemoteSwiftPackageReference "automerge-swift" */ = {
@@ -1475,7 +1468,6 @@
 		};
 		2684F3D91C4B009F3E9D574C /* MTPKit */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 6BD31C5A21CB3CFB74E6A5DB /* XCRemoteSwiftPackageReference "MTPKit" */;
 			productName = MTPKit;
 		};
 		2F280E3BD3CAFCA30F17AC99 /* GRDB */ = {
@@ -1487,11 +1479,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 44635DEC287817240082396B /* XCRemoteSwiftPackageReference "ZIPFoundation" */;
 			productName = ZIPFoundation;
-		};
-		6DD7D77391BABA00A2C94561 /* SwiftMTPAsync */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 59B87C0328B4918A7F6B0165 /* XCRemoteSwiftPackageReference "swift-mtp" */;
-			productName = SwiftMTPAsync;
 		};
 		770243B41284AFCA8EC2E14D /* GRDB */ = {
 			isa = XCSwiftPackageProductDependency;
