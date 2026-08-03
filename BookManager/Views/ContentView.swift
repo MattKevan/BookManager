@@ -53,6 +53,9 @@ struct ContentView: View {
             // availability and sync (drain the outbox, ingest changes made by
             // other Macs). The always-on monitor is 4b.
             Task { await session.reconnectIfNeeded() }
+            // Device support: rescan the USB bus on activation so a device
+            // plugged in while the app was inactive appears in the sidebar.
+            Task { await session.devices.scanForDevices() }
         }
         .onChange(of: session.selection) { _, newValue in
             if newValue.count == 1 && !session.isMarqueeSelecting {
@@ -147,8 +150,16 @@ struct ContentView: View {
             SidebarView(session: session)
                 .navigationTitle(session.repository?.root.lastPathComponent ?? "Library")
         } detail: {
-            browser
-                .navigationTitle(session.selectedFacet?.value ?? "All Books")
+            Group {
+                if session.selectedDeviceID != nil {
+                    DeviceBooksView(session: session) {
+                        showImportReport = true
+                    }
+                } else {
+                    browser
+                        .navigationTitle(session.selectedFacet?.value ?? "All Books")
+                }
+            }
         }
         .inspector(isPresented: $session.inspectorPresented) {
             BookInspectorView(session: session)

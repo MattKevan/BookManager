@@ -81,6 +81,22 @@ final class LibrarySession {
     private(set) var selectionAnchor: UUID?
     var selectedFacet: FacetSelection?
 
+    // Device support: the connected-device store and the sidebar selection
+    // bridging into it (selecting a device clears the library facet, and vice
+    // versa is handled by `selectFacet`).
+    let devices = DeviceManager()
+    var selectedDeviceID: UUID? {
+        get { devices.selectedDeviceID }
+        set { devices.selectedDeviceID = newValue }
+    }
+
+    /// Selects a device in the sidebar; choosing a device clears the library
+    /// facet so the detail area shows the device browser.
+    func selectDevice(_ id: UUID?) {
+        if id != nil { selectedFacet = nil }
+        selectedDeviceID = id
+    }
+
     private(set) var books: [IndexedBook] = []
     private(set) var authors: [(value: String, count: Int)] = []
     private(set) var series: [(value: String, count: Int)] = []

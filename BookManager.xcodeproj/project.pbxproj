@@ -20,6 +20,7 @@
 		112914843DEE19AF2ACA255E /* SendPlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = D97D5E795D3B6648EF62BB68 /* SendPlan.swift */; };
 		11C3140491DF9252BABB852C /* FormatConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FCD8104FD5D44DD32AA2AAB /* FormatConverter.swift */; };
 		15A2A1C2A92042F7CD15541D /* LibraryRootCapabilitiesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF714235D6DA039272631C7E /* LibraryRootCapabilitiesTests.swift */; };
+		161CF45F8B8E33B703A8170E /* DeviceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 439CAE5BC99FD34EB367DECE /* DeviceManager.swift */; };
 		1680E06ADD1A537B0869D47F /* Automerge in Frameworks */ = {isa = PBXBuildFile; productRef = E73D1BC292F51DC0789C0A2A /* Automerge */; };
 		183696E853097A577B690223 /* BookTableView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B299D92FE747584FDD46D395 /* BookTableView.swift */; };
 		18D5B7E4B72E772DE7362FBD /* CalibreRawPresenterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA927B479D52396761EE4A89 /* CalibreRawPresenterTests.swift */; };
@@ -31,6 +32,7 @@
 		25DDA9C20029305707541FC9 /* BookDocumentSchema.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37F9BBB1AC9D128C81F9BE1A /* BookDocumentSchema.swift */; };
 		2918DE3E2EF2ECDCCC9D71C3 /* fixture.mobi in Resources */ = {isa = PBXBuildFile; fileRef = FFDC0677C744390DB4F5CB35 /* fixture.mobi */; };
 		29EDCC6B877FC2870885AD1E /* MobiImportServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF7CB4109844BE855474503A /* MobiImportServiceTests.swift */; };
+		2AA7EAE05AE8D25B702E30CA /* DeviceBooksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7CBC51BD2A47AD934452F83 /* DeviceBooksView.swift */; };
 		2AF79754097A6BBA6AF9274A /* LibraryStorageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA4DE265111712DFFE44F5CE /* LibraryStorageTests.swift */; };
 		330F88F83159D6D8E5F2E908 /* CalibreReaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23170AE9E3BBE8D4759EC9A9 /* CalibreReaderTests.swift */; };
 		332A7B733BC508252826E4FF /* BookManagerCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EA00130013634EE3D52C9CCF /* BookManagerCore.framework */; };
@@ -220,6 +222,7 @@
 		3DF69781560F6A54FAD6CAA1 /* SendPlanTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendPlanTests.swift; sourceTree = "<group>"; };
 		40F349DC5B3BC95D5E3FC6D6 /* GridSelectionSemantics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GridSelectionSemantics.swift; sourceTree = "<group>"; };
 		41AE1CF600A8CDAC31E619E5 /* DeviceBookScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceBookScanner.swift; sourceTree = "<group>"; };
+		439CAE5BC99FD34EB367DECE /* DeviceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceManager.swift; sourceTree = "<group>"; };
 		43EA202AE9BDB7D5CA811756 /* DeviceRegistryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceRegistryTests.swift; sourceTree = "<group>"; };
 		4540BF1FE4AA0CBEA1429A76 /* DeviceTransportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceTransportTests.swift; sourceTree = "<group>"; };
 		4973027E235C62C6A61C0133 /* MetadataLookupServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataLookupServiceTests.swift; sourceTree = "<group>"; };
@@ -293,6 +296,7 @@
 		DEFD333EB0AA1DFF27C99321 /* LibraryMonitorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryMonitorTests.swift; sourceTree = "<group>"; };
 		DF714235D6DA039272631C7E /* LibraryRootCapabilitiesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryRootCapabilitiesTests.swift; sourceTree = "<group>"; };
 		E58E824C700C1F72F39EF611 /* MetadataExtractorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataExtractorTests.swift; sourceTree = "<group>"; };
+		E7CBC51BD2A47AD934452F83 /* DeviceBooksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceBooksView.swift; sourceTree = "<group>"; };
 		E828C0124F1B0E570B6BB023 /* OfflineBookEditTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineBookEditTests.swift; sourceTree = "<group>"; };
 		E84E5F580EC7EE78C56E7E93 /* LocalCatalogBatchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalCatalogBatchTests.swift; sourceTree = "<group>"; };
 		EA00130013634EE3D52C9CCF /* BookManagerCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = BookManagerCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -637,6 +641,7 @@
 				CE55CCEAE5F9B6D05CFCD1FD /* CalibreImportView.swift */,
 				A6E24C22DC0D497C119E3503 /* ContentView.swift */,
 				922F216A8DB77886FEE7AC6E /* CoverGridView.swift */,
+				E7CBC51BD2A47AD934452F83 /* DeviceBooksView.swift */,
 				8AB6243EDA7B5EAFD4AB27C9 /* DiagnosticsView.swift */,
 				768C45F6FF1C77FFEA249DA5 /* ImportReportView.swift */,
 				FE22DC7A79DA7703CE5EF160 /* LibraryWelcomeView.swift */,
@@ -679,6 +684,7 @@
 		D7DA8F7B33155B208F428C14 /* Stores */ = {
 			isa = PBXGroup;
 			children = (
+				439CAE5BC99FD34EB367DECE /* DeviceManager.swift */,
 				A230E717F0A049BE946E41FF /* LibrarySession.swift */,
 				B8F482AB5AA370AD5457130D /* ThumbnailCache.swift */,
 			);
@@ -1028,6 +1034,8 @@
 				FDF72C5AB371B8D58B183DA7 /* CalibreImportView.swift in Sources */,
 				43F6F8FC156FB2A7AFF5EB98 /* ContentView.swift in Sources */,
 				CD372D5D26ACA6955A952064 /* CoverGridView.swift in Sources */,
+				2AA7EAE05AE8D25B702E30CA /* DeviceBooksView.swift in Sources */,
+				161CF45F8B8E33B703A8170E /* DeviceManager.swift in Sources */,
 				D6C1B3B2C636694F81452B78 /* DiagnosticsView.swift in Sources */,
 				43CED18F41774E710AB5D0DF /* ImportReportView.swift in Sources */,
 				050B0C32F9422ED9DE8FBFB8 /* LibrarySession.swift in Sources */,
