@@ -30,3 +30,4 @@ The portable library's `.bookmanager/changes` directory is authoritative. SQLite
 2. **Management workflows** — implemented (this slice: import, metadata editing, search and facets, cover grid, external open, trash/restore, diagnostics)
 3. **Calibre migration** — implemented (this slice: import a copy of a Calibre library read-only, map full metadata, preserve custom columns and unsupported values, resumable import, report)
 4. **Multi-Mac hardening** — not started
+5. **Device support** — implemented (Kindle Paperwhite MTP: sidebar device, browse, import DRM-free, send native formats; modular DeviceTransport × DeviceProfile; FormatConverter seam for full conversion)
