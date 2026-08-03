@@ -6,3 +6,6 @@ xcuserdata/
 *.xcuserstate
 .pi-subagents/
 .superpowers/
+
+# SwiftPM local metadata inside vendored packages
+**/.swiftpm/
