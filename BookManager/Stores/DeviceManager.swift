@@ -31,6 +31,11 @@ final class DeviceManager {
     /// (and any stray scan) skips while set so the bus is never enumerated
     /// mid-transfer.
     private var isEnriching = false
+    /// True while an import (device-file download phase) is in flight; drives
+    /// the device-view progress banner.
+    private(set) var isImporting = false
+    /// Download-phase progress 0...1; nil when not importing.
+    private(set) var importProgress: Double?
     /// Last device-layer error (connection, listing, transfer, eject).
     /// Settable by views so import failures can surface on the device screen.
     var deviceError: String?
@@ -196,16 +201,27 @@ final class DeviceManager {
         // drops the connection (hardware-reproduced: clicking a book to enrich
         // downloaded it ~8s while the 10s tick fired, and the device reset).
         guard !isScanning, !isListing, !isTransferring, !isEnriching else { return }
+        // While a device is connected, never enumerate at all — the held
+        // session IS the device's presence proof (Calibre's model). Repeated
+        // idle enumeration disturbed the device and dropped the link ~30s
+        // after the app went idle, while a probe holding the session alone
+        // survived 120s+ idle with zero drops. Arrivals are still detected
+        // when nothing is connected (devices.isEmpty); removals while
+        // connected surface through the op-failure path in `refreshBooks`.
+        guard devices.isEmpty else { return }
         await scanForDevices()
     }
 
     func select(_ id: UUID?) async {
         // Re-selecting the same device keeps the current listing (MTP scans
-        // are slow); deselecting clears it without a scan.
+        // are slow). Deselecting KEEPS the listing cached in memory so
+        // returning to the device shows it instantly instead of re-reading
+        // the bus; the listing is only refreshed when there is none (first
+        // selection, or after the selected device vanished and reconnected —
+        // `scanForDevices` clears deviceBooks in that case).
         guard id != selectedDeviceID || deviceBooks.isEmpty else { return }
         selectedDeviceID = id
-        deviceBooks = []
-        if id != nil { await refreshBooks() }
+        if id != nil && deviceBooks.isEmpty { await refreshBooks() }
     }
 
     func refreshBooks() async {
@@ -307,18 +323,34 @@ final class DeviceManager {
     }
 
     /// Downloads the given device files into a fresh temp directory and
-    /// returns the local URLs for the import pipeline.
+    /// returns the local URLs for the import pipeline. The per-file loop is
+    /// inlined (rather than delegating to `DeviceImportService`) so the
+    /// progress banner can report book N of M; the core service remains for
+    /// tests and stays behaviorally identical.
     func download(_ files: [DeviceFile]) async throws -> [URL] {
         guard let id = selectedDeviceID,
               let device = devices.first(where: { $0.id == id }) else {
             throw DeviceManagerError.noDeviceSelected
         }
         isTransferring = true
-        defer { isTransferring = false }
+        isImporting = true
+        importProgress = files.isEmpty ? 1 : 0
+        defer {
+            isTransferring = false
+            isImporting = false
+            importProgress = nil
+        }
         let directory = FileManager.default.temporaryDirectory
             .appending(path: UUID().uuidString, directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        return try await DeviceImportService(transport: device.transport).download(files, to: directory)
+        var urls: [URL] = []
+        for (index, file) in files.enumerated() {
+            let destination = directory.appending(path: file.name)
+            try await device.transport.download(file, to: destination)
+            urls.append(destination)
+            importProgress = Double(index + 1) / Double(files.count)
+        }
+        return urls
     }
 
     func eject(_ id: UUID) async {

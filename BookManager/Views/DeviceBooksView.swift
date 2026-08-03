@@ -8,6 +8,13 @@ import SwiftUI
 struct DeviceBooksView: View {
     @Bindable var session: LibrarySession
     @State private var selection = Set<String>() // DeviceBookRecord ids
+    /// True while imported books convert through the library pipeline (after
+    /// the device download phase); drives the progress banner's conversion
+    /// message. Cleared when the import task finishes.
+    @State private var isConverting = false
+    /// Number of files in the current import — used to render
+    /// "Importing book N of M…" from `DeviceManager.importProgress`.
+    @State private var importTotal = 0
     var onImported: () -> Void = {}
 
     var body: some View {
@@ -69,9 +76,9 @@ struct DeviceBooksView: View {
         .toolbar {
             ToolbarItemGroup {
                 Button("Import Selected") { importSelected() }
-                    .disabled(selection.isEmpty || session.devices.isListing)
+                    .disabled(selection.isEmpty || session.devices.isListing || isImportingOrConverting)
                 Button("Import All") { importAll() }
-                    .disabled(session.devices.deviceBooks.isEmpty)
+                    .disabled(session.devices.deviceBooks.isEmpty || isImportingOrConverting)
                 Button {
                     if let id = session.selectedDeviceID { Task { await session.devices.refreshBooks() } }
                 } label: { Label("Refresh", systemImage: "arrow.clockwise") }
@@ -80,12 +87,47 @@ struct DeviceBooksView: View {
                 } label: { Label("Eject", systemImage: "eject") }
             }
         }
+        .overlay(alignment: .top) {
+            if isImportingOrConverting {
+                importBanner
+            }
+        }
+    }
+
+    private var isImportingOrConverting: Bool {
+        session.devices.isImporting || isConverting
+    }
+
+    private var importBanner: some View {
+        HStack(spacing: 8) {
+            ProgressView()
+                .controlSize(.small)
+            Text(importBannerText)
+            Spacer()
+        }
+        .padding(10)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+        .padding()
+    }
+
+    private var importBannerText: String {
+        if isConverting { return "Converting to library format…" }
+        guard let progress = session.devices.importProgress, importTotal > 0 else {
+            return "Importing…"
+        }
+        let done = min(Int((progress * Double(importTotal)).rounded()), importTotal)
+        return "Importing book \(done) of \(importTotal)…"
     }
 
     private func importFiles(_ files: [DeviceFile]) {
+        guard !files.isEmpty else { return }
         Task {
+            importTotal = files.count
+            isConverting = false
+            defer { isConverting = false }
             do {
                 let urls = try await session.devices.download(files)
+                isConverting = true
                 await session.importFiles(urls: urls)
                 onImported()
             } catch {
