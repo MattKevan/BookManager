@@ -157,6 +157,7 @@ public actor MTPTransport: DeviceTransport {
         session = nil
     }
 
+
     // MARK: - Helpers
 
     private func storages() async -> [Storage] {
@@ -172,7 +173,12 @@ public actor MTPTransport: DeviceTransport {
                 return (storage, resolved)
             }
             let root = (try? await storage.contents(of: .root)) ?? []
-            if let dir = root.first(where: { $0.isDirectory && $0.name == folder.path }) {
+            // Kindle exposes the book folder as lowercase "documents" at the
+            // storage root; compare case-insensitively against the canonical
+            // profile folder name ("Documents").
+            if let dir = root.first(where: {
+                $0.isDirectory && $0.name.caseInsensitiveCompare(folder.path) == .orderedSame
+            }) {
                 return (storage, dir)
             }
         }
@@ -187,7 +193,10 @@ public actor MTPTransport: DeviceTransport {
                 return (storage, resolved)
             }
         }
-        let containing = URL(fileURLWithPath: file.path).deletingLastPathComponent().path
+        // URL(fileURLWithPath:) prepends a leading slash ("Documents" →
+        // "/Documents") that never matches the device folder; NSString keeps
+        // the path relative so folderInfo can match it case-insensitively.
+        let containing = (file.path as NSString).deletingLastPathComponent
         if let (storage, dir) = try await folderInfo(DeviceFolder(path: containing)) {
             let children = (try? await storage.contents(of: dir.folder ?? .root)) ?? []
             if let match = children.first(where: { !$0.isDirectory && $0.name == file.name }) {
