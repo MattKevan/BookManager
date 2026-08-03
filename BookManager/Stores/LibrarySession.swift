@@ -91,10 +91,12 @@ final class LibrarySession {
     }
 
     /// Selects a device in the sidebar; choosing a device clears the library
-    /// facet so the detail area shows the device browser.
+    /// facet so the detail area shows the device browser. The actual state
+    /// transition (selection + book listing) happens in `DeviceManager.select`
+    /// so selecting a device immediately loads its books.
     func selectDevice(_ id: UUID?) {
         if id != nil { selectedFacet = nil }
-        selectedDeviceID = id
+        Task { await devices.select(id) }
     }
 
     private(set) var books: [IndexedBook] = []

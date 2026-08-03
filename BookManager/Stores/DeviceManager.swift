@@ -37,6 +37,7 @@ final class DeviceManager {
     func scanForDevices() async {
         isScanning = true
         defer { isScanning = false }
+        deviceError = nil
         do {
             let candidates = try await factory.candidates()
             var fresh: [ConnectedDevice] = []
@@ -65,6 +66,9 @@ final class DeviceManager {
     }
 
     func select(_ id: UUID?) async {
+        // Re-selecting the same device keeps the current listing (MTP scans
+        // are slow); deselecting clears it without a scan.
+        guard id != selectedDeviceID || deviceBooks.isEmpty else { return }
         selectedDeviceID = id
         deviceBooks = []
         if id != nil { await refreshBooks() }
@@ -73,6 +77,7 @@ final class DeviceManager {
     func refreshBooks() async {
         guard let id = selectedDeviceID,
               let device = devices.first(where: { $0.id == id }) else { return }
+        deviceError = nil
         isListing = true
         defer { isListing = false }
         do {
