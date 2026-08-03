@@ -68,7 +68,7 @@ targets:
         # App Nap suspends idle apps; for an app holding a USB/MTP session this
         # can let the host idle-suspend the device link (Kindle drops ~30s
         # after the last transfer). Opt out so the held session stays live.
-        INFOPLIST_KEY_NSAppNapDisabled: YES
+        INFOPLIST_KEY_NSAppSleepDisabled: YES
         INFOPLIST_KEY_LSApplicationCategoryType: >-
           public.app-category.productivity
     dependencies:

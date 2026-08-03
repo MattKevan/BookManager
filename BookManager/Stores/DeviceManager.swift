@@ -201,48 +201,17 @@ final class DeviceManager {
         // drops the connection (hardware-reproduced: clicking a book to enrich
         // downloaded it ~8s while the 10s tick fired, and the device reset).
         guard !isScanning, !isListing, !isTransferring, !isEnriching else { return }
+        // Calibre-exact idle model: with a device connected the tick does
+        // NOTHING — the held session is the connection's maintenance (a probe
+        // holding the session alone survived 120s+ idle, and idle enumeration
+        // dropped the link ~30s after the app went idle). There is no
+        // keepalive: swift-mtp's storages() is memory-cached (no USB traffic),
+        // so a "keepalive ping" was inert dead code. Drops surface on the next
+        // real operation via refreshBooks' failure-retry + the error state.
         if devices.isEmpty {
             // No connected device: enumerate to detect arrivals. Safe — nothing
             // is claimed, so nothing can be disturbed.
             await scanForDevices()
-            return
-        }
-        // Connected device: NEVER enumerate (the held session IS the presence
-        // proof — Calibre's model; idle enumeration dropped the link ~30s
-        // after the app went idle, while a probe holding the session alone
-        // survived 120s+ idle). Instead run a cheap keepalive so the host's
-        // USB idle-suspend timer (which can drop the link ~30s after the last
-        // transfer) never fires, and treat a throwing ping as the drop signal:
-        // recover by re-detecting and reconnecting.
-        for device in devices {
-            do {
-                try await device.transport.ping()
-            } catch {
-                await recoverFromDrop(device)
-            }
-        }
-    }
-
-    /// A keepalive `ping` failed: the device dropped or re-enumerated. Release
-    /// its stale session, re-detect, and if the previously selected device
-    /// comes back, re-select and re-list it; otherwise clear the selection and
-    /// surface a clear error. Best-effort throughout — a device that refuses
-    /// to come back just stays gone until the user reconnects it.
-    private func recoverFromDrop(_ device: ConnectedDevice) async {
-        let wasSelected = selectedDeviceID == device.id
-        let info = device.info
-        devices.removeAll { $0.id == device.id }
-        try? await device.transport.disconnect()
-        await scanForDevices()
-        guard wasSelected else { return }
-        if let fresh = devices.first(where: { $0.info == info }) {
-            selectedDeviceID = fresh.id
-            deviceBooks = []
-            await refreshBooks()
-        } else {
-            selectedDeviceID = nil
-            deviceBooks = []
-            deviceError = "Device disconnected — reconnect your Kindle"
         }
     }
 

@@ -96,12 +96,4 @@ struct DeviceTransportTests {
             try await transport.download(atPath: "metadata.calibre", to: dest.appending(path: "m.calibre"))
         }
     }
-
-    @Test
-    func mockPingSucceedsAndCounts() async throws {
-        let transport = MockTransport()
-        try await transport.ping()
-        try await transport.ping()
-        #expect(await transport.pingCount == 2)
-    }
 }

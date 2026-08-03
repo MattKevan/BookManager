@@ -33,11 +33,6 @@ public struct DeviceInfo: Sendable, Equatable {
 
 public protocol DeviceTransport: Sendable {
     func connect() async throws -> DeviceInfo
-    /// A cheap liveness round-trip on the held session. Callers use it as a
-    /// keepalive (macOS can idle-suspend a USB link ~30s after the last
-    /// transfer, dropping the device) and as a drop detector — a throwing
-    /// `ping` means the session/device is gone.
-    func ping() async throws
     func listFiles(in folder: DeviceFolder) async throws -> [DeviceFile]
     func download(_ file: DeviceFile, to destination: URL) async throws
     func upload(_ source: URL, to folder: DeviceFolder, as filename: String) async throws

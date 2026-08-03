@@ -101,20 +101,6 @@ public actor MTPTransport: DeviceTransport {
         )
     }
 
-    public func ping() async throws {
-        guard let session else { throw MTPTransportError.notConnected }
-        do {
-            // The same storage enumeration connect()'s storage check performs
-            // (~50ms on Kindle MTP) — cheap enough to run every tick as a
-            // keepalive so the host's USB idle-suspend timer never fires.
-            _ = try await session.storages()
-        } catch let error as MTPTransportError {
-            throw error
-        } catch {
-            throw MTPTransportError.operationFailed(Self.message(error))
-        }
-    }
-
     public func listFiles(in folder: DeviceFolder) async throws -> [DeviceFile] {
         guard session != nil else { throw MTPTransportError.notConnected }
         do {

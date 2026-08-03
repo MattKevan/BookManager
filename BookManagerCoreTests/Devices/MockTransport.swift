@@ -6,9 +6,6 @@ actor MockTransport: DeviceTransport {
 
     private var storage: [String: Data] = [:]
     private(set) var ejected = false
-    /// Number of `ping()` keepalive calls — lets tests assert the tick's
-    /// keepalive path runs.
-    private(set) var pingCount = 0
     /// Names of every file downloaded via `download(_:to:)` — lets tests assert
     /// the fast browse path performs no downloads.
     private(set) var downloadedNames: [String] = []
@@ -37,8 +34,6 @@ actor MockTransport: DeviceTransport {
     func uploadError(_ error: Error) { forcedError = error }
 
     func connect() async throws -> DeviceInfo { Self.deviceInfo }
-
-    func ping() async throws { pingCount += 1 }
 
     func listFiles(in folder: DeviceFolder) async throws -> [DeviceFile] {
         storage.keys
