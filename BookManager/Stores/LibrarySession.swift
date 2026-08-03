@@ -79,11 +79,13 @@ final class LibrarySession {
     /// The anchor for ⇧-click range selection in the grid. Ignored by the
     /// table view (which manages its own selection semantics natively).
     private(set) var selectionAnchor: UUID?
-    var selectedFacet: FacetSelection?
+    /// Sidebar + middle-column navigation state (which category is active,
+    /// which value is chosen). Drives the 3-column browser.
+    private(set) var facetNavigation = FacetNavigation()
 
     // Device support: the connected-device store and the sidebar selection
     // bridging into it (selecting a device clears the library facet, and vice
-    // versa is handled by `selectFacet`).
+    // versa is handled by `selectCategory`).
     let devices = DeviceManager()
     var selectedDeviceID: UUID? {
         get { devices.selectedDeviceID }
@@ -95,7 +97,7 @@ final class LibrarySession {
     /// transition (selection + book listing) happens in `DeviceManager.select`
     /// so selecting a device immediately loads its books.
     func selectDevice(_ id: UUID?) {
-        if id != nil { selectedFacet = nil }
+        if id != nil { facetNavigation.clear() }
         Task { await devices.select(id) }
     }
 
@@ -136,11 +138,6 @@ final class LibrarySession {
     private var syncState: SyncState?
     private var monitor: LibraryMonitor?
     private var searchTask: Task<Void, Never>?
-
-    struct FacetSelection: Hashable {
-        let type: FacetType
-        let value: String
-    }
 
     init(
         deviceID: UUID = UUID(),
@@ -209,7 +206,7 @@ final class LibrarySession {
         deletedBooks = []
         selection = []
         selectionAnchor = nil
-        selectedFacet = nil
+        facetNavigation.clear()
         searchText = ""
         missingFiles = []
         viewMode = .table
@@ -311,7 +308,7 @@ final class LibrarySession {
     func refreshBooks() async {
         guard let repository else { return }
         do {
-            if let facet = selectedFacet {
+            if let facet = facetNavigation.activeFacet {
                 books = try await repository.books(facetType: facet.type, value: facet.value)
             } else if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 books = try await repository.books()
@@ -344,8 +341,19 @@ final class LibrarySession {
 
     // MARK: - Facets and search
 
-    func selectFacet(_ facet: FacetSelection?) {
-        selectedFacet = (facet == selectedFacet) ? nil : facet
+    /// Sidebar click on a facet category (Authors/Series/Tags/Formats).
+    /// `nil` selects All Books. Selecting any library view deselects a
+    /// connected device — the two selection domains are mutually exclusive.
+    func selectCategory(_ type: FacetType?) {
+        Task { await devices.select(nil) }
+        facetNavigation.selectCategory(type)
+        Task { await refreshBooks() }
+    }
+
+    /// Middle-column click on a specific value. Re-clicking the same value
+    /// toggles it off, back to all books.
+    func selectValue(_ value: String?) {
+        facetNavigation.selectValue(value)
         Task { await refreshBooks() }
     }
 
@@ -437,6 +445,16 @@ final class LibrarySession {
             ))
         }
         await devices.send(requests)
+    }
+
+    /// Finder-style drag from a sidebar device row: clear the library
+    /// selection, select the target device, then send the dropped files.
+    /// Awaiting the device selection ensures the send targets the right
+    /// device.
+    func sendDroppedFiles(urls: [URL], to deviceID: UUID) async {
+        facetNavigation.clear()
+        await devices.select(deviceID)
+        await sendFiles(urls: urls)
     }
 
     /// The first existing format file for a book, used to make library rows

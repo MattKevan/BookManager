@@ -175,7 +175,7 @@ struct ContentView: View {
                     }
                 } else {
                     browser
-                        .navigationTitle(session.selectedFacet?.value ?? "All Books")
+                        .navigationTitle(session.facetNavigation.value ?? "All Books")
                 }
             }
         }

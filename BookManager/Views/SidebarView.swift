@@ -2,24 +2,27 @@ import BookManagerCore
 import Foundation
 import SwiftUI
 
-/// One selectable row in the sidebar: the all-books entry, a library facet,
-/// or a connected device (Finder-style).
+/// One selectable row in the sidebar: All Books, a library facet category,
+/// or a connected device (Finder-style, with eject).
 enum SidebarItem: Hashable {
     case allBooks
-    case facet(LibrarySession.FacetSelection)
+    case category(FacetType)
     case device(UUID)
 }
 
 struct SidebarView: View {
     @Bindable var session: LibrarySession
 
+    /// The facet categories offered in the Library section, in order.
+    private let libraryCategories: [FacetType] = [.author, .series, .tag, .format]
+
     var body: some View {
         List(selection: Binding<SidebarItem?>(
             get: {
                 if let id = session.selectedDeviceID {
                     return .device(id)
-                } else if let facet = session.selectedFacet {
-                    return .facet(facet)
+                } else if let category = session.facetNavigation.category {
+                    return .category(category)
                 } else {
                     return .allBooks
                 }
@@ -27,11 +30,9 @@ struct SidebarView: View {
             set: { item in
                 switch item {
                 case .allBooks:
-                    session.selectDevice(nil)
-                    session.selectFacet(nil)
-                case let .facet(facet):
-                    session.selectDevice(nil)
-                    session.selectFacet(facet)
+                    session.selectCategory(nil)
+                case let .category(category):
+                    session.selectCategory(category)
                 case let .device(id):
                     session.selectDevice(id)
                 case nil:
@@ -39,40 +40,34 @@ struct SidebarView: View {
                 }
             }
         )) {
+            Section("Library") {
+                Label("All Books", systemImage: "books.vertical")
+                    .tag(SidebarItem.allBooks)
+                ForEach(libraryCategories, id: \.self) { category in
+                    Label(category.displayName, systemImage: category.sidebarSymbol)
+                        .tag(SidebarItem.category(category))
+                }
+            }
             if !session.devices.devices.isEmpty {
                 Section("Devices") {
                     ForEach(session.devices.devices) { device in
-                        Label(device.name, systemImage: "externaldrive")
-                            .tag(SidebarItem.device(device.id))
-                            .contentShape(Rectangle())
-                            .onDrop(of: [.fileURL], isTargeted: nil) { providers in
-                                handleDrop(providers, deviceID: device.id)
+                        HStack(spacing: 6) {
+                            Label(device.name, systemImage: "externaldrive")
+                            Spacer()
+                            Button {
+                                Task { await session.devices.eject(device.id) }
+                            } label: {
+                                Image(systemName: "eject.fill")
                             }
+                            .buttonStyle(.borderless)
+                            .help("Eject \(device.name)")
+                        }
+                        .tag(SidebarItem.device(device.id))
+                        .contentShape(Rectangle())
+                        .onDrop(of: [.fileURL], isTargeted: nil) { providers in
+                            handleDrop(providers, deviceID: device.id)
+                        }
                     }
-                }
-            }
-            Section {
-                Label("All Books", systemImage: "books.vertical")
-                    .tag(SidebarItem.allBooks)
-            }
-            Section("Authors") {
-                ForEach(session.authors, id: \.value) { item in
-                    FacetRow(title: item.value, count: item.count, type: .author)
-                }
-            }
-            Section("Series") {
-                ForEach(session.series, id: \.value) { item in
-                    FacetRow(title: item.value, count: item.count, type: .series)
-                }
-            }
-            Section("Tags") {
-                ForEach(session.tags, id: \.value) { item in
-                    FacetRow(title: item.value, count: item.count, type: .tag)
-                }
-            }
-            Section("Formats") {
-                ForEach(session.formats, id: \.value) { item in
-                    FacetRow(title: item.value, count: item.count, type: .format)
                 }
             }
         }
@@ -90,26 +85,9 @@ struct SidebarView: View {
                 }
             }
             guard !urls.isEmpty else { return }
-            await session.devices.select(deviceID)
-            await session.sendFiles(urls: urls)
+            await session.sendDroppedFiles(urls: urls, to: deviceID)
         }
         return true
-    }
-
-    private struct FacetRow: View {
-        let title: String
-        let count: Int
-        let type: FacetType
-
-        var body: some View {
-            HStack {
-                Text(title)
-                Spacer()
-                Text("\(count)")
-                    .foregroundStyle(.secondary)
-            }
-            .tag(SidebarItem.facet(LibrarySession.FacetSelection(type: type, value: title)))
-        }
     }
 }
 
