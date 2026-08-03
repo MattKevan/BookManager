@@ -6,6 +6,9 @@ actor MockTransport: DeviceTransport {
 
     private var storage: [String: Data] = [:]
     private(set) var ejected = false
+    /// Names of every file downloaded via `download(_:to:)` — lets tests assert
+    /// the fast browse path performs no downloads.
+    private(set) var downloadedNames: [String] = []
     private var forcedError: Error?
 
     func add(fileNamed name: String, data: Data, in folder: DeviceFolder = DeviceFolder(path: "Documents")) {
@@ -34,6 +37,7 @@ actor MockTransport: DeviceTransport {
 
     func download(_ file: DeviceFile, to destination: URL) async throws {
         guard let data = storage[file.path] else { throw DeviceTransportError.fileNotFound(file.path) }
+        downloadedNames.append(file.name)
         try data.write(to: destination)
     }
 

@@ -14,24 +14,61 @@ struct DeviceBookScannerTests {
         return try #require(bundle.url(forResource: "fixture", withExtension: "mobi"))
     }
 
+    private let documents = DeviceFolder(path: "Documents")
+
     @Test
-    func scansMobiWithMetadata() async throws {
+    func listReturnsStemTitlesWithoutDownloading() async throws {
+        let transport = MockTransport()
+        await transport.add(fileNamed: "Fixture.mobi", data: try Data(contentsOf: mobiFixtureURL()))
+        await transport.add(fileNamed: "scanned.epub", data: Data("x".utf8))
+        await transport.add(fileNamed: ".DS_Store", data: Data("z".utf8))
+
+        let records = try await DeviceBookScanner(transport: transport)
+            .list(in: documents)
+
+        #expect(records.map { $0.name() }.sorted() == ["Fixture.mobi", "scanned.epub"])
+        #expect(records.allSatisfy { !$0.isEnriched && $0.authors.isEmpty && !$0.isDRM })
+        // Filename-stem titles only — no downloads happened.
+        #expect(records.allSatisfy { $0.title == URL(fileURLWithPath: $0.name()).deletingPathExtension().lastPathComponent })
+        #expect(await transport.downloadedNames.isEmpty)
+    }
+
+    @Test
+    func listKeepsKfxAndTxtSkipsNonBooks() async throws {
+        let transport = MockTransport()
+        await transport.add(fileNamed: "Novel.kfx", data: Data("x".utf8))
+        await transport.add(fileNamed: "notes.txt", data: Data("y".utf8))
+        await transport.add(fileNamed: ".DS_Store", data: Data("z".utf8))
+        await transport.add(fileNamed: "archive.zip", data: Data("w".utf8))
+
+        let records = try await DeviceBookScanner(transport: transport)
+            .list(in: documents)
+
+        #expect(records.map(\.format).sorted() == ["KFX", "TXT"])
+        #expect(await transport.downloadedNames.isEmpty)
+    }
+
+    @Test
+    func enrichFillsMetadataFromFixture() async throws {
         let transport = MockTransport()
         let mobiURL = try mobiFixtureURL()
         await transport.add(fileNamed: "Fixture.mobi", data: try Data(contentsOf: mobiURL))
 
-        let records = try await DeviceBookScanner(transport: transport)
-            .scan(in: DeviceFolder(path: "Documents"))
+        let scanner = DeviceBookScanner(transport: transport)
+        let listed = try await scanner.list(in: documents)
+        let record = try #require(listed.first)
+        #expect(!record.isEnriched)
 
-        #expect(records.count == 1)
-        let record = try #require(records.first)
-        #expect(!record.title.isEmpty)
-        #expect(record.format == "MOBI")
-        #expect(!record.isDRM)
+        let enriched = try await scanner.enrich(record)
+
+        #expect(enriched.isEnriched)
+        #expect(!enriched.title.isEmpty)
+        #expect(!enriched.isDRM)
+        #expect(await transport.downloadedNames == ["Fixture.mobi"])
     }
 
     @Test
-    func marksDrmMobiWithLockFlag() async throws {
+    func enrichMarksDrmBooks() async throws {
         let transport = MockTransport()
         // Patch the fixture's record-0 encryption_type byte, mirroring
         // MobiReaderTests.encryptedMobiThrowsDrmError: the "MOBI" magic sits
@@ -47,41 +84,48 @@ struct DeviceBookScannerTests {
         patched[magic.lowerBound - 4] = 1 // MOBI_ENCRYPTION_V1
         await transport.add(fileNamed: "Locked.azw3", data: patched)
 
-        let records = try await DeviceBookScanner(transport: transport)
-            .scan(in: DeviceFolder(path: "Documents"))
+        let scanner = DeviceBookScanner(transport: transport)
+        let listed = try await scanner.list(in: documents)
+        let record = try #require(listed.first { $0.name() == "Locked.azw3" })
 
-        let locked = try #require(records.first { $0.name() == "Locked.azw3" })
-        #expect(locked.isDRM)
+        let enriched = try await scanner.enrich(record)
+
+        #expect(enriched.isDRM)
+        #expect(enriched.isEnriched)
+        #expect(enriched.title == "Locked")
     }
 
     @Test
-    func scansEpubWithExtractedMetadata() async throws {
+    func enrichReadsEpubMetadata() async throws {
         let transport = MockTransport()
         let epubURL = try Fixtures.makeEPUB(named: "scanned.epub")
         defer { try? FileManager.default.removeItem(at: epubURL) }
         await transport.add(fileNamed: "scanned.epub", data: try Data(contentsOf: epubURL))
 
-        let records = try await DeviceBookScanner(transport: transport)
-            .scan(in: DeviceFolder(path: "Documents"))
+        let scanner = DeviceBookScanner(transport: transport)
+        let record = try #require(try await scanner.list(in: documents).first)
 
-        let record = try #require(records.first)
-        #expect(record.format == "EPUB")
-        #expect(!record.title.isEmpty)
-        #expect(!record.authors.isEmpty)
+        let enriched = try await scanner.enrich(record)
+
+        #expect(enriched.isEnriched)
+        #expect(!enriched.title.isEmpty)
+        #expect(!enriched.authors.isEmpty)
+        #expect(!enriched.isDRM)
     }
 
     @Test
-    func listsKfxByFilenameOnlyAndSkipsNonBooks() async throws {
+    func enrichDegradesOnMalformedFile() async throws {
         let transport = MockTransport()
-        await transport.add(fileNamed: "Novel.kfx", data: Data("x".utf8))
-        await transport.add(fileNamed: "notes.txt", data: Data("y".utf8))
-        await transport.add(fileNamed: ".DS_Store", data: Data("z".utf8))
-        await transport.add(fileNamed: "archive.zip", data: Data("w".utf8))
+        await transport.add(fileNamed: "garbage.azw3", data: Data("not a real book".utf8))
 
-        let records = try await DeviceBookScanner(transport: transport)
-            .scan(in: DeviceFolder(path: "Documents"))
+        let scanner = DeviceBookScanner(transport: transport)
+        let record = try #require(try await scanner.list(in: documents).first)
 
-        #expect(records.map(\.format).sorted() == ["KFX", "TXT"])
+        let enriched = try await scanner.enrich(record)
+
+        #expect(enriched.isEnriched)
+        #expect(enriched.title == "garbage")
+        #expect(!enriched.isDRM)
     }
 }
 
