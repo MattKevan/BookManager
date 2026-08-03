@@ -215,9 +215,15 @@ struct ContentView: View {
                 .help("Table or cover grid")
                 if session.devices.devices.isEmpty {
                     EmptyView()
-                } else if session.devices.devices.count == 1 {
+                } else if let device = session.devices.devices.first, session.devices.devices.count == 1 {
                     Button {
-                        Task { await session.sendSelectionToDevice() }
+                        Task {
+                            // Mirror the multi-device path: select the sole device
+                            // first so send-to-device works without a prior
+                            // sidebar click (select is same-id guarded).
+                            await session.devices.select(device.id)
+                            await session.sendSelectionToDevice()
+                        }
                     } label: {
                         Label("Send to Device", systemImage: "arrow.up.doc")
                     }
