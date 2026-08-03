@@ -36,6 +36,13 @@ public protocol DeviceTransport: Sendable {
     func listFiles(in folder: DeviceFolder) async throws -> [DeviceFile]
     func download(_ file: DeviceFile, to destination: URL) async throws
     func upload(_ source: URL, to folder: DeviceFolder, as filename: String) async throws
+    /// Downloads a file by path relative to the storage ROOT (device-level
+    /// files like Calibre's `metadata.calibre` live at root, not inside a
+    /// book folder).
+    func download(atPath path: String, to destination: URL) async throws
+    /// Uploads a file to the storage ROOT, replacing any existing file of the
+    /// same name (MTP has no overwrite-by-name, so transports replace).
+    func upload(atPath path: String, from source: URL) async throws
     func eject() async throws
     func disconnect() async throws
 }

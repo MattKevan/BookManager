@@ -15,6 +15,16 @@ actor MockTransport: DeviceTransport {
         storage["\(folder.path)/\(name)"] = data
     }
 
+    /// Seeds a file at the storage ROOT (key = the path exactly, no folder
+    /// prefix) — mirrors device-level files like `metadata.calibre`.
+    func addRootFile(named name: String, data: Data) {
+        storage[name] = data
+    }
+
+    func rootFileData(named name: String) -> Data? {
+        storage[name]
+    }
+
     func fileData(named name: String, in folder: DeviceFolder = DeviceFolder(path: "Documents")) -> Data? {
         storage["\(folder.path)/\(name)"]
     }
@@ -45,6 +55,16 @@ actor MockTransport: DeviceTransport {
         if let forcedError { throw forcedError }
         let data = try Data(contentsOf: source)
         storage["\(folder.path)/\(filename)"] = data
+    }
+
+    func download(atPath path: String, to destination: URL) async throws {
+        guard let data = storage[path] else { throw DeviceTransportError.fileNotFound(path) }
+        try data.write(to: destination)
+    }
+
+    func upload(atPath path: String, from source: URL) async throws {
+        if let forcedError { throw forcedError }
+        storage[path] = try Data(contentsOf: source)
     }
 
     func eject() async throws { ejected = true }

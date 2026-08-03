@@ -157,6 +157,45 @@ public actor MTPTransport: DeviceTransport {
         session = nil
     }
 
+    public func download(atPath path: String, to destination: URL) async throws {
+        guard session != nil else { throw MTPTransportError.notConnected }
+        do {
+            let name = (path as NSString).lastPathComponent
+            guard let (storage, info) = try await rootFileInfo(name) else {
+                throw MTPTransportError.fileNotFound(path)
+            }
+            try await storage.download(info.id, to: destination) { _, _ in .continue }
+        } catch let error as MTPTransportError {
+            throw error
+        } catch {
+            throw MTPTransportError.operationFailed(Self.message(error))
+        }
+    }
+
+    public func upload(atPath path: String, from source: URL) async throws {
+        guard session != nil else { throw MTPTransportError.notConnected }
+        do {
+            let name = (path as NSString).lastPathComponent
+            // MTP has no overwrite-by-name (objects are id-keyed), so a plain
+            // upload of a same-named file would leave a duplicate and the next
+            // read could hit the stale one. Replace: delete the existing root
+            // file (on whatever storage holds it), then upload fresh.
+            if let (storage, existing) = try await rootFileInfo(name) {
+                try await storage.delete(existing.id)
+                try await storage.upload(from: source, to: .root, as: name)
+                return
+            }
+            guard let storage = await storages().first else {
+                throw MTPTransportError.storageUnavailable
+            }
+            try await storage.upload(from: source, to: .root, as: name)
+        } catch let error as MTPTransportError {
+            throw error
+        } catch {
+            throw MTPTransportError.operationFailed(Self.message(error))
+        }
+    }
+
 
     // MARK: - Helpers
 
@@ -180,6 +219,20 @@ public actor MTPTransport: DeviceTransport {
                 $0.isDirectory && $0.name.caseInsensitiveCompare(folder.path) == .orderedSame
             }) {
                 return (storage, dir)
+            }
+        }
+        return nil
+    }
+
+    /// Finds a file at the storage ROOT across all storages (case-insensitive
+    /// name match) — used for device-level files like `metadata.calibre`.
+    private func rootFileInfo(_ name: String) async throws -> (storage: Storage, info: FileInfo)? {
+        for storage in await storages() {
+            let root = (try? await storage.contents(of: .root)) ?? []
+            if let match = root.first(where: {
+                !$0.isDirectory && $0.name.caseInsensitiveCompare(name) == .orderedSame
+            }) {
+                return (storage, match)
             }
         }
         return nil

@@ -61,4 +61,39 @@ struct DeviceTransportTests {
         try await transport.eject()
         #expect(await transport.ejected)
     }
+
+    @Test
+    func rootFileRoundTripsDownloadAndUploadWithoutEnteringListings() async throws {
+        let transport = MockTransport()
+        let bytes = Data("cache".utf8)
+        await transport.addRootFile(named: "metadata.calibre", data: bytes)
+
+        let dest = FileManager.default.temporaryDirectory
+            .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: dest, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dest) }
+
+        try await transport.download(atPath: "metadata.calibre", to: dest.appending(path: "metadata.calibre"))
+        #expect(try Data(contentsOf: dest.appending(path: "metadata.calibre")) == bytes)
+
+        // Root files are device-level: they never appear in Documents listings.
+        let files = try await transport.listFiles(in: DeviceFolder(path: "Documents"))
+        #expect(files.isEmpty)
+
+        let source = dest.appending(path: "new.calibre")
+        try Data("newer".utf8).write(to: source)
+        try await transport.upload(atPath: "metadata.calibre", from: source)
+        #expect(await transport.rootFileData(named: "metadata.calibre") == Data("newer".utf8))
+    }
+
+    @Test
+    func rootDownloadMissingFileThrows() async throws {
+        let transport = MockTransport()
+        let dest = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: dest, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dest) }
+        await #expect(throws: DeviceTransportError.self) {
+            try await transport.download(atPath: "metadata.calibre", to: dest.appending(path: "m.calibre"))
+        }
+    }
 }

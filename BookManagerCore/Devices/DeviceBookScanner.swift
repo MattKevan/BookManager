@@ -63,6 +63,26 @@ public struct DeviceBookScanner: Sendable {
         }
     }
 
+    /// Applies a parsed `metadata.calibre` cache to listed records: any record
+    /// whose file matches a cache entry (lowercased path + exact size) gets the
+    /// cached title/authors/DRM flag and is marked enriched, so the UI shows
+    /// real metadata instantly and the lazy per-row enrich skips it. Unmatched
+    /// records (new books, Amazon Wi-Fi downloads, size-changed files) keep
+    /// their filename-only state. No downloads happen here.
+    public func apply(cache: CalibreCache, to records: [DeviceBookRecord]) -> [DeviceBookRecord] {
+        records.map { record in
+            guard let entry = cache.entry(matching: record.file) else { return record }
+            return DeviceBookRecord(
+                file: record.file,
+                title: entry.title.isEmpty ? record.title : entry.title,
+                authors: entry.authors,
+                format: record.format,
+                isDRM: entry.isDRM,
+                isEnriched: true
+            )
+        }
+    }
+
     /// Downloads the record's file and parses it for real title/authors/DRM.
     /// Never throws on an unreadable or malformed file — it degrades to the
     /// filename-only record marked enriched, so the UI stops offering to

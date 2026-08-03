@@ -127,6 +127,37 @@ struct DeviceBookScannerTests {
         #expect(enriched.title == "garbage")
         #expect(!enriched.isDRM)
     }
+
+    @Test
+    func applyCacheFillsMetadataWithoutDownloads() async throws {
+        let transport = MockTransport()
+        await transport.add(fileNamed: "Alpha - One.mobi", data: Data("x".utf8))
+        await transport.add(fileNamed: "Beta.mobi", data: Data("y".utf8))
+
+        let scanner = DeviceBookScanner(transport: transport)
+        let listed = try await scanner.list(in: documents)
+
+        let cache = CalibreCache(jsonData: Data("""
+        [{"lpath": "documents/Alpha - One.mobi", "size": 1, "title": "Alpha One", "authors": ["A Author"], "pages": -3}]
+        """.utf8))
+        let records = scanner.apply(cache: cache, to: listed)
+
+        let alpha = try #require(records.first { $0.name() == "Alpha - One.mobi" })
+        #expect(alpha.title == "Alpha One")
+        #expect(alpha.authors == ["A Author"])
+        #expect(alpha.isDRM)
+        #expect(alpha.isEnriched)
+
+        // Unmatched record keeps its filename-only state, un-enriched.
+        let beta = try #require(records.first { $0.name() == "Beta.mobi" })
+        #expect(beta.title == "Beta")
+        #expect(!beta.isEnriched)
+        #expect(beta.authors.isEmpty)
+        #expect(!beta.isDRM)
+
+        // The cache path must never touch the device for file contents.
+        #expect(await transport.downloadedNames.isEmpty)
+    }
 }
 
 // Helper so the test reads cleanly; DeviceBookRecord exposes `file`.
