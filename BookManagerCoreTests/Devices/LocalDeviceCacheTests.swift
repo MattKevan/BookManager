@@ -56,7 +56,10 @@ struct LocalDeviceCacheTests {
         let dir = try tempDir()
         defer { try? FileManager.default.removeItem(at: dir) }
         let cache = LocalDeviceCache(directory: dir)
-        try Data("not json".utf8).write(to: dir.appending(path: "1949-9981.json"))
+        // The cache reads the SANITIZED filename ("19499981.json"), so the
+        // garbage must be written there to exercise the corrupt-decode path
+        // rather than the missing-file guard.
+        try Data("not json".utf8).write(to: dir.appending(path: "19499981.json"))
         #expect(try cache.load(key: "1949-9981") == nil)
     }
 
@@ -79,6 +82,8 @@ struct LocalDeviceCacheTests {
         let loaded = try cache.load(key: "19/49:9981")
         #expect(loaded != nil)
         #expect(loaded?.records.first?.title == "A Real Title")
+        // The key "19/49:9981" sanitizes to "19499981.json" on disk.
+        #expect(FileManager.default.fileExists(atPath: dir.appending(path: "19499981.json").path))
     }
 
     @Test
