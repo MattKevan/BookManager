@@ -102,6 +102,14 @@ struct CoverGridView: View {
                     )
                 }
             }
+            .onDrag { dragProvider(for: book) }
+    }
+
+    /// Makes a tile draggable onto a sidebar device row (sends that book's
+    /// primary format file to the device).
+    private func dragProvider(for book: IndexedBook) -> NSItemProvider {
+        guard let url = session.formatFileURL(for: book) else { return NSItemProvider() }
+        return NSItemProvider(object: url as NSURL)
     }
 
     private var marqueeDrag: some Gesture {

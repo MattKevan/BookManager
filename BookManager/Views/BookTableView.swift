@@ -1,4 +1,5 @@
 import BookManagerCore
+import Foundation
 import SwiftUI
 
 struct BookTableView: View {
@@ -6,7 +7,10 @@ struct BookTableView: View {
 
     var body: some View {
         Table(session.books, selection: $session.selection) {
-            TableColumn("Title", value: \.title)
+            TableColumn("Title") { book in
+                Text(book.title)
+                    .onDrag { dragProvider(for: book) }
+            }
             TableColumn("Authors") { book in
                 Text(book.authors.joined(separator: ", ")).foregroundStyle(.secondary)
             }
@@ -53,5 +57,12 @@ struct BookTableView: View {
                 )
             }
         }
+    }
+
+    /// Makes a row draggable onto a sidebar device row (sends that book's
+    /// primary format file to the device).
+    private func dragProvider(for book: IndexedBook) -> NSItemProvider {
+        guard let url = session.formatFileURL(for: book) else { return NSItemProvider() }
+        return NSItemProvider(object: url as NSURL)
     }
 }

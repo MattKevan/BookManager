@@ -27,9 +27,31 @@ final class DeviceManager {
     /// Last device-layer error (connection, listing, transfer, eject).
     /// Settable by views so import failures can surface on the device screen.
     var deviceError: String?
+    /// The most recent send-to-device run; presented by the send-report sheet.
+    private(set) var sendReport: SendReport?
+    var sendReportPresented = false
 
     private let registry = DeviceRegistry()
     private let factory = MTPTransportFactory()
+
+    /// The connected device the sidebar currently has selected, if any.
+    var selectedDevice: ConnectedDevice? {
+        guard let id = selectedDeviceID else { return nil }
+        return devices.first { $0.id == id }
+    }
+
+    /// Sends the given requests to the selected device's Documents folder via
+    /// its transport, using the device profile's format support and the
+    /// identity converter (v1: native-format copy only). Stores the report and
+    /// presents it.
+    func send(_ requests: [SendRequest]) async {
+        guard let device = selectedDevice else { return }
+        let service = DeviceSendService(transport: device.transport)
+        sendReport = SendReport(items: await service.send(
+            requests, profile: device.profile, converter: IdentityConverter()
+        ))
+        sendReportPresented = true
+    }
 
     /// Re-enumerates the USB bus, keeps devices the registry still resolves,
     /// connects new ones, and drops ones that vanished. Clears the selection

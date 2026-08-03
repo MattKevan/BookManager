@@ -105,6 +105,14 @@ struct ContentView: View {
                 ImportReportView(report: report) { showImportReport = false }
             }
         }
+        .sheet(isPresented: Binding(
+            get: { session.devices.sendReportPresented },
+            set: { session.devices.sendReportPresented = $0 }
+        )) {
+            if let report = session.devices.sendReport {
+                SendReportView(report: report) { session.devices.sendReportPresented = false }
+            }
+        }
         .sheet(item: $session.inspectorBook) { book in
             MetadataEditorView(book: book, session: session, onSave: { edit, coverData in
                 Task { await session.saveEdit(edit, coverData: coverData, for: book.id) }
@@ -205,6 +213,30 @@ struct ContentView: View {
                 }
                 .pickerStyle(.segmented)
                 .help("Table or cover grid")
+                if session.devices.devices.isEmpty {
+                    EmptyView()
+                } else if session.devices.devices.count == 1 {
+                    Button {
+                        Task { await session.sendSelectionToDevice() }
+                    } label: {
+                        Label("Send to Device", systemImage: "arrow.up.doc")
+                    }
+                    .disabled(session.selection.isEmpty)
+                } else {
+                    Menu {
+                        ForEach(session.devices.devices) { device in
+                            Button(device.name) {
+                                Task {
+                                    await session.devices.select(device.id)
+                                    await session.sendSelectionToDevice()
+                                }
+                            }
+                        }
+                    } label: {
+                        Label("Send to Device", systemImage: "arrow.up.doc")
+                    }
+                    .disabled(session.selection.isEmpty)
+                }
                 Button {
                     showDiagnostics = true
                 } label: {
@@ -267,7 +299,7 @@ struct ContentView: View {
         Task { @MainActor in
             var urls: [URL] = []
             for provider in providers {
-                if let url = await loadURL(from: provider) {
+                if let url = await LibrarySession.loadURL(from: provider) {
                     urls.append(url)
                 }
             }
@@ -276,14 +308,6 @@ struct ContentView: View {
             showImportReport = session.importReport != nil
         }
         return true
-    }
-
-    private func loadURL(from provider: NSItemProvider) async -> URL? {
-        await withCheckedContinuation { continuation in
-            _ = provider.loadTransferable(type: URL.self) { result in
-                continuation.resume(returning: try? result.get())
-            }
-        }
     }
 
     private func openSelection() {

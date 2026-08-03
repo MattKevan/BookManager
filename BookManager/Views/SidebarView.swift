@@ -1,4 +1,5 @@
 import BookManagerCore
+import Foundation
 import SwiftUI
 
 /// One selectable row in the sidebar: the all-books entry, a library facet,
@@ -43,6 +44,10 @@ struct SidebarView: View {
                     ForEach(session.devices.devices) { device in
                         Label(device.name, systemImage: "externaldrive")
                             .tag(SidebarItem.device(device.id))
+                            .contentShape(Rectangle())
+                            .onDrop(of: [.fileURL], isTargeted: nil) { providers in
+                                handleDrop(providers, deviceID: device.id)
+                            }
                     }
                 }
             }
@@ -72,6 +77,23 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
+    }
+
+    /// Finder-style drag: file URLs dropped on a device row are sent to that
+    /// device (selecting it first so the send targets the right one).
+    private func handleDrop(_ providers: [NSItemProvider], deviceID: UUID) -> Bool {
+        Task { @MainActor in
+            var urls: [URL] = []
+            for provider in providers {
+                if let url = await LibrarySession.loadURL(from: provider) {
+                    urls.append(url)
+                }
+            }
+            guard !urls.isEmpty else { return }
+            await session.devices.select(deviceID)
+            await session.sendFiles(urls: urls)
+        }
+        return true
     }
 
     private struct FacetRow: View {

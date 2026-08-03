@@ -61,6 +61,12 @@ private struct AppCommands: Commands {
             }
             .keyboardShortcut("e", modifiers: .command)
             .disabled(session.selection.count != 1 || session.isLibraryUnavailable)
+            Divider()
+            Button("Send to Device") {
+                Task { await session.sendSelectionToDevice() }
+            }
+            .keyboardShortcut("d", modifiers: [.command, .shift])
+            .disabled(session.selection.isEmpty || session.devices.selectedDeviceID == nil)
         }
         CommandGroup(after: .textEditing) {
             Button("Find") {

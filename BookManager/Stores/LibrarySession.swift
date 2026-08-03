@@ -390,6 +390,77 @@ final class LibrarySession {
         await refreshAll()
     }
 
+    // MARK: - Send to device
+
+    /// Resolves each selected book's best stored format file (in the selected
+    /// device's format-priority order) and sends them to the device. Books
+    /// with no supported stored format are omitted here and surface as "no
+    /// compatible format" rows in the send report.
+    func sendSelectionToDevice() async {
+        guard let repository else { return }
+        let folder = BookFolder(layout: .init(root: repository.root))
+        let selectedBooks = books.filter { selection.contains($0.id) }
+        var requests: [SendRequest] = []
+        for book in selectedBooks {
+            for format in devices.selectedDevice?.profile.supportedFormats ?? [] {
+                guard let record = book.formats.first(where: { $0.kind.lowercased() == format }) else {
+                    continue
+                }
+                let url = await folder.formatFileURL(relativePath: book.relativePath, filename: record.filename)
+                if FileManager.default.fileExists(atPath: url.path) {
+                    requests.append(SendRequest(title: book.title, sourceURL: url, format: format))
+                    break
+                }
+            }
+        }
+        await devices.send(requests)
+    }
+
+    /// Sends files dropped onto a sidebar device row (Finder-style drag). Each
+    /// URL is sent as-is when its extension is a format the device accepts;
+    /// unsupported formats surface as "no compatible format" in the report.
+    func sendFiles(urls: [URL]) async {
+        var requests: [SendRequest] = []
+        for url in urls {
+            let format = url.pathExtension.lowercased()
+            guard !format.isEmpty else { continue }
+            requests.append(SendRequest(
+                title: url.deletingPathExtension().lastPathComponent,
+                sourceURL: url,
+                format: format
+            ))
+        }
+        await devices.send(requests)
+    }
+
+    /// The first existing format file for a book, used to make library rows
+    /// draggable (drag onto a device row sends that file). Computed directly
+    /// from the layout (pure path math, mirrors `BookFolder.formatFileURL`) so
+    /// the synchronous drag handler needs no actor hop.
+    func formatFileURL(for book: IndexedBook) -> URL? {
+        guard let repository else { return nil }
+        let root = LibraryLayout(root: repository.root).root
+        for format in book.formats {
+            let url = root
+                .appending(path: book.relativePath, directoryHint: .isDirectory)
+                .appending(path: format.filename)
+            if FileManager.default.fileExists(atPath: url.path) {
+                return url
+            }
+        }
+        return nil
+    }
+
+    /// Loads a file URL from a drag/drop item provider. Shared by the library
+    /// drop handler and the sidebar device-row drop handler.
+    static func loadURL(from provider: NSItemProvider) async -> URL? {
+        await withCheckedContinuation { continuation in
+            _ = provider.loadTransferable(type: URL.self) { result in
+                continuation.resume(returning: try? result.get())
+            }
+        }
+    }
+
     // MARK: - Calibre import
 
     func selectCalibreLibrary(at url: URL) async {
