@@ -40,6 +40,10 @@ final class DeviceManager {
     /// the sidebar honest as devices arrive/leave. Session-innocent under the
     /// reuse model — it never disconnects or reconnects anything.
     private var monitorTask: Task<Void, Never>?
+    /// The parsed device-side `metadata.calibre` cache for the selected
+    /// device, if one exists. Fetched on browse; written back on send so
+    /// Calibre and Book Manager stay in sync. MainActor-confined.
+    private var metadataCache: CalibreCache?
 
     /// The connected device the sidebar currently has selected, if any.
     var selectedDevice: ConnectedDevice? {
@@ -58,12 +62,55 @@ final class DeviceManager {
         isTransferring = true
         defer { isTransferring = false }
         let service = DeviceSendService(transport: device.transport)
-        var items = await service.send(
+        let rawItems = await service.send(
             requests, profile: device.profile, converter: IdentityConverter()
         )
+        await updateDeviceCache(afterSending: requests, items: rawItems, to: device)
+        var items = rawItems
         items.append(contentsOf: noCompatible)
         sendReport = SendReport(items: items)
         sendReportPresented = true
+    }
+
+    /// Extends the device's `metadata.calibre` cache with the books that were
+    /// just sent (path from the sanitized upload filename, size from the source
+    /// file, title/authors from the request), then writes the merged cache
+    /// back to the device root. Best-effort: cache and write failures degrade
+    /// silently. Only runs on send (per-book enrich is too chatty at ~24s per
+    /// MTP op); when the device has no cache yet, a fresh one is seeded from
+    /// the sent books so Calibre sees them with correct metadata.
+    private func updateDeviceCache(
+        afterSending requests: [SendRequest],
+        items: [SendItem],
+        to device: ConnectedDevice
+    ) async {
+        guard requests.count == items.count else { return }
+        var updates: [CalibreCacheEntry] = []
+        for (request, item) in zip(requests, items) {
+            guard case .sent(let format) = item.status else { continue }
+            let filename = DeviceSendService.filename(for: request, format: format)
+            let attrs = try? FileManager.default.attributesOfItem(atPath: request.sourceURL.path)
+            let size = (attrs?[.size] as? NSNumber)?.int64Value ?? 0
+            updates.append(CalibreCacheEntry(
+                lpath: "\(device.profile.bookFolder.path)/\(filename)",
+                size: size,
+                title: request.title,
+                authors: request.authors,
+                mime: nil,
+                pages: nil
+            ))
+        }
+        guard !updates.isEmpty else { return }
+        let base = metadataCache ?? CalibreCache(jsonData: Data("[]".utf8))
+        let data = base.mergedData(updating: updates, adding: [])
+        let scratch = cacheScratchURL(for: device)
+        try? FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
+        let file = scratch.appending(path: "metadata.calibre")
+        guard (try? data.write(to: file)) != nil else { return }
+        guard (try? await device.transport.upload(atPath: "metadata.calibre", from: file)) != nil else {
+            return
+        }
+        metadataCache = CalibreCache(jsonData: data)
     }
 
     /// Re-enumerates the USB bus and keeps ONE held session per connected
@@ -157,6 +204,7 @@ final class DeviceManager {
         do {
             deviceBooks = try await DeviceBookScanner(transport: device.transport)
                 .list(in: device.profile.bookFolder)
+            await applyDeviceCache(to: device)
         } catch {
             // The Kindle re-enumerates on the USB bus; a session held from an
             // earlier scan can go stale between the scan and the click, so the
@@ -176,11 +224,39 @@ final class DeviceManager {
             do {
                 deviceBooks = try await DeviceBookScanner(transport: fresh.transport)
                     .list(in: fresh.profile.bookFolder)
+                await applyDeviceCache(to: fresh)
                 deviceError = nil
             } catch {
                 deviceError = error.localizedDescription
             }
         }
+    }
+
+    /// Fetches the device's `metadata.calibre` cache (one root-level download)
+    /// and applies it to the current listing: cache hits render instantly with
+    /// real titles/authors/DRM and skip the lazy per-row enrich. Best-effort —
+    /// no cache on the device degrades to the plain filename listing.
+    private func applyDeviceCache(to device: ConnectedDevice) async {
+        let scratch = cacheScratchURL(for: device)
+        try? FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
+        let file = scratch.appending(path: "metadata.calibre")
+        guard (try? await device.transport.download(atPath: "metadata.calibre", to: file)) != nil,
+              let data = try? Data(contentsOf: file) else {
+            metadataCache = nil
+            return
+        }
+        let cache = CalibreCache(jsonData: data)
+        metadataCache = cache
+        if !cache.entries.isEmpty {
+            deviceBooks = DeviceBookScanner(transport: device.transport)
+                .apply(cache: cache, to: deviceBooks)
+        }
+    }
+
+    /// Per-device scratch directory holding the downloaded `metadata.calibre`.
+    private func cacheScratchURL(for device: ConnectedDevice) -> URL {
+        FileManager.default.temporaryDirectory
+            .appending(path: "bookmanager-cache-\(device.id.uuidString)", directoryHint: .isDirectory)
     }
 
     /// Lazily fetches full metadata (real title/authors/DRM flag) for one book
@@ -233,7 +309,12 @@ final class DeviceManager {
         do {
             try await device.transport.eject()
             devices.removeAll { $0.id == id }
-            if selectedDeviceID == id { selectedDeviceID = nil; deviceBooks = [] }
+            if selectedDeviceID == id {
+                selectedDeviceID = nil
+                deviceBooks = []
+                metadataCache = nil
+                try? FileManager.default.removeItem(at: cacheScratchURL(for: device))
+            }
         } catch {
             deviceError = error.localizedDescription
         }

@@ -410,7 +410,7 @@ final class LibrarySession {
                 }
                 let url = await folder.formatFileURL(relativePath: book.relativePath, filename: record.filename)
                 if FileManager.default.fileExists(atPath: url.path) {
-                    requests.append(SendRequest(title: book.title, sourceURL: url, format: format))
+                    requests.append(SendRequest(title: book.title, authors: book.authors, sourceURL: url, format: format))
                     hasSupportedFormat = true
                     break
                 }

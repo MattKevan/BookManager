@@ -2,11 +2,15 @@ import Foundation
 
 public struct SendRequest: Sendable {
     public let title: String
+    /// Authors, used for the device metadata cache write-back. May be empty
+    /// (e.g. file-level drags that carry no library metadata).
+    public let authors: [String]
     public let sourceURL: URL
     public let format: String // lowercase extension
 
-    public init(title: String, sourceURL: URL, format: String) {
+    public init(title: String, authors: [String] = [], sourceURL: URL, format: String) {
         self.title = title
+        self.authors = authors
         self.sourceURL = sourceURL
         self.format = format
     }
@@ -58,7 +62,7 @@ public struct DeviceSendService: Sendable {
     /// Builds the on-device filename from a request title. Device file systems
     /// reject path separators and control characters in names, so every
     /// reserved character is replaced with a space before the extension.
-    static func filename(for request: SendRequest, format: String) -> String {
+    public static func filename(for request: SendRequest, format: String) -> String {
         var illegal = CharacterSet(charactersIn: "/:\\")
         illegal.formUnion(.controlCharacters)
         let base = request.title
