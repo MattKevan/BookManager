@@ -27,6 +27,10 @@ final class DeviceManager {
     /// True while a transfer (import download or send-to-device) is in flight;
     /// the detection tick skips while set so it can never interrupt a transfer.
     private(set) var isTransferring = false
+    /// True while a per-book enrich download is in flight; the detection tick
+    /// (and any stray scan) skips while set so the bus is never enumerated
+    /// mid-transfer.
+    private var isEnriching = false
     /// Last device-layer error (connection, listing, transfer, eject).
     /// Settable by views so import failures can surface on the device screen.
     var deviceError: String?
@@ -126,8 +130,13 @@ final class DeviceManager {
     func scanForDevices() async {
         // Serialize scans: `isScanning` is set synchronously before any await,
         // so a second call (activation scan + user refresh) returns immediately
-        // instead of opening a second MTP session.
-        guard !isScanning else { return }
+        // instead of opening a second MTP session. Also never enumerate while
+        // an MTP operation is in flight (stray callers: app activation can fire
+        // this mid-enrich; enumeration disturbs the held session). isListing is
+        // deliberately excluded: refreshBooks' failure-retry re-enumerates with
+        // the flag set, after its listing op has already thrown — no transfer
+        // is in flight at that point, and the retry MUST enumerate to recover.
+        guard !isScanning, !isTransferring, !isEnriching else { return }
         // Start the detection tick once, from the first scan.
         if monitorTask == nil {
             monitorTask = Task { [weak self] in
@@ -182,7 +191,11 @@ final class DeviceManager {
     }
 
     private func tick() async {
-        guard !isScanning, !isTransferring, !isListing else { return }
+        // Never enumerate the bus while a device operation is in flight:
+        // libusb enumeration mid-transfer disturbs the held MTP session and
+        // drops the connection (hardware-reproduced: clicking a book to enrich
+        // downloaded it ~8s while the 10s tick fired, and the device reset).
+        guard !isScanning, !isListing, !isTransferring, !isEnriching else { return }
         await scanForDevices()
     }
 
@@ -271,6 +284,10 @@ final class DeviceManager {
               !record.isEnriched,
               let index = deviceBooks.firstIndex(where: { $0.id == record.id }),
               !deviceBooks[index].isEnriched else { return }
+        // Guard the detection tick (and any stray scan) away from the download:
+        // enumeration mid-transfer drops the connection (hardware-reproduced).
+        isEnriching = true
+        defer { isEnriching = false }
         let current = deviceBooks[index]
         let result: DeviceBookRecord
         if let enriched = try? await DeviceBookScanner(transport: device.transport)
