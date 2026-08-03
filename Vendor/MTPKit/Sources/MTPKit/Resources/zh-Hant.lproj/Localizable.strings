@@ -1,0 +1,40 @@
+/* MTP response code messages */
+"mtp.ok" = "成功";
+"mtp.generalError" = "裝置發生一般性錯誤";
+"mtp.sessionNotOpen" = "工作階段未開啟";
+"mtp.operationNotSupported" = "此裝置不支援這個操作";
+"mtp.parameterNotSupported" = "裝置不支援這個參數";
+"mtp.incompleteTransfer" = "傳輸未完成";
+"mtp.invalidStorageID" = "找不到指定的儲存空間";
+"mtp.invalidObjectHandle" = "找不到這個檔案（可能已在裝置上被移除）";
+"mtp.storeFull" = "裝置儲存空間已滿";
+"mtp.storeReadOnly" = "這個儲存空間是唯讀的";
+"mtp.accessDenied" = "存取被拒，請在手機上確認已允許檔案存取";
+"mtp.invalidParentObject" = "目標資料夾無效";
+"mtp.invalidParameter" = "參數無效";
+"mtp.sessionAlreadyOpen" = "工作階段已開啟";
+"mtp.deviceBusy" = "裝置忙碌中，請稍後再試";
+
+/* MTPError cases */
+"err.truncated" = "資料不完整（封包被截斷）";
+"err.unexpectedContainerType" = "收到非預期的回應類型（%d）";
+"err.operationFailed" = "操作失敗（代碼 0x%04X）";
+"err.stringTooLong" = "名稱過長";
+"err.noDevice" = "找不到 Android 裝置";
+"err.interfaceNotFound" = "找不到 MTP 介面，請確認手機已切換到「檔案傳輸」模式";
+"err.protocolError" = "通訊協定錯誤：%@";
+"err.deviceStalled" = "裝置沒有回應，請重試。";
+"err.unknown" = "未知錯誤";
+
+/* TransportError cases */
+"transport.notConnected" = "裝置未連接";
+"transport.notFound" = "找不到這個項目（可能已被移除）";
+"transport.notADirectory" = "這不是資料夾";
+"transport.cancelled" = "已取消";
+
+/* Misc */
+"storage.generic" = "儲存空間";
+
+/* ADB storage names */
+"storage.internal" = "內部儲存空間";
+"storage.removable" = "外接儲存空間";

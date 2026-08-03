@@ -1,0 +1,40 @@
+/* MTP response code messages */
+"mtp.ok" = "Success";
+"mtp.generalError" = "The device reported a general error";
+"mtp.sessionNotOpen" = "The session is not open";
+"mtp.operationNotSupported" = "This device does not support that operation";
+"mtp.parameterNotSupported" = "The device does not support that parameter";
+"mtp.incompleteTransfer" = "The transfer did not complete";
+"mtp.invalidStorageID" = "The specified storage was not found";
+"mtp.invalidObjectHandle" = "This file was not found (it may have been removed on the device)";
+"mtp.storeFull" = "The device storage is full";
+"mtp.storeReadOnly" = "This storage is read-only";
+"mtp.accessDenied" = "Access denied. Please allow file access on your phone";
+"mtp.invalidParentObject" = "The destination folder is invalid";
+"mtp.invalidParameter" = "Invalid parameter";
+"mtp.sessionAlreadyOpen" = "The session is already open";
+"mtp.deviceBusy" = "The device is busy. Please try again";
+
+/* MTPError cases */
+"err.truncated" = "Incomplete data (packet was truncated)";
+"err.unexpectedContainerType" = "Unexpected response type (%d)";
+"err.operationFailed" = "Operation failed (code 0x%04X)";
+"err.stringTooLong" = "The name is too long";
+"err.noDevice" = "No Android device found";
+"err.interfaceNotFound" = "No MTP interface found. Make sure the phone is in \"File Transfer\" mode";
+"err.protocolError" = "Protocol error: %@";
+"err.deviceStalled" = "The device stopped responding. Please try again.";
+"err.unknown" = "Unknown error";
+
+/* TransportError cases */
+"transport.notConnected" = "Device not connected";
+"transport.notFound" = "Item not found (it may have been removed)";
+"transport.notADirectory" = "This is not a folder";
+"transport.cancelled" = "Cancelled";
+
+/* Misc */
+"storage.generic" = "Storage";
+
+/* ADB storage names */
+"storage.internal" = "Internal Storage";
+"storage.removable" = "Removable Storage";

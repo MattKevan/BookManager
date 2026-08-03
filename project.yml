@@ -26,8 +26,7 @@ packages:
     url: https://github.com/CleanCocoa/swift-mtp.git
     exactVersion: 0.12.0
   MTPKit:
-    url: https://github.com/5j54d93/MTPKit.git
-    exactVersion: 0.1.4
+    path: Vendor/MTPKit
 
 settings:
   base:
