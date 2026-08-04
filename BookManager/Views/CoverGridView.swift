@@ -36,12 +36,16 @@ struct CoverGridView: View {
             .background {
                 GeometryReader { geo in
                     Color.clear
-                        .contentShape(Rectangle())
-                        .onTapGesture { session.clearGridSelection() }
                         .onAppear { gridWidth = geo.size.width }
                         .onChange(of: geo.size.width) { _, newValue in gridWidth = newValue }
                 }
             }
+            // Clicking empty grid background clears the selection. The tap
+            // lives on the grid (ScrollView) itself, not in a background
+            // view: on macOS the ScrollView captures hits across its whole
+            // frame, so a background-attached gesture never fires. Tile
+            // clicks still win via child-gesture precedence.
+            .onTapGesture { session.clearGridSelection() }
             .simultaneousGesture(marqueeDrag)
             .onPreferenceChange(CoverTileFrameKey.self) { tileFrames = $0 }
             .overlay {
@@ -222,10 +226,6 @@ private struct CoverTile: View {
                 .foregroundStyle(.secondary)
         }
         .padding(6)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(isHovering ? Color.accentColor.opacity(0.08) : .clear)
-        )
         .contentShape(Rectangle())
         .onHover { hovering in
             isHovering = hovering
@@ -247,22 +247,31 @@ private struct CoverTile: View {
         }
     }
 
-    /// The cover bottom-aligned on the tile's shelf — covers of different
-    /// aspect ratios line up along the bottom edge — with a soft drop shadow
-    /// and the selection stroke hugging the cover itself (no grey plate).
+    /// The cover: selection border hugs the image itself (no gap when the
+    /// cover doesn't fill the area), subtle corner radius, and hover
+    /// feedback — the cover lifts slightly (anchored to the shelf) while the
+    /// drop shadow deepens. No hover background tint.
     @ViewBuilder
     private var coverArea: some View {
         cover
-            .frame(height: 160, alignment: .bottom)
-            .frame(maxWidth: .infinity)
-            .shadow(color: .black.opacity(0.25), radius: 5, x: 0, y: 2)
+            .clipShape(RoundedRectangle(cornerRadius: 4))
             .overlay(
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: 4)
                     .strokeBorder(
                         session?.selection.contains(book.id) ?? false ? Color.accentColor : .clear,
                         lineWidth: 3
                     )
             )
+            .frame(height: 160, alignment: .bottom)
+            .frame(maxWidth: .infinity)
+            .scaleEffect(isHovering ? 1.04 : 1, anchor: .bottom)
+            .shadow(
+                color: .black.opacity(isHovering ? 0.45 : 0.25),
+                radius: isHovering ? 10 : 5,
+                x: 0,
+                y: isHovering ? 5 : 2
+            )
+            .animation(.easeOut(duration: 0.15), value: isHovering)
     }
 
     @ViewBuilder
