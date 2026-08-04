@@ -42,10 +42,11 @@ private struct AppCommands: Commands {
             Button("Close Library") { session.closeLibrary() }
                 .keyboardShortcut("w", modifiers: [.command, .shift])
         }
-        CommandMenu("Library") {
+        // File menu: library open/import actions (the old custom Library menu
+        // is gone — Open moves to File with Cmd+O).
+        CommandGroup(after: .newItem) {
             Button("Open Library…") { session.present(.open) }
                 .keyboardShortcut("o", modifiers: .command)
-            Divider()
             Menu("Open Recent") {
                 if session.recentLibraries.isEmpty {
                     Text("No Recent Libraries")
@@ -57,6 +58,19 @@ private struct AppCommands: Commands {
                 }
             }
             Divider()
+            Button("Import Books…") { session.present(.addBooks) }
+                .keyboardShortcut("i", modifiers: .command)
+            Button("Import Calibre Library…") { session.present(.calibre) }
+                .keyboardShortcut("i", modifiers: [.command, .shift])
+            Divider()
+            Button("Send to Device") {
+                Task { await session.sendSelectionToDevice() }
+            }
+            .keyboardShortcut("d", modifiers: [.command, .shift])
+            .disabled(session.selection.isEmpty || session.devices.selectedDeviceID == nil)
+        }
+        // Books menu: actions on the library selection and its metadata.
+        CommandMenu("Books") {
             Button("Edit Metadata…") {
                 if let id = session.selection.first,
                    let book = session.books.first(where: { $0.id == id }) {
@@ -64,18 +78,33 @@ private struct AppCommands: Commands {
                 }
             }
             .keyboardShortcut("e", modifiers: .command)
-            .disabled(session.selection.count != 1 || session.isLibraryUnavailable)
-            Divider()
+            .disabled(session.selection.count != 1 || session.isLibraryUnavailable || session.selectedDeviceID != nil)
             Button("Fetch Missing Metadata…") {
                 Task { await session.enrichAllBooksMissingMetadata() }
             }
             .disabled(session.isLibraryUnavailable)
             Divider()
-            Button("Send to Device") {
-                Task { await session.sendSelectionToDevice() }
+            Button("Open in Reader") {
+                if let id = session.selection.first {
+                    Task { await session.open(id: id) }
+                }
             }
-            .keyboardShortcut("d", modifiers: [.command, .shift])
-            .disabled(session.selection.isEmpty || session.devices.selectedDeviceID == nil)
+            .disabled(session.selection.isEmpty || session.isLibraryUnavailable || session.selectedDeviceID != nil)
+            Button("Show in Finder") {
+                if let id = session.selection.first {
+                    Task { await session.reveal(id: id) }
+                }
+            }
+            .disabled(session.selection.isEmpty || session.isLibraryUnavailable || session.selectedDeviceID != nil)
+        }
+        // Edit menu: deletion of the library selection (Cmd+Delete; the bare
+        // Delete/Backspace key is handled in the grid/table views).
+        CommandGroup(after: .pasteboard) {
+            Button("Delete") {
+                Task { await session.delete(ids: session.selection) }
+            }
+            .keyboardShortcut(.delete, modifiers: .command)
+            .disabled(session.selection.isEmpty || session.isLibraryUnavailable || session.selectedDeviceID != nil)
         }
         CommandGroup(after: .textEditing) {
             Button("Find") {

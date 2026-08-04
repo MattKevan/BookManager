@@ -57,6 +57,14 @@ struct BookTableView: View {
                 )
             }
         }
+        // Delete/Backspace trashes the selected rows (mirrors the grid's
+        // onKeyPress delete). Cmd+Delete (Edit > Delete) is the menu path.
+        .focusable()
+        .onKeyPress(.delete) {
+            guard !session.selection.isEmpty else { return .ignored }
+            Task { await session.delete(ids: session.selection) }
+            return .handled
+        }
     }
 
     /// Makes a row draggable onto a sidebar device row (sends that book's
