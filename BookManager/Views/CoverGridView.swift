@@ -94,6 +94,9 @@ struct CoverGridView: View {
             .environment(\.librarySession, session)
             .focusable()
             .focused($focusedID, equals: book.id)
+            // No focus ring around the whole item: selection is shown only by
+            // the accent border hugging the cover, not by an outer ring.
+            .focusEffectDisabled()
             .background {
                 GeometryReader { geo in
                     Color.clear.preference(
@@ -208,24 +211,7 @@ private struct CoverTile: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            cover
-                .frame(height: 160)
-                .frame(maxWidth: .infinity)
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(.quaternary.opacity(0.4))
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .strokeBorder(
-                            session?.selection.contains(book.id) ?? false ? Color.accentColor : .clear,
-                            lineWidth: 3
-                        )
-                )
-                .onHover { hovering in
-                    isHovering = hovering
-                }
+            coverArea
             Text(book.title)
                 .font(.caption)
                 .lineLimit(2)
@@ -241,6 +227,9 @@ private struct CoverTile: View {
                 .fill(isHovering ? Color.accentColor.opacity(0.08) : .clear)
         )
         .contentShape(Rectangle())
+        .onHover { hovering in
+            isHovering = hovering
+        }
         .onTapGesture(count: 2) {
             Task { await session?.open(id: book.id) }
         }
@@ -256,6 +245,24 @@ private struct CoverTile: View {
         .task {
             image = await ThumbnailCache.shared.thumbnail(for: book, repository: session?.repository)
         }
+    }
+
+    /// The cover bottom-aligned on the tile's shelf — covers of different
+    /// aspect ratios line up along the bottom edge — with a soft drop shadow
+    /// and the selection stroke hugging the cover itself (no grey plate).
+    @ViewBuilder
+    private var coverArea: some View {
+        cover
+            .frame(height: 160, alignment: .bottom)
+            .frame(maxWidth: .infinity)
+            .shadow(color: .black.opacity(0.25), radius: 5, x: 0, y: 2)
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .strokeBorder(
+                        session?.selection.contains(book.id) ?? false ? Color.accentColor : .clear,
+                        lineWidth: 3
+                    )
+            )
     }
 
     @ViewBuilder

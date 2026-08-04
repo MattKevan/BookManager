@@ -38,6 +38,7 @@ struct FacetListView: View {
                     Text("\(item.count)")
                         .foregroundStyle(.secondary)
                 }
+                .padding(.vertical, 6)
                 .tag(item.value)
             }
         }

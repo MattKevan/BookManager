@@ -70,7 +70,7 @@ final class LibrarySession {
         }
     }
     var lastError: String?
-    var viewMode: ViewMode = .table
+    var viewMode: ViewMode = .grid
     var inspectorPresented = false
     /// True while a grid marquee drag is in flight; suppresses the inspector's
     /// click-driven auto-show so a mid-drag single selection doesn't pop it open.
@@ -209,7 +209,7 @@ final class LibrarySession {
         facetNavigation.clear()
         searchText = ""
         missingFiles = []
-        viewMode = .table
+        viewMode = .grid
         inspectorPresented = false
         isMarqueeSelecting = false
         importReport = nil
