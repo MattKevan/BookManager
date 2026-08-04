@@ -66,6 +66,9 @@ public enum MobiToEpubConverter {
         let creators = content.authors
             .map { "<dc:creator opf:role=\"aut\">\(escaped($0))</dc:creator>" }
             .joined()
+        let subjects = content.subjects
+            .map { "<dc:subject>\(escaped($0))</dc:subject>" }
+            .joined()
         let manifestChapters = content.chapters
             .map { chapter in
                 "<item id=\"\(chapter.id)\" href=\"\(chapter.id).xhtml\" media-type=\"application/xhtml+xml\"/>"
@@ -84,6 +87,7 @@ public enum MobiToEpubConverter {
         <dc:identifier opf:scheme="BOOKMANAGER" id="bookid">\(uid)</dc:identifier>
         <dc:title>\(escaped(content.title))</dc:title>
         \(creators)
+        \(subjects)
         </metadata>
         <manifest>
         <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>

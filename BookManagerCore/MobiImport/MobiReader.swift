@@ -21,12 +21,16 @@ public struct MobiChapter: Sendable, Equatable, Identifiable {
 public struct MobiContent: Sendable, Equatable {
     public let title: String
     public let authors: [String]
+    /// EXTH subject records (tags), split on the standard separators
+    /// (`,`, `;`, `\u{01}`). Empty when the source carries none.
+    public let subjects: [String]
     public let cover: Data?
     public let chapters: [MobiChapter]
 
-    public init(title: String, authors: [String], cover: Data?, chapters: [MobiChapter]) {
+    public init(title: String, authors: [String], subjects: [String] = [], cover: Data?, chapters: [MobiChapter]) {
         self.title = title
         self.authors = authors
+        self.subjects = subjects
         self.cover = cover
         self.chapters = chapters
     }
@@ -87,6 +91,8 @@ public struct MobiReader: Sendable {
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
         let exthAuthor = ((try? mobi.getAuthor()) ?? nil)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        let exthSubject = ((try? mobi.getSubject()) ?? nil)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
         let dcTitle = Self.metadataTitle(from: rawml)
         let dcAuthors = Self.metadataCreators(from: rawml)
 
@@ -100,10 +106,20 @@ public struct MobiReader: Sendable {
             }
             return []
         }()
+        // EXTH subjects may bundle several tags into one record, separated by
+        // commas, semicolons, or the record separator.
+        let subjects: [String] = {
+            guard let exthSubject, !exthSubject.isEmpty else { return [] }
+            return exthSubject
+                .components(separatedBy: CharacterSet(charactersIn: ",;\u{1}"))
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+        }()
 
         return MobiContent(
             title: title,
             authors: authors,
+            subjects: subjects,
             cover: cover,
             chapters: Self.chapters(from: rawml)
         )

@@ -8,13 +8,14 @@ struct MobiToEpubConverterTests {
     private func content(
         title: String = "Test Book",
         authors: [String] = ["Alice", "Bob"],
+        subjects: [String] = [],
         cover: Data? = nil,
         chapters: [MobiChapter] = [
             MobiChapter(id: "chap1", title: "One", html: "<h1>One</h1><p>First chapter.</p>"),
             MobiChapter(id: "chap2", title: "Two", html: "<h2>Two</h2><p>Second chapter.</p>"),
         ]
     ) -> MobiContent {
-        MobiContent(title: title, authors: authors, cover: cover, chapters: chapters)
+        MobiContent(title: title, authors: authors, subjects: subjects, cover: cover, chapters: chapters)
     }
 
     private func archive(from data: Data) throws -> Archive {
@@ -66,6 +67,15 @@ struct MobiToEpubConverterTests {
         #expect(entryData(archive, "cover.jpg") != nil)
         let ncx = entryData(archive, "toc.ncx").flatMap { String(data: $0, encoding: .utf8) } ?? ""
         #expect(ncx.contains("navPoint"))
+    }
+
+    @Test
+    func subjectsBecomeDcSubjectElements() throws {
+        let data = try MobiToEpubConverter.convert(content(subjects: ["Sci-Fi", "Dystopian"]))
+        let archive = try archive(from: data)
+        let opf = entryData(archive, "content.opf").flatMap { String(data: $0, encoding: .utf8) } ?? ""
+        #expect(opf.contains("<dc:subject>Sci-Fi</dc:subject>"))
+        #expect(opf.contains("<dc:subject>Dystopian</dc:subject>"))
     }
 
     @Test
