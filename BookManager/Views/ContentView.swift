@@ -165,28 +165,30 @@ struct ContentView: View {
     }
 
     private var loadedBody: some View {
-        NavigationSplitView(columnVisibility: $columnVisibility) {
-            SidebarView(session: session)
-                .navigationTitle(session.repository?.root.lastPathComponent ?? "Library")
-        } content: {
+        // macOS NavigationSplitView cannot hide only the middle column:
+        // `NavigationSplitViewVisibility.doubleColumn` on a three-column view
+        // means "content + detail" (the sidebar collapses), and `detailOnly`
+        // hides both leading columns. So the 2-column and 3-column layouts are
+        // structurally distinct split views, swapped on category selection.
+        // `.doubleColumn` below keeps the sidebar visible in the 2-column
+        // layout (where it is equivalent to `.all`).
+        Group {
             if session.facetNavigation.category != nil {
-                FacetListView(session: session)
-            }
-        } detail: {
-            Group {
-                if session.selectedDeviceID != nil {
-                    DeviceBooksView(session: session) {
-                        Task { await presentImportFeedback() }
-                    }
-                } else {
-                    browser
-                        .navigationTitle(session.facetNavigation.value ?? "All Books")
-                }
+                threeColumnBrowser
+            } else {
+                twoColumnBrowser
             }
         }
         .onChange(of: session.facetNavigation.category) { _, category in
             columnVisibility = (category == nil) ? .doubleColumn : .all
         }
+        // `.searchable` is attached here — once, at the layout root — not to
+        // the detail column: the structural 2-col ⇄ 3-col swap would
+        // re-register a detail-column search item in the window toolbar and
+        // trip NSToolbar's "duplicate com.apple.SwiftUI.search" assertion.
+        .searchable(text: $session.searchText, prompt: "Search books")
+        .searchFocused($searchFocused)
+        .focusedValue(\.searchFocus, $searchFocused)
         // The inspector shows LIBRARY book metadata; the device view has no
         // inspector detail, so suppress it while a device is selected (a stale
         // library book must never appear alongside a device-book selection).
@@ -331,6 +333,48 @@ struct ContentView: View {
         }
     }
 
+    /// Two-column layout (sidebar + detail): All Books and device views.
+    private var twoColumnBrowser: some View {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
+            sidebarColumn
+        } detail: {
+            detailColumn
+        }
+    }
+
+    /// Three-column layout (sidebar + facet values + detail): a facet
+    /// category is active in the sidebar.
+    private var threeColumnBrowser: some View {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
+            sidebarColumn
+        } content: {
+            FacetListView(session: session)
+        } detail: {
+            detailColumn
+        }
+    }
+
+    /// The library/device navigation sidebar, shared by both layouts.
+    private var sidebarColumn: some View {
+        SidebarView(session: session)
+            .navigationTitle(session.repository?.root.lastPathComponent ?? "Library")
+    }
+
+    /// The trailing column: the device books table, or the library browser
+    /// with the active facet filter applied.
+    private var detailColumn: some View {
+        Group {
+            if session.selectedDeviceID != nil {
+                DeviceBooksView(session: session) {
+                    Task { await presentImportFeedback() }
+                }
+            } else {
+                browser
+                    .navigationTitle(session.facetNavigation.value ?? "All Books")
+            }
+        }
+    }
+
     /// Toolbar label for device activity: a determinate circular ring while a
     /// sized operation (import download) runs, an indeterminate spinner for
     /// unsized operations, an error badge when a device error is pending, and
@@ -364,9 +408,6 @@ struct ContentView: View {
                 CoverGridView(session: session)
             }
         }
-        .searchable(text: $session.searchText, prompt: "Search books")
-        .searchFocused($searchFocused)
-        .focusedValue(\.searchFocus, $searchFocused)
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in
             handleDrop(providers)
         }

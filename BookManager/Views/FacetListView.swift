@@ -43,6 +43,29 @@ struct FacetListView: View {
         }
         .listStyle(.sidebar)
         .navigationTitle(session.facetNavigation.category?.displayName ?? "")
-        .searchable(text: $filterText, prompt: "Filter")
+        // The filter is a plain TextField, not `.searchable`: on macOS a
+        // `.searchable` field inside a NavigationSplitView column triggers a
+        // reentrant NSHostingView layout crash (AppKit layout recursion,
+        // "It's not legal to call -layoutSubtreeIfNeeded…" fatal).
+        .safeAreaInset(edge: .top, spacing: 0) {
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+                TextField("Filter", text: $filterText)
+                    .textFieldStyle(.plain)
+                if !filterText.isEmpty {
+                    Button {
+                        filterText = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Clear filter")
+                }
+            }
+            .padding(8)
+            .background(.bar)
+        }
     }
 }
