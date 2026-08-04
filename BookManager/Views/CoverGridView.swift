@@ -184,7 +184,7 @@ struct CoverGridView: View {
         } else {
             return
         }
-        Task { await session.delete(ids: ids) }
+        session.requestDelete(ids: ids)
     }
 
     private func marqueeRect(start: CGPoint, current: CGPoint) -> CGRect {

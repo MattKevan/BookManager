@@ -198,6 +198,28 @@ struct ContentView: View {
         )) {
             BookInspectorView(session: session)
         }
+        // Delete confirmation: all delete paths (menu, Delete key, context
+        // menu) route through `requestDelete`, which sets `pendingDelete`;
+        // the destructive action here runs the actual `delete(ids:)`.
+        .alert(
+            session.pendingDelete.map { "Move \($0.count) book\($0.count == 1 ? "" : "s") to Trash?" } ?? "Move to Trash?",
+            isPresented: Binding(
+                get: { session.pendingDelete != nil },
+                set: { if !$0 { session.pendingDelete = nil } }
+            )
+        ) {
+            Button("Move to Trash", role: .destructive) {
+                if let ids = session.pendingDelete {
+                    session.pendingDelete = nil
+                    Task { await session.delete(ids: ids) }
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                session.pendingDelete = nil
+            }
+        } message: {
+            Text("The selected book\(session.pendingDelete?.count ?? 1 == 1 ? "" : "s") stays in the library Trash and can be restored later.")
+        }
     }
 
     /// The detail column's toolbar items (Add Books, Open, Reveal, Edit

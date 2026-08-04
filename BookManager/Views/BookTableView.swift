@@ -43,7 +43,7 @@ struct BookTableView: View {
             }
             Divider()
             Button("Move to Trash", role: .destructive) {
-                Task { await session.delete(ids: ids) }
+                session.requestDelete(ids: ids)
             }
         } primaryAction: { ids in
             if let id = ids.first { Task { await session.open(id: id) } }
@@ -62,7 +62,7 @@ struct BookTableView: View {
         .focusable()
         .onKeyPress(.delete) {
             guard !session.selection.isEmpty else { return .ignored }
-            Task { await session.delete(ids: session.selection) }
+            session.requestDelete(ids: session.selection)
             return .handled
         }
     }

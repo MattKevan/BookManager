@@ -107,6 +107,10 @@ final class LibrarySession {
     private(set) var tags: [(value: String, count: Int)] = []
     private(set) var formats: [(value: String, count: Int)] = []
     private(set) var deletedBooks: [IndexedBook] = []
+    /// Book ids awaiting delete confirmation; nil when nothing is pending.
+    /// Set by `requestDelete`, consumed by the confirmation alert, then
+    /// cleared before `delete(ids:)` runs.
+    var pendingDelete: Set<UUID>?
     private(set) var missingFiles: [(book: IndexedBook, filename: String)] = []
     var importReport: ImportReport?
     var inspectorBook: IndexedBook?
@@ -206,6 +210,7 @@ final class LibrarySession {
         deletedBooks = []
         selection = []
         selectionAnchor = nil
+        pendingDelete = nil
         facetNavigation.clear()
         searchText = ""
         missingFiles = []
@@ -915,6 +920,14 @@ final class LibrarySession {
     }
 
     // MARK: - Delete / restore
+
+    /// Asks for confirmation before deleting the given books: stores the ids
+    /// in `pendingDelete` for the confirmation alert. The actual `delete(ids:)`
+    /// runs only after the user confirms.
+    func requestDelete(ids: Set<UUID>) {
+        guard !ids.isEmpty, !isLibraryUnavailable else { return }
+        pendingDelete = ids
+    }
 
     func delete(ids: Set<UUID>) async {
         guard let repository else { return }

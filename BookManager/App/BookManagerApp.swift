@@ -101,7 +101,7 @@ private struct AppCommands: Commands {
         // Delete/Backspace key is handled in the grid/table views).
         CommandGroup(after: .pasteboard) {
             Button("Delete") {
-                Task { await session.delete(ids: session.selection) }
+                session.requestDelete(ids: session.selection)
             }
             .keyboardShortcut(.delete, modifiers: .command)
             .disabled(session.selection.isEmpty || session.isLibraryUnavailable || session.selectedDeviceID != nil)
