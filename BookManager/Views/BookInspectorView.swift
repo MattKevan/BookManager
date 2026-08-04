@@ -86,9 +86,9 @@ struct BookInspectorView: View {
                 }
 
                 Button("Edit Metadata…") {
-                    session.inspectorBook = book
+                    session.metadataEditQueue = [book]
                 }
-                .disabled(session.inspectorBook != nil)
+                .disabled(session.metadataEditQueue != nil)
 
                 Button("Fetch Metadata…") {
                     Task { await session.fetchMetadata(for: book.id) }

@@ -99,8 +99,10 @@ final class BrowserColumnSwitchTests: XCTestCase {
         XCTAssertFalse(app.textFields["Filter"].exists, "middle column visible before any category click")
 
         // The detail search field must still exist — it is registered once at
-        // the layout root, not per split-view column.
-        XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 5),
+        // the layout root (a custom toolbar item now, replacing `.searchable`),
+        // not per split-view column.
+        let searchField = app.textFields["Search books"]
+        XCTAssertTrue(searchField.waitForExistence(timeout: 5),
                       "detail search field missing in 2-column layout")
 
         // Click Authors → 3-column state: the middle column (Filter field)
@@ -109,7 +111,7 @@ final class BrowserColumnSwitchTests: XCTestCase {
         XCTAssertTrue(app.textFields["Filter"].waitForExistence(timeout: 5),
                       "middle column did not appear after clicking Authors")
         XCTAssertTrue(allBooks.exists, "app no longer responsive after 2-col → 3-col switch (crash?)")
-        XCTAssertTrue(app.searchFields.firstMatch.exists,
+        XCTAssertTrue(searchField.exists,
                       "detail search field missing in 3-column layout")
 
         // Back to All Books → 2-column again.

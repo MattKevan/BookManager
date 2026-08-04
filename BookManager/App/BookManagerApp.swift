@@ -22,6 +22,7 @@ struct BookManagerApp: App {
         }
         Settings {
             SettingsView(settings: settings)
+                .environment(\.librarySession, session)
         }
     }
 }
@@ -72,13 +73,10 @@ private struct AppCommands: Commands {
         // Books menu: actions on the library selection and its metadata.
         CommandMenu("Books") {
             Button("Edit Metadata…") {
-                if let id = session.selection.first,
-                   let book = session.books.first(where: { $0.id == id }) {
-                    session.inspectorBook = book
-                }
+                session.metadataEditQueue = session.selectionBooks
             }
             .keyboardShortcut("e", modifiers: .command)
-            .disabled(session.selection.count != 1 || session.isLibraryUnavailable || session.selectedDeviceID != nil)
+            .disabled(session.selection.isEmpty || session.isLibraryUnavailable || session.selectedDeviceID != nil)
             Button("Fetch Missing Metadata…") {
                 Task { await session.enrichAllBooksMissingMetadata() }
             }

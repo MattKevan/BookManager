@@ -38,27 +38,27 @@ final class LibrarySession {
     private(set) var repository: LibraryRepository?
     /// Metadata edits queued locally because the library folder is unreachable;
     /// cleared when `syncNow` drains the outbox.
-    private(set) var pendingSyncCount = 0
+    var pendingSyncCount = 0
 
     /// Rebuild progress (0...1) while `isRebuilding`; nil otherwise.
-    private(set) var rebuildProgress: Double?
+    var rebuildProgress: Double?
     /// True while the Diagnostics rebuild is running (drives the progress UI).
-    private(set) var isRebuilding = false
-    private let cancelFlag = RebuildCancelFlag()
+    var isRebuilding = false
+    let cancelFlag = RebuildCancelFlag()
 
     /// Undecodable change files moved to the library quarantine by the last
     /// ingest — surfaced in Diagnostics so nothing silently disappears.
-    private(set) var quarantinedChanges: [URL] = []
+    var quarantinedChanges: [URL] = []
     /// Read-only gate: the library folder is known unreachable, so editing is
     /// disabled until a reconnect succeeds (approved read-only-when-offline
     /// amendment). Transient mid-session write failures still stage to the
     /// outbox via `saveOffline`.
-    private(set) var isLibraryUnavailable = false
+    var isLibraryUnavailable = false
     /// True while a sync sequence (drain + ingest + reconcile) is running.
-    private(set) var isSyncing = false
+    var isSyncing = false
     /// The last reconciliation pass's findings — surfaced in Diagnostics so
     /// re-pointed folders and forked conflicts are never silent.
-    private(set) var reconciliationReport: ReconciliationReport?
+    var reconciliationReport: ReconciliationReport?
     var searchText = "" {
         didSet {
             searchTask?.cancel()
@@ -81,7 +81,7 @@ final class LibrarySession {
     private(set) var selectionAnchor: UUID?
     /// Sidebar + middle-column navigation state (which category is active,
     /// which value is chosen). Drives the 3-column browser.
-    private(set) var facetNavigation = FacetNavigation()
+    var facetNavigation = FacetNavigation()
 
     // Device support: the connected-device store and the sidebar selection
     // bridging into it (selecting a device clears the library facet, and vice
@@ -111,36 +111,45 @@ final class LibrarySession {
     /// Set by `requestDelete`, consumed by the confirmation alert, then
     /// cleared before `delete(ids:)` runs.
     var pendingDelete: Set<UUID>?
-    private(set) var missingFiles: [(book: IndexedBook, filename: String)] = []
+    var missingFiles: [(book: IndexedBook, filename: String)] = []
     var importReport: ImportReport?
-    var inspectorBook: IndexedBook?
+    /// Books queued for the metadata editor. The editor steps through them
+    /// (Book 1 of N with Prev/Next) when more than one is set; nil closes it.
+    /// Populated from `selectionBooks` (or `[book]` for single-book callers).
+    var metadataEditQueue: [IndexedBook]?
+
+    /// The library books backing the current selection, in catalog order —
+    /// the order the batch metadata editor walks its “1 of N” queue in.
+    var selectionBooks: [IndexedBook] {
+        books.filter { selection.contains($0.id) }
+    }
 
     // Metadata enrichment state
-    private(set) var metadataCandidates: [MetadataCandidate] = []
+    var metadataCandidates: [MetadataCandidate] = []
     /// Presented by the view; the review sheet binds to this.
     var metadataReviewPresented = false
-    private(set) var metadataLookupError: String?
-    private(set) var metadataBookID: UUID?
-    private(set) var isFetchingMetadata = false
-    private var metadataService: MetadataLookupService?
+    var metadataLookupError: String?
+    var metadataBookID: UUID?
+    var isFetchingMetadata = false
+    var metadataService: MetadataLookupService?
 
-    private static let metadataUserAgent = "BookManager/1.0"
+    static let metadataUserAgent = "BookManager/1.0"
     var diagnosticsPresented = false
 
     // Calibre import wizard state
-    private(set) var calibreSummary: CalibreLibrarySummary?
-    private(set) var calibreBooks: [CalibreBookRecord] = []
+    var calibreSummary: CalibreLibrarySummary?
+    var calibreBooks: [CalibreBookRecord] = []
     var calibreSelectedIDs = Set<Int>()
-    private(set) var calibreImportReport: CalibreImportReport?
+    var calibreImportReport: CalibreImportReport?
     var calibreImportInProgress = false
-    private(set) var calibreSourcePath: String?
+    var calibreSourcePath: String?
 
-    private let deviceID: UUID
+    let deviceID: UUID
     private let bookmarks: LibraryBookmarkStore
     private var activeSecurityURL: URL?
-    private var calibreSourceSecurityURL: URL?
-    private var syncState: SyncState?
-    private var monitor: LibraryMonitor?
+    var calibreSourceSecurityURL: URL?
+    var syncState: SyncState?
+    var monitor: LibraryMonitor?
     private var searchTask: Task<Void, Never>?
 
     init(
@@ -218,7 +227,7 @@ final class LibrarySession {
         inspectorPresented = false
         isMarqueeSelecting = false
         importReport = nil
-        inspectorBook = nil
+        metadataEditQueue = nil
         metadataCandidates = []
         metadataReviewPresented = false
         metadataLookupError = nil
@@ -235,24 +244,6 @@ final class LibrarySession {
         pickerAction = nil
         isPickerPresented = false
         recentLibraries = Self.resolveRecents(bookmarks)
-    }
-
-    /// Stops the Calibre source's security-scoped access and clears all wizard
-    /// state. Called when the wizard disappears (Cancel, Done, or Escape);
-    /// idempotent.
-    func cancelCalibreImport() {
-        stopCalibreAccess()
-        calibreSummary = nil
-        calibreBooks = []
-        calibreSelectedIDs = []
-        calibreImportReport = nil
-        calibreImportInProgress = false
-        calibreSourcePath = nil
-    }
-
-    private func stopCalibreAccess() {
-        calibreSourceSecurityURL?.stopAccessingSecurityScopedResource()
-        calibreSourceSecurityURL = nil
     }
 
     // MARK: - Activation
@@ -388,537 +379,25 @@ final class LibrarySession {
         selectionAnchor = nil
     }
 
-    // MARK: - Import
-
-    func importFiles(urls: [URL]) async {
-        guard let repository else { return }
-        let service = ImportService(layout: .init(root: repository.root))
-        do {
-            importReport = try await service.importFiles(urls, into: repository)
-        } catch {
-            importReport = ImportReport(items: [
-                ImportItem(sourceURL: urls.first ?? URL(fileURLWithPath: "/"), kind: .epub, status: .failed(error.localizedDescription))
-            ])
-        }
-        await refreshAll()
-        // Enrich freshly imported books that are missing authors/tags, when
-        // the preference is on. Runs off the import's critical path so the
-        // report feedback is not delayed by network lookups.
-        if AppSettings.automaticallyFetchMissingMetadata() {
-            let importedIDs = (importReport?.imported ?? []).compactMap { item -> UUID? in
-                if case let .imported(id) = item.status { return id }
-                return nil
-            }
-            if !importedIDs.isEmpty {
-                Task { await self.enrichBooksMissingMetadata(importedIDs) }
-            }
-        }
+    private static func syncRoot() throws -> URL {
+        let root = URL.applicationSupportDirectory
+            .appending(path: "Book Manager", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        return root
     }
 
-    // MARK: - Send to device
-
-    /// Resolves each selected book's best stored format file (in the selected
-    /// device's format-priority order) and sends them to the device. Books
-    /// with no supported stored format get an explicit "no compatible format"
-    /// row in the send report.
-    func sendSelectionToDevice() async {
-        guard let repository else { return }
-        let folder = BookFolder(layout: .init(root: repository.root))
-        let selectedBooks = books.filter { selection.contains($0.id) }
-        var requests: [SendRequest] = []
-        var noCompatible: [SendItem] = []
-        for book in selectedBooks {
-            var hasSupportedFormat = false
-            for format in devices.selectedDevice?.profile.supportedFormats ?? [] {
-                guard let record = book.formats.first(where: { $0.kind.lowercased() == format }) else {
-                    continue
-                }
-                let url = await folder.formatFileURL(relativePath: book.relativePath, filename: record.filename)
-                if FileManager.default.fileExists(atPath: url.path) {
-                    requests.append(SendRequest(title: book.title, authors: book.authors, sourceURL: url, format: format))
-                    hasSupportedFormat = true
-                    break
-                }
-            }
-            if !hasSupportedFormat {
-                noCompatible.append(SendItem(title: book.title, status: .noCompatibleFormat))
-            }
-        }
-        await devices.send(requests, noCompatible: noCompatible)
+    private static func indexDirectory() throws -> URL {
+        let root = URL.applicationSupportDirectory
+            .appending(path: "Book Manager", directoryHint: .isDirectory)
+            .appending(path: "Indexes", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        return root
     }
+}
 
-    /// Sends files dropped onto a sidebar device row (Finder-style drag). Each
-    /// URL is sent as-is when its extension is a format the device accepts;
-    /// unsupported formats surface as "no compatible format" in the report.
-    func sendFiles(urls: [URL]) async {
-        var requests: [SendRequest] = []
-        for url in urls {
-            let format = url.pathExtension.lowercased()
-            guard !format.isEmpty else { continue }
-            requests.append(SendRequest(
-                title: url.deletingPathExtension().lastPathComponent,
-                sourceURL: url,
-                format: format
-            ))
-        }
-        await devices.send(requests)
-    }
+// MARK: - Delete / restore, Open / reveal
 
-    /// Finder-style drag from a sidebar device row: clear the library
-    /// selection, select the target device, then send the dropped files.
-    /// Awaiting the device selection ensures the send targets the right
-    /// device.
-    func sendDroppedFiles(urls: [URL], to deviceID: UUID) async {
-        facetNavigation.clear()
-        await devices.select(deviceID)
-        await sendFiles(urls: urls)
-    }
-
-    /// The first existing format file for a book, used to make library rows
-    /// draggable (drag onto a device row sends that file). Computed directly
-    /// from the layout (pure path math, mirrors `BookFolder.formatFileURL`) so
-    /// the synchronous drag handler needs no actor hop.
-    func formatFileURL(for book: IndexedBook) -> URL? {
-        guard let repository else { return nil }
-        let root = LibraryLayout(root: repository.root).root
-        for format in book.formats {
-            let url = root
-                .appending(path: book.relativePath, directoryHint: .isDirectory)
-                .appending(path: format.filename)
-            if FileManager.default.fileExists(atPath: url.path) {
-                return url
-            }
-        }
-        return nil
-    }
-
-    /// Loads a file URL from a drag/drop item provider. Shared by the library
-    /// drop handler and the sidebar device-row drop handler.
-    static func loadURL(from provider: NSItemProvider) async -> URL? {
-        await withCheckedContinuation { continuation in
-            _ = provider.loadTransferable(type: URL.self) { result in
-                continuation.resume(returning: try? result.get())
-            }
-        }
-    }
-
-    // MARK: - Calibre import
-
-    func selectCalibreLibrary(at url: URL) async {
-        // The folder comes from SwiftUI's fileImporter and is security-scoped:
-        // the sandbox denies every read of the source (including the
-        // metadata.db snapshot copy inside CalibreReader.open) until the scope
-        // is started. Hold it for the whole wizard — the import copies book
-        // files from this folder later.
-        stopCalibreAccess()
-        if url.startAccessingSecurityScopedResource() {
-            calibreSourceSecurityURL = url
-        }
-        defer {
-            // The wizard never appears on the failure paths: release the scope.
-            if calibreSummary == nil { stopCalibreAccess() }
-        }
-        let reader: CalibreReader
-        do {
-            reader = try CalibreReader.open(libraryURL: url)
-        } catch {
-            lastError = error.localizedDescription
-            calibreSummary = nil
-            calibreBooks = []
-            calibreSourcePath = nil
-            return
-        }
-        defer { try? reader.close() }
-        do {
-            let summary = try reader.summary()
-            let books = try reader.books()
-            calibreSummary = summary
-            calibreBooks = books
-            calibreSelectedIDs = Set(books.map(\.calibreID))
-            calibreImportReport = nil
-            calibreSourcePath = url.standardizedFileURL.path
-        } catch {
-            lastError = error.localizedDescription
-            calibreSummary = nil
-            calibreBooks = []
-            calibreSourcePath = nil
-        }
-    }
-
-    func importCalibre() async {
-        guard let repository, let summary = calibreSummary,
-              let sourcePath = calibreSourcePath else { return }
-        calibreImportInProgress = true
-        defer { calibreImportInProgress = false }
-        let service = CalibreImportService(layout: .init(root: repository.root))
-        do {
-            calibreImportReport = try await service.importBooks(
-                calibreBooks,
-                from: sourcePath,
-                libraryID: summary.libraryID,
-                selection: Array(calibreSelectedIDs),
-                into: repository
-            )
-            // The source is no longer read after the import completes; a
-            // failed import keeps the scope so the wizard's retry can read it.
-            stopCalibreAccess()
-        } catch {
-            lastError = error.localizedDescription
-        }
-        await refreshAll()
-    }
-
-    // MARK: - Editing
-
-    func saveEdit(_ edit: BookEdit, coverData: Data?, for id: UUID) async {
-        guard let repository else { return }
-        guard !isLibraryUnavailable else {
-            lastError = "Library unavailable — the library becomes editable again once it reconnects."
-            return
-        }
-        do {
-            let updated = try await repository.updateBook(id: id, edit: edit)
-            // Best-effort cover: a failure must not undo the metadata save.
-            // NOTE: `inspectorBook` is deliberately NOT reassigned here — the
-            // editor sheet's presentation is owned by its callers (onSave/
-            // onCancel set it to nil to dismiss); reassigning it on save would
-            // re-present the sheet. The updated book reaches the UI via
-            // `refreshAll()` → `session.books`.
-            if let coverData {
-                do {
-                    _ = try await repository.updateCover(coverData: coverData, for: id)
-                } catch {
-                    lastError = "Metadata saved; cover update failed: \(error.localizedDescription)"
-                }
-            }
-        } catch {
-            // The library folder may be unreachable (volume unmounted, cloud
-            // folder offline): queue the edit to the durable outbox and keep
-            // the catalog current so browsing reflects it. If even the offline
-            // path fails, surface the original error. Covers require the
-            // library, so the offline path never takes cover data.
-            await saveOffline(edit, for: id, originalError: error)
-        }
-        refreshPendingSync()
-        await refreshAll()
-    }
-
-    private func saveOffline(_ edit: BookEdit, for id: UUID, originalError: Error) async {
-        guard let repository, let syncState else {
-            lastError = originalError.localizedDescription
-            return
-        }
-        var book = books.first { $0.id == id }
-        if book == nil {
-            book = try? await repository.book(id: id)
-        }
-        guard let book else {
-            lastError = originalError.localizedDescription
-            return
-        }
-        do {
-            let (changes, resolved) = try OfflineBookEdit.apply(
-                edit, to: book.snapshot, deviceID: deviceID
-            )
-            var clock = HybridLogicalClock(nodeID: deviceID)
-            for change in changes {
-                _ = try syncState.outbox.stage(
-                    change: change, bookID: id, deviceID: deviceID, clock: clock.tick()
-                )
-            }
-            let updated = try await repository.upsertResolved(
-                resolved, bookID: id, baseSnapshot: book.snapshot, changes: changes
-            )
-            // Same contract as `saveEdit`: do NOT reassign `inspectorBook`
-            // (it would re-present the dismissed editor sheet).
-        } catch {
-            lastError = originalError.localizedDescription
-        }
-    }
-
-    // MARK: - Metadata enrichment
-
-    /// The metadata lookup service, created once (sources: OpenLibrary then
-    /// Google Books). Shared by the inspector's fetch and the editor's
-    /// review-first fetch.
-    private func lookupService() -> MetadataLookupService {
-        if let existing = metadataService {
-            return existing
-        }
-        let client = URLSessionMetadataHTTPClient()
-        let registry = MetadataRegistry(sources: [
-            OpenLibrarySource(client: client, userAgent: Self.metadataUserAgent),
-            GoogleBooksSource(client: client, userAgent: Self.metadataUserAgent),
-        ])
-        let created = MetadataLookupService(registry: registry)
-        metadataService = created
-        return created
-    }
-
-    private func lookupResult(for book: IndexedBook) async throws -> MetadataLookupResult {
-        let query = MetadataLookupQuery(
-            isbn: book.identifiers["isbn"], title: book.title, authors: book.authors
-        )
-        return try await lookupService().lookup(query)
-    }
-
-    /// Looks up metadata for a book (ISBN-first, then title+author) and either
-    /// auto-applies a high-confidence candidate or presents the review sheet.
-    func fetchMetadata(for bookID: UUID) async {
-        guard let repository, !isFetchingMetadata else { return }
-        guard let book = books.first(where: { $0.id == bookID }) else { return }
-        metadataLookupError = nil
-        isFetchingMetadata = true
-        defer { isFetchingMetadata = false }
-        do {
-            let result = try await lookupResult(for: book)
-            if let autoApply = result.autoApply {
-                await applyMetadataCandidate(autoApply, for: bookID, auto: true)
-            } else if !result.candidates.isEmpty {
-                metadataCandidates = result.candidates
-                metadataBookID = bookID
-                metadataReviewPresented = true
-            } else {
-                metadataLookupError = "No metadata found."
-            }
-        } catch {
-            metadataLookupError = error.localizedDescription
-        }
-    }
-
-    /// Enriches the given books when they are missing authors/tags (see
-    /// `EnrichmentPolicy`). Sequential — the lookup allows one in-flight
-    /// fetch; high-confidence candidates auto-apply, ambiguous ones present
-    /// the review sheet.
-    func enrichBooksMissingMetadata(_ bookIDs: [UUID]) async {
-        for id in bookIDs {
-            guard let book = books.first(where: { $0.id == id }),
-                  EnrichmentPolicy.needsEnrichment(book) else { continue }
-            await fetchMetadata(for: id)
-        }
-    }
-
-    /// Library-wide sweep: fetch metadata for every book missing authors or
-    /// tags. Menu: Library ▸ Fetch Missing Metadata…
-    func enrichAllBooksMissingMetadata() async {
-        let missing = books
-            .filter { EnrichmentPolicy.needsEnrichment($0) }
-            .map(\.id)
-        await enrichBooksMissingMetadata(missing)
-    }
-
-    /// Returns candidates for the editor's review-first fetch. Never applies —
-    /// even a high-confidence candidate comes back as a candidate so the user
-    /// can decide per field. Errors surface via `metadataLookupError`.
-    func lookupMetadataCandidates(for bookID: UUID) async -> [MetadataCandidate] {
-        guard let repository else { return [] }
-        guard let book = books.first(where: { $0.id == bookID }) else { return [] }
-        do {
-            let result = try await lookupResult(for: book)
-            if let autoApply = result.autoApply {
-                return [autoApply]
-            }
-            return result.candidates
-        } catch {
-            metadataLookupError = error.localizedDescription
-            return []
-        }
-    }
-
-    /// Applies a chosen candidate with missing-fields-only semantics — existing
-    /// values are never clobbered — and downloads the cover (bounded) when the
-    /// book has none. `auto` suppresses the review-sheet cleanup (nothing to
-    /// clear on the auto-apply path).
-    func applyMetadataCandidate(_ candidate: MetadataCandidate, for bookID: UUID, auto: Bool = false) async {
-        defer {
-            if !auto {
-                metadataCandidates = []
-                metadataBookID = nil
-                metadataReviewPresented = false
-            }
-        }
-        guard let repository else { return }
-        guard let book = books.first(where: { $0.id == bookID }) else { return }
-
-        var edit = BookEdit()
-        var changed = false
-        if book.title.isEmpty, !candidate.title.isEmpty {
-            edit.title = candidate.title
-            changed = true
-        }
-        if book.authors.isEmpty, !candidate.authors.isEmpty {
-            edit.authors = candidate.authors
-            changed = true
-        }
-        if book.publisher == nil, let publisher = candidate.publisher, !publisher.isEmpty {
-            edit.publisher = .set(publisher)
-            changed = true
-        }
-        if book.publicationDate == nil, let date = candidate.publicationDate {
-            edit.publicationDate = .set(date)
-            changed = true
-        }
-        if book.identifiers["isbn"] == nil, let isbn = candidate.isbn {
-            edit.identifiers = book.identifiers.merging(["isbn": isbn]) { _, new in new }
-            changed = true
-        }
-        if changed {
-            do {
-                _ = try await repository.updateBook(id: bookID, edit: edit)
-            } catch {
-                lastError = error.localizedDescription
-            }
-        }
-
-        if book.coverHash == nil, let coverURL = candidate.coverURL {
-            do {
-                let client = URLSessionMetadataHTTPClient()
-                let request = URLRequest(url: coverURL)
-                let data = try await withThrowingTaskGroup(of: Data.self) { group in
-                    group.addTask { try await client.data(from: request) }
-                    group.addTask {
-                        try await Task.sleep(for: .seconds(10))
-                        throw CancellationError()
-                    }
-                    guard let data = try await group.next() else {
-                        throw CancellationError()
-                    }
-                    group.cancelAll()
-                    return data
-                }
-                _ = try await repository.updateCover(coverData: data, for: bookID)
-            } catch {
-                // Best-effort: a cover download failure must not undo the metadata apply.
-                metadataLookupError = "Metadata applied; cover download failed."
-            }
-        }
-        await refreshAll()
-    }
-
-    // MARK: - Sync
-
-    /// The full sync sequence shared by the always-on monitor and the manual
-    /// Sync Now button: drain the outbox, ingest changes made by other Macs,
-    /// reconcile the book folders, refresh. Overlapping runs are coalesced.
-    private func runSyncSequence(manual: Bool) async {
-        guard let repository, let syncState else { return }
-        guard !isSyncing else { return }
-        isSyncing = true
-        defer { isSyncing = false }
-        await ensureLibraryFilesDownloaded()
-        do {
-            let engine = await repository.syncEngine(state: syncState)
-            _ = try await engine.drainOutbox()
-            let report = try await engine.ingest()
-            quarantinedChanges = report.quarantined
-        } catch {
-            lastError = error.localizedDescription
-        }
-        do {
-            let reconciler = await repository.reconciler()
-            reconciliationReport = try await reconciler.reconcile()
-        } catch {
-            lastError = error.localizedDescription
-        }
-        refreshLibraryAvailability()
-        if isLibraryUnavailable {
-            // Read-only: stop the monitor so it does not hammer a dead library.
-            stopMonitor()
-        } else if monitor == nil {
-            await startMonitor()
-        }
-        refreshPendingSync()
-        await refreshAll()
-    }
-
-    /// Manual affordance (toolbar button, app activation via
-    /// `reconnectIfNeeded`): runs the full sync sequence.
-    func syncNow() async {
-        await runSyncSequence(manual: true)
-    }
-
-    /// Starts the always-on monitor. FSEvents on local volumes; periodic
-    /// polling on network/cloud roots where events are unreliable. Idempotent;
-    /// the first ingest + reconcile happens in `activate` before this runs.
-    private func startMonitor() async {
-        guard monitor == nil else { return }
-        guard let repository, let syncState, !isLibraryUnavailable else { return }
-        let capabilities = LibraryRootCapabilities.probe(repository.root)
-        let source: any SyncEventSource
-        if capabilities.isNetworkMount || capabilities.isUbiquitous {
-            source = PollingSource(interval: .seconds(60)) { [weak self] in
-                Task { await self?.monitorEvent() }
-            }
-        } else {
-            source = FSEventSource(root: repository.root) { [weak self] in
-                Task { await self?.monitorEvent() }
-            }
-        }
-        let monitor = LibraryMonitor(
-            eventSource: source,
-            periodic: .seconds(60),
-            debounce: .seconds(1),
-            onChange: { [weak self] in await self?.runSyncSequence(manual: false) },
-            onPeriodic: { [weak self] in await self?.runSyncSequence(manual: true) }
-        )
-        self.monitor = monitor
-        await monitor.start()
-    }
-
-    /// Stops and drops the monitor (library closed, or library unavailable).
-    private func stopMonitor() {
-        guard let monitor else { return }
-        self.monitor = nil
-        Task { await monitor.stop() }
-    }
-
-    /// Event-source hop: the source's closure runs on a background queue and
-    /// hands the event to the actor, which debounces it.
-    private func monitorEvent() async {
-        guard let monitor else { return }
-        await monitor.onEvent()
-    }
-
-    /// Lightweight reachability probe: the library root directory must be
-    /// readable. False when unmounted/unreachable.
-    func refreshLibraryAvailability() {
-        guard let repository else { return }
-        var isDirectory: ObjCBool = false
-        isLibraryUnavailable = !FileManager.default.fileExists(
-            atPath: repository.root.path, isDirectory: &isDirectory
-        ) || !isDirectory.boolValue
-    }
-
-    /// Reconnect flow used on app activation: refresh availability, then sync.
-    func reconnectIfNeeded() async {
-        refreshLibraryAvailability()
-        await syncNow()
-    }
-
-    private func refreshPendingSync() {
-        pendingSyncCount = (try? syncState?.outbox.pendingCount()) ?? 0
-    }
-
-    /// iCloud Drive can leave library files as placeholders until requested;
-    /// ingest must read real content, so request a download first. The wait is
-    /// bounded (Task 4's `ensureDownloaded` loop is caller-bounded by design).
-    private func ensureLibraryFilesDownloaded() async {
-        guard let repository else { return }
-        let capabilities = LibraryRootCapabilities.probe(repository.root)
-        guard capabilities.isUbiquitous else { return }
-        try? await withThrowingTaskGroup(of: Void.self) { group in
-            group.addTask {
-                await LibraryRootCapabilities.ensureDownloaded(repository.root)
-            }
-            group.addTask {
-                try await Task.sleep(for: .seconds(10))
-                throw CancellationError()
-            }
-            try await group.next()
-            group.cancelAll()
-        }
-    }
-
+extension LibrarySession {
     // MARK: - Delete / restore
 
     /// Asks for confirmation before deleting the given books: stores the ids
@@ -977,66 +456,13 @@ final class LibrarySession {
     var libraryRoot: URL? {
         repository?.root
     }
-
-    // MARK: - Diagnostics
-
-    func rebuildIndex() async {
-        guard let repository else { return }
-        isRebuilding = true
-        rebuildProgress = 0
-        defer {
-            isRebuilding = false
-            rebuildProgress = nil
-            cancelFlag.requested = false
-        }
-        do {
-            try await repository.rebuildCatalog(
-                progress: { [weak self] value in
-                    Task { @MainActor in
-                        self?.rebuildProgress = value
-                    }
-                },
-                cancelled: { [cancelFlag] in cancelFlag.requested }
-            )
-        } catch LibraryRepositoryError.rebuildCancelled {
-            lastError = "Rebuild cancelled."
-        } catch {
-            lastError = error.localizedDescription
-        }
-        await refreshAll()
-    }
-
-    func cancelRebuild() {
-        cancelFlag.requested = true
-    }
-
-    func reloadDiagnostics() async {
-        guard let repository else { return }
-        missingFiles = (try? await repository.missingFormatFiles()) ?? []
-        await refreshDeleted()
-    }
-
-    private static func syncRoot() throws -> URL {
-        let root = URL.applicationSupportDirectory
-            .appending(path: "Book Manager", directoryHint: .isDirectory)
-        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        return root
-    }
-
-    private static func indexDirectory() throws -> URL {
-        let root = URL.applicationSupportDirectory
-            .appending(path: "Book Manager", directoryHint: .isDirectory)
-            .appending(path: "Indexes", directoryHint: .isDirectory)
-        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        return root
-    }
 }
 
 /// Lock-protected boolean so the repository's synchronous `cancelled` closure
 /// (called from the repository actor) can read the MainActor session's cancel
 /// request without a data race (a stale read only delays cancellation by one
 /// book — benign for a rebuild-cancel flag).
-private final class RebuildCancelFlag: @unchecked Sendable {
+final class RebuildCancelFlag: @unchecked Sendable {
     private let lock = NSLock()
     private var value = false
 

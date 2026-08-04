@@ -121,4 +121,13 @@ public struct BookEdit: Sendable {
         self.identifiers = identifiers
         self.comments = comments
     }
+
+    /// True when the edit changes nothing (every field is `.keep`/nil). The
+    /// batch metadata editor skips such books when committing — a no-op edit
+    /// would otherwise write an unnecessary change record.
+    public var isEmpty: Bool {
+        title == nil && authors == nil && tags == nil && languages == nil && identifiers == nil
+            && series == .keep && seriesIndex == .keep && rating == .keep
+            && publisher == .keep && publicationDate == .keep && comments == .keep
+    }
 }

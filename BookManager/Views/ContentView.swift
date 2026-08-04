@@ -22,7 +22,6 @@ struct ContentView: View {
     @State private var importURLs: [URL] = []
     @State private var showImportReport = false
     @State private var showSendReport = false
-    @State private var showDiagnostics = false
     @State private var showCalibreImport = false
     @State private var showActivityPopover = false
     @State private var columnVisibility: NavigationSplitViewVisibility = .doubleColumn
@@ -124,16 +123,19 @@ struct ContentView: View {
                 SendReportView(report: report) { showSendReport = false }
             }
         }
-        .sheet(item: $session.inspectorBook) { book in
-            MetadataEditorView(book: book, session: session, onSave: { edit, coverData in
-                Task { await session.saveEdit(edit, coverData: coverData, for: book.id) }
-                session.inspectorBook = nil
-            }, onCancel: {
-                session.inspectorBook = nil
-            })
-        }
-        .sheet(isPresented: $showDiagnostics) {
-            DiagnosticsView()
+        .sheet(isPresented: metadataEditorPresented) {
+            if let books = session.metadataEditQueue {
+                MetadataEditorView(books: books, session: session, onSave: { results in
+                    Task {
+                        for result in results {
+                            await session.saveEdit(result.edit, coverData: result.coverData, for: result.book.id)
+                        }
+                        session.metadataEditQueue = nil
+                    }
+                }, onCancel: {
+                    session.metadataEditQueue = nil
+                })
+            }
         }
         .sheet(isPresented: $showCalibreImport) {
             CalibreImportView(session: session)
@@ -182,12 +184,13 @@ struct ContentView: View {
         .onChange(of: session.facetNavigation.category) { _, category in
             columnVisibility = (category == nil) ? .doubleColumn : .all
         }
-        // `.searchable` is attached here — once, at the layout root — not to
-        // the detail column: the structural 2-col ⇄ 3-col swap would
-        // re-register a detail-column search item in the window toolbar and
-        // trip NSToolbar's "duplicate com.apple.SwiftUI.search" assertion.
-        .searchable(text: $session.searchText, prompt: "Search books")
-        .searchFocused($searchFocused)
+        // The search field is a real `NSSearchField` in its own toolbar item
+        // (not `.searchable`): the system search item always sits at the
+        // toolbar's trailing edge with nothing allowed after it (and expands
+        // to fill the toolbar on macOS 26), but the Inspector toggle must ride
+        // to the RIGHT of the search bar. Keeping each control in its own
+        // toolbar item makes the item order deterministic and prevents one
+        // item's state change from re-laying-out the others.
         .focusedValue(\.searchFocus, $searchFocused)
         // The inspector shows LIBRARY book metadata; the device view has no
         // inspector detail, so suppress it while a device is selected (a stale
@@ -222,63 +225,17 @@ struct ContentView: View {
         }
     }
 
-    /// The detail column's toolbar items (Add Books, Open, Reveal, Edit
-    /// Metadata, Inspector, view picker, Send to Device, activity,
-    /// diagnostics, sync, Calibre import). Attached to the detail column —
-    /// not the split view — so the toolbar chrome stays over the detail pane
-    /// and the middle-column divider runs the full window height.
-    private var detailToolbar: some ToolbarContent {
+}
+
+extension ContentView {
+    /// Device management cluster: send-to-device (single button or device
+    /// menu) plus the device-activity button. Present only while a device is
+    /// connected ("when available"). Own group so it reads as a distinct
+    /// cluster, leading of the library actions. Attached to the detail
+    /// column — not the split view — so the toolbar chrome stays over the
+    /// detail pane and the middle-column divider runs the full window height.
+    private var deviceToolbarGroup: some ToolbarContent {
         ToolbarItemGroup {
-            Button {
-                session.present(.addBooks)
-            } label: {
-                Label("Add Books", systemImage: "plus")
-            }
-            // The library-selection actions (Open / Reveal / Edit
-            // Metadata) act on the library book selection, which is stale
-            // in device mode — hide them while a device is selected.
-            if session.selectedDeviceID == nil {
-                Button {
-                    openSelection()
-                } label: {
-                    Label("Open", systemImage: "book")
-                }
-                .disabled(session.selection.isEmpty)
-                Button {
-                    revealSelection()
-                } label: {
-                    Label("Reveal in Finder", systemImage: "folder")
-                }
-                .disabled(session.selection.isEmpty)
-                Button {
-                    editSelection()
-                } label: {
-                    Label("Edit Metadata", systemImage: "pencil")
-                }
-                .disabled(session.isLibraryUnavailable || session.selection.count != 1)
-            }
-            if session.selectedDeviceID == nil {
-                Button {
-                    session.inspectorPresented.toggle()
-                } label: {
-                    Label("Inspector", systemImage: "sidebar.trailing")
-                }
-                .help("Show or hide the inspector")
-            }
-            // The Table/Grid picker only affects the library browser; the
-            // device view is table-only, so hide it in device mode.
-            if session.selectedDeviceID == nil {
-                Picker("View", selection: $session.viewMode) {
-                    Image(systemName: "list.bullet")
-                        .accessibilityLabel("Table")
-                        .tag(LibrarySession.ViewMode.table)
-                    Image(systemName: "square.grid.2x2")
-                        .accessibilityLabel("Cover grid")
-                        .tag(LibrarySession.ViewMode.grid)
-                }
-                .pickerStyle(.segmented)
-                .help("Table or cover grid")
-            }
             if session.devices.devices.isEmpty {
                 EmptyView()
             } else if let device = session.devices.devices.first, session.devices.devices.count == 1 {
@@ -321,27 +278,66 @@ struct ContentView: View {
                     DeviceActivityPopover(session: session)
                 }
             }
+        }
+    }
+
+    /// Library selection actions: Add Books, Open, Edit Metadata. The
+    /// selection actions act on the library book selection, which is stale in
+    /// device mode — they are hidden while a device is selected. Add Books is
+    /// available in both modes.
+    private var libraryActionsToolbarGroup: some ToolbarContent {
+        ToolbarItemGroup {
             Button {
-                showDiagnostics = true
+                session.present(.addBooks)
             } label: {
-                Label("Diagnostics", systemImage: "wrench.and.screwdriver")
+                Label("Add Books", systemImage: "plus")
             }
+            if session.selectedDeviceID == nil {
+                Button {
+                    openSelection()
+                } label: {
+                    Label("Open", systemImage: "book")
+                }
+                .disabled(session.selection.isEmpty)
+                Button {
+                    editSelection()
+                } label: {
+                    Label("Edit Metadata", systemImage: "pencil")
+                }
+                .disabled(session.isLibraryUnavailable || session.selection.isEmpty)
+            }
+        }
+    }
+
+    /// The Table/Grid view picker. Only affects the library browser (the
+    /// device view is table-only), so it is hidden in device mode.
+    private var viewPickerToolbarItem: some ToolbarContent {
+        ToolbarItemGroup {
+            if session.selectedDeviceID == nil {
+                Picker("View", selection: $session.viewMode) {
+                    Image(systemName: "list.bullet")
+                        .accessibilityLabel("Table")
+                        .tag(LibrarySession.ViewMode.table)
+                    Image(systemName: "square.grid.2x2")
+                        .accessibilityLabel("Cover grid")
+                        .tag(LibrarySession.ViewMode.grid)
+                }
+                .pickerStyle(.segmented)
+                .help("Table or cover grid")
+            }
+        }
+    }
+
+    /// Sync status: its own toolbar item so the spinner/text swap never
+    /// re-lays-out the search field or Inspector toggle. While syncing the
+    /// label is a bare spinner — no “Syncing…” text — so the item keeps its
+    /// icon width and the toolbar doesn't jump when syncing starts/ends.
+    private var syncToolbarItem: some ToolbarContent {
+        ToolbarItem {
             Button {
                 Task { await session.syncNow() }
             } label: {
-                if session.isLibraryUnavailable {
-                    Label("Library unavailable", systemImage: "exclamationmark.triangle")
-                } else if session.isSyncing {
-                    HStack(spacing: 4) {
-                        ProgressView()
-                            .controlSize(.small)
-                        Text("Syncing…")
-                    }
-                } else if session.pendingSyncCount > 0 {
-                    Label("\(session.pendingSyncCount) pending", systemImage: "arrow.triangle.2.circlepath")
-                } else {
-                    Label("Synced", systemImage: "checkmark.circle")
-                }
+                syncToolbarLabel
             }
             .help(
                 session.isLibraryUnavailable
@@ -352,14 +348,51 @@ struct ContentView: View {
                             ? "\(session.pendingSyncCount) change(s) waiting to sync — click to sync now"
                             : "Synced — click to check for changes from other Macs"))
             )
-            Button {
-                session.present(.calibre)
-            } label: {
-                Label("Import from Calibre…", systemImage: "tray.and.arrow.down")
-            }
-            .help("Import a copy of an existing Calibre library")
         }
     }
+
+    @ViewBuilder
+    private var syncToolbarLabel: some View {
+        if session.isLibraryUnavailable {
+            Label("Library unavailable", systemImage: "exclamationmark.triangle")
+        } else if session.isSyncing {
+            ProgressView()
+                .controlSize(.small)
+        } else if session.pendingSyncCount > 0 {
+            Label("\(session.pendingSyncCount) pending", systemImage: "arrow.triangle.2.circlepath")
+        } else {
+            Label("Synced", systemImage: "checkmark.circle")
+        }
+    }
+
+    /// The search field in its own toolbar item, so the sync spinner swap
+    /// never re-lays-out it (or the Inspector toggle) and vice versa.
+    private var searchToolbarItem: some ToolbarContent {
+        ToolbarItem {
+            ToolbarSearchField(
+                text: $session.searchText,
+                prompt: "Search books",
+                isFocused: $searchFocused
+            )
+        }
+    }
+
+    /// The Inspector toggle in its own toolbar item, trailing the search
+    /// field so it sits at the very trailing edge of the toolbar, right of
+    /// the search bar.
+    private var inspectorToolbarItem: some ToolbarContent {
+        ToolbarItem {
+            if session.selectedDeviceID == nil {
+                Button {
+                    session.inspectorPresented.toggle()
+                } label: {
+                    Label("Inspector", systemImage: "sidebar.trailing")
+                }
+                .help("Show or hide the inspector")
+            }
+        }
+    }
+
 
     /// Two-column layout (sidebar + detail): All Books and device views.
     private var twoColumnBrowser: some View {
@@ -401,7 +434,29 @@ struct ContentView: View {
                     .navigationTitle(session.facetNavigation.value ?? "All Books")
             }
         }
-        .toolbar { detailToolbar }
+        // One `.toolbar` with separate items (not multiple `.toolbar`
+        // attachments — those reorder unpredictably on macOS). Statement
+        // order here is the toolbar order, and a leading flexible spacer
+        // aligns the whole cluster to the trailing edge. Fixed spacers break
+        // the macOS 26 glass surface into the distinct clusters below.
+        // Right-to-left from the edge: Inspector toggle, search field,
+        // grid/list picker, library actions (Add Books / Open / Edit
+        // Metadata), device management, then the sync status at the leading
+        // end of the cluster.
+        .toolbar {
+            ToolbarSpacer(.flexible)
+            syncToolbarItem
+            ToolbarSpacer(.fixed)
+            deviceToolbarGroup
+            ToolbarSpacer(.fixed)
+            libraryActionsToolbarGroup
+            ToolbarSpacer(.fixed)
+            viewPickerToolbarItem
+            ToolbarSpacer(.fixed)
+            searchToolbarItem
+            ToolbarSpacer(.fixed)
+            inspectorToolbarItem
+        }
     }
 
     /// Toolbar label for device activity: a determinate circular ring while a
@@ -470,17 +525,16 @@ struct ContentView: View {
         }
     }
 
-    private func revealSelection() {
-        if let id = session.selection.first {
-            Task { await session.reveal(id: id) }
-        }
+    private func editSelection() {
+        session.metadataEditQueue = session.selectionBooks
     }
 
-    private func editSelection() {
-        if let id = session.selection.first,
-           let book = session.books.first(where: { $0.id == id }) {
-            session.inspectorBook = book
-        }
+    /// Dismissal binding for the batch metadata editor sheet.
+    private var metadataEditorPresented: Binding<Bool> {
+        Binding(
+            get: { session.metadataEditQueue != nil },
+            set: { if !$0 { session.metadataEditQueue = nil } }
+        )
     }
 }
 

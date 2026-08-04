@@ -1,10 +1,26 @@
 import SwiftUI
 
-/// Standard macOS preferences pane (Settings… / Cmd-,).
+/// Standard macOS preferences pane (Settings… / Cmd-,). The Diagnostics
+/// section moved here from the toolbar so the window toolbar stays clean.
 struct SettingsView: View {
     @Bindable var settings: AppSettings
 
     var body: some View {
+        TabView {
+            generalTab
+                .tabItem {
+                    Label("General", systemImage: "gearshape")
+                }
+            DiagnosticsView()
+                .tabItem {
+                    Label("Diagnostics", systemImage: "wrench.and.screwdriver")
+                }
+        }
+        .frame(width: 560)
+        .frame(minHeight: 460)
+    }
+
+    private var generalTab: some View {
         Form {
             Section {
                 Toggle(
@@ -19,8 +35,6 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 480)
-        .fixedSize(horizontal: false, vertical: true)
         .navigationTitle("General")
     }
 }

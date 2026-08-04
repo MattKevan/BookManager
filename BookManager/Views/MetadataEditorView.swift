@@ -2,12 +2,108 @@ import AppKit
 import BookManagerCore
 import SwiftUI
 
-struct MetadataEditorView: View {
+/// One queued book's pending edit from the batch metadata editor. `onSave`
+/// receives the whole batch; books whose form has no actual changes are
+/// omitted (a no-op edit would write an unnecessary change record).
+struct MetadataEditResult {
     let book: IndexedBook
+    let edit: BookEdit
+    let coverData: Data?
+}
+
+/// Snapshot of one queued book's form so Prev/Next navigation preserves edits
+/// made earlier in the batch. Drafts are kept per book and committed together
+/// on Save Changes; the live form state below is the current book's draft.
+private struct Draft {
+    var title: String
+    var authorsText: String
+    var series: String
+    var seriesIndex: String
+    var tagsText: String
+    var rating: Int
+    var publisher: String
+    var publicationDate: Date?
+    var hasPublicationDate: Bool
+    var languagesText: String
+    var identifiersText: String
+    var comments: String
+    var coverData: Data?
+
+    init(book: IndexedBook) {
+        title = book.title
+        authorsText = book.authors.joined(separator: ", ")
+        series = book.series ?? ""
+        seriesIndex = book.seriesIndex.map { String($0) } ?? ""
+        tagsText = book.tags.joined(separator: ", ")
+        rating = book.rating ?? 0
+        publisher = book.publisher ?? ""
+        if let date = book.publicationDate {
+            hasPublicationDate = true
+            publicationDate = date
+        } else {
+            hasPublicationDate = false
+            publicationDate = nil
+        }
+        languagesText = book.languages.joined(separator: ", ")
+        identifiersText = book.identifiers.map { "\($0.key)=\($0.value)" }.sorted().joined(separator: "\n")
+        comments = book.comments ?? ""
+        coverData = nil
+    }
+
+    /// Full snapshot init used when flushing the live form into a draft.
+    init(
+        title: String,
+        authorsText: String,
+        series: String,
+        seriesIndex: String,
+        tagsText: String,
+        rating: Int,
+        publisher: String,
+        publicationDate: Date?,
+        hasPublicationDate: Bool,
+        languagesText: String,
+        identifiersText: String,
+        comments: String,
+        coverData: Data?
+    ) {
+        self.title = title
+        self.authorsText = authorsText
+        self.series = series
+        self.seriesIndex = seriesIndex
+        self.tagsText = tagsText
+        self.rating = rating
+        self.publisher = publisher
+        self.publicationDate = publicationDate
+        self.hasPublicationDate = hasPublicationDate
+        self.languagesText = languagesText
+        self.identifiersText = identifiersText
+        self.comments = comments
+        self.coverData = coverData
+    }
+}
+
+private enum ReviewStep: Identifiable {
+    case candidates([MetadataCandidate])
+    case merge(plan: MetadataMergePlan, candidate: MetadataCandidate)
+
+    var id: String {
+        switch self {
+        case .candidates: return "candidates"
+        case .merge(let plan, _): return "merge-\(plan.items.map(\.id).joined(separator: ","))"
+        }
+    }
+}
+
+struct MetadataEditorView: View {
+    /// The batch queue, walked in order (Book 1 of N). Single-book callers
+    /// pass a one-element array; the Prev/Next controls only appear when
+    /// there is more than one book.
+    let books: [IndexedBook]
     let session: LibrarySession?
-    let onSave: (BookEdit, Data?) -> Void
+    let onSave: ([MetadataEditResult]) -> Void
     let onCancel: () -> Void
 
+    // Live form state — the current book's draft.
     @State private var title = ""
     @State private var authorsText = ""
     @State private var series = ""
@@ -21,36 +117,38 @@ struct MetadataEditorView: View {
     @State private var identifiersText = ""
     @State private var comments = ""
 
-    // Metadata merge (Fetch Metadata…): candidate pick, then the per-field
-    // Keep/Use-fetched review. One sheet whose content switches step — avoids
-    // the double-sheet presentation glitch.
-    private enum ReviewStep: Identifiable {
-        case candidates([MetadataCandidate])
-        case merge(plan: MetadataMergePlan, candidate: MetadataCandidate)
-
-        var id: String {
-            switch self {
-            case .candidates: return "candidates"
-            case .merge(let plan, _): return "merge-\(plan.items.map(\.id).joined(separator: ","))"
-            }
-        }
-    }
+    // Batch navigation: drafts keyed by book id preserve edits across
+    // Prev/Next; the index points at the book the live form shows.
+    @State private var currentIndex = 0
+    @State private var drafts: [UUID: Draft] = [:]
 
     @State private var reviewStep: ReviewStep?
     @State private var mergeChoices: [MetadataMergeItem.Field: MetadataMergeChoice] = [:]
     @State private var pendingCoverData: Data?
     @State private var coverPending = false
     @State private var coverDownloadTask: Task<Void, Never>?
+    @State private var fetchTask: Task<Void, Never>?
     @State private var isFetchingMetadata = false
     @State private var currentCoverImage: NSImage?
     @State private var fetchedCoverImage: NSImage?
     @State private var mergeError: String?
 
+    private var currentBook: IndexedBook { books[currentIndex] }
+    private var isBatch: Bool { books.count > 1 }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Edit Metadata")
-                .font(.headline)
-                .padding()
+            HStack(alignment: .firstTextBaseline) {
+                Text("Edit Metadata")
+                    .font(.headline)
+                if isBatch {
+                    Text("Book \(currentIndex + 1) of \(books.count)")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+            .padding()
             Form {
                 TextField("Title", text: $title)
                 TextField("Authors (comma separated)", text: $authorsText)
@@ -81,11 +179,30 @@ struct MetadataEditorView: View {
                 .disabled(isFetchingMetadata)
                 .help("Fetch metadata and a cover from OpenLibrary / Google Books and review per-field changes before saving")
                 Spacer()
+                if isBatch {
+                    Button {
+                        navigate(by: -1)
+                    } label: {
+                        Label("Previous", systemImage: "chevron.left")
+                    }
+                    .disabled(currentIndex == 0)
+                    .help("Previous book")
+
+                    Button {
+                        navigate(by: 1)
+                    } label: {
+                        Label("Next", systemImage: "chevron.right")
+                    }
+                    .disabled(currentIndex == books.count - 1)
+                    .help("Next book")
+                }
                 Button("Cancel") { onCancel() }
-                Button("Save") {
-                    onSave(collectEdit(), pendingCoverData)
+                    .keyboardShortcut(.cancelAction)
+                Button(isBatch ? "Save Changes" : "Save") {
+                    saveAll()
                 }
                 .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.defaultAction)
                 .disabled(coverPending)
                 if coverPending {
                     ProgressView()
@@ -96,7 +213,7 @@ struct MetadataEditorView: View {
             .padding()
         }
         .frame(minWidth: 420, minHeight: 480)
-        .onAppear(perform: populate)
+        .onAppear(perform: loadCurrentDraft)
         .sheet(item: $reviewStep) { step in
             switch step {
             case .candidates(let candidates):
@@ -130,72 +247,154 @@ struct MetadataEditorView: View {
         }
     }
 
-    private func populate() {
-        title = book.title
-        authorsText = book.authors.joined(separator: ", ")
-        series = book.series ?? ""
-        seriesIndex = book.seriesIndex.map { String($0) } ?? ""
-        tagsText = book.tags.joined(separator: ", ")
-        rating = book.rating ?? 0
-        publisher = book.publisher ?? ""
-        if let date = book.publicationDate {
-            hasPublicationDate = true
-            publicationDate = date
-        }
-        languagesText = book.languages.joined(separator: ", ")
-        identifiersText = book.identifiers.map { "\($0.key)=\($0.value)" }.sorted().joined(separator: "\n")
-        comments = book.comments ?? ""
+}
+
+extension MetadataEditorView {
+    // MARK: - Batch navigation
+
+    private func navigate(by delta: Int) {
+        commitCurrentDraft()
+        // A book switch invalidates the previous book's in-flight work: cancel
+        // any fetch/cover download so a late completion can't populate the
+        // form (or a pending cover) of the book now on screen.
+        fetchTask?.cancel()
+        fetchTask = nil
+        isFetchingMetadata = false
+        coverDownloadTask?.cancel()
+        coverDownloadTask = nil
+        coverPending = false
+        pendingCoverData = nil
+        currentIndex = min(max(currentIndex + delta, 0), books.count - 1)
+        loadCurrentDraft()
     }
 
-    private func collectEdit() -> BookEdit {
+    /// Flushes the live form into the current book's draft (idempotent — Save
+    /// filters unchanged books out before committing).
+    private func commitCurrentDraft() {
+        drafts[currentBook.id] = Draft(
+            title: title, authorsText: authorsText, series: series, seriesIndex: seriesIndex,
+            tagsText: tagsText, rating: rating, publisher: publisher,
+            publicationDate: publicationDate, hasPublicationDate: hasPublicationDate,
+            languagesText: languagesText, identifiersText: identifiersText,
+            comments: comments, coverData: pendingCoverData
+        )
+    }
+
+    /// Populates the live form from the current book's draft (or the book
+    /// itself on first visit) and clears per-book review state.
+    private func loadCurrentDraft() {
+        if let draft = drafts[currentBook.id] {
+            title = draft.title
+            authorsText = draft.authorsText
+            series = draft.series
+            seriesIndex = draft.seriesIndex
+            tagsText = draft.tagsText
+            rating = draft.rating
+            publisher = draft.publisher
+            hasPublicationDate = draft.hasPublicationDate
+            publicationDate = draft.publicationDate
+            languagesText = draft.languagesText
+            identifiersText = draft.identifiersText
+            comments = draft.comments
+            pendingCoverData = draft.coverData
+        } else {
+            title = currentBook.title
+            authorsText = currentBook.authors.joined(separator: ", ")
+            series = currentBook.series ?? ""
+            seriesIndex = currentBook.seriesIndex.map { String($0) } ?? ""
+            tagsText = currentBook.tags.joined(separator: ", ")
+            rating = currentBook.rating ?? 0
+            publisher = currentBook.publisher ?? ""
+            if let date = currentBook.publicationDate {
+                hasPublicationDate = true
+                publicationDate = date
+            } else {
+                hasPublicationDate = false
+                publicationDate = nil
+            }
+            languagesText = currentBook.languages.joined(separator: ", ")
+            identifiersText = currentBook.identifiers.map { "\($0.key)=\($0.value)" }.sorted().joined(separator: "\n")
+            comments = currentBook.comments ?? ""
+            pendingCoverData = nil
+        }
+        reviewStep = nil
+        mergeChoices = [:]
+        currentCoverImage = nil
+        fetchedCoverImage = nil
+        mergeError = nil
+    }
+
+    /// Save Changes: flush the current form, then commit every book whose
+    /// draft actually differs (empty edits and cover-less books are skipped).
+    private func saveAll() {
+        commitCurrentDraft()
+        var results: [MetadataEditResult] = []
+        for book in books {
+            guard let draft = drafts[book.id] else { continue }
+            let edit = makeEdit(from: draft, for: book)
+            if !edit.isEmpty || draft.coverData != nil {
+                results.append(MetadataEditResult(book: book, edit: edit, coverData: draft.coverData))
+            }
+        }
+        onSave(results)
+    }
+
+    private func makeEdit(from draft: Draft, for book: IndexedBook) -> BookEdit {
         let splitList = { (value: String) -> [String] in
             value.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         }
         var identifiers: [String: String] = [:]
-        for line in identifiersText.split(separator: "\n") {
+        for line in draft.identifiersText.split(separator: "\n") {
             let parts = line.split(separator: "=", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             if parts.count == 2 { identifiers[parts[0]] = parts[1] }
         }
-        let newSeries = series.trimmingCharacters(in: .whitespacesAndNewlines)
+        let newSeries = draft.series.trimmingCharacters(in: .whitespacesAndNewlines)
         let seriesEdit: FieldEdit<String> = newSeries.isEmpty ? .clear : .set(newSeries)
-        let trimmedIndex = seriesIndex.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedIndex = draft.seriesIndex.trimmingCharacters(in: .whitespacesAndNewlines)
         let newIndex = trimmedIndex.isEmpty ? nil : Double(trimmedIndex)
         let indexEdit: FieldEdit<Double> = newSeries.isEmpty ? .clear : (newIndex.map { .set($0) } ?? .clear)
-        let ratingEdit: FieldEdit<Int> = rating == 0 ? .clear : .set(rating)
+        let ratingEdit: FieldEdit<Int> = draft.rating == 0 ? .clear : .set(draft.rating)
         let publisherEdit: FieldEdit<String> = {
-            let value = publisher.trimmingCharacters(in: .whitespacesAndNewlines)
+            let value = draft.publisher.trimmingCharacters(in: .whitespacesAndNewlines)
             return value.isEmpty ? .clear : .set(value)
         }()
-        let dateEdit: FieldEdit<Date> = hasPublicationDate
-            ? (publicationDate.map { .set($0) } ?? .clear)
+        let dateEdit: FieldEdit<Date> = draft.hasPublicationDate
+            ? (draft.publicationDate.map { .set($0) } ?? .clear)
             : .clear
         let commentsEdit: FieldEdit<String> = {
-            let value = comments.trimmingCharacters(in: .whitespacesAndNewlines)
+            let value = draft.comments.trimmingCharacters(in: .whitespacesAndNewlines)
             return value.isEmpty ? .clear : .set(value)
         }()
-        let newTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let newTitle = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
         return BookEdit(
             title: newTitle == book.title ? nil : newTitle,
-            authors: splitList(authorsText) == book.authors ? nil : splitList(authorsText),
+            authors: splitList(draft.authorsText) == book.authors ? nil : splitList(draft.authorsText),
             series: seriesEdit,
             seriesIndex: indexEdit,
-            tags: splitList(tagsText) == book.tags ? nil : splitList(tagsText),
+            tags: splitList(draft.tagsText) == book.tags ? nil : splitList(draft.tagsText),
             rating: ratingEdit,
             publisher: publisherEdit,
             publicationDate: dateEdit,
-            languages: splitList(languagesText) == book.languages ? nil : splitList(languagesText),
+            languages: splitList(draft.languagesText) == book.languages ? nil : splitList(draft.languagesText),
             identifiers: identifiers == book.identifiers ? nil : identifiers,
             comments: commentsEdit
         )
     }
 
+}
+
+extension MetadataEditorView {
     // MARK: - Fetch Metadata…
 
     /// Runs the review-first lookup; the result goes to the candidate pick
-    /// (never auto-applied — the editor is per-field review by design).
+    /// (never auto-applied — the editor is per-field review by design). The
+    /// lookup targets the book the fetch was started on, even if the queue is
+    /// later navigated — though the review sheet is modal, so navigation while
+    /// it is up is impossible anyway.
     private func fetchMetadata() {
         guard let session, !isFetchingMetadata else { return }
         isFetchingMetadata = true
+        let targetBook = currentBook
         // Cancel any in-flight cover download BEFORE the reset: a stale
         // download completing after this point must never repopulate the draft
         // with a cover the user did not choose in the current flow.
@@ -207,8 +406,8 @@ struct MetadataEditorView: View {
         pendingCoverData = nil
         coverPending = false
         mergeError = nil
-        Task {
-            let candidates = await session.lookupMetadataCandidates(for: book.id)
+        fetchTask = Task {
+            let candidates = await session.lookupMetadataCandidates(for: targetBook.id)
             isFetchingMetadata = false
             guard !Task.isCancelled else { return }
             if candidates.isEmpty {
@@ -222,7 +421,7 @@ struct MetadataEditorView: View {
     /// Picking a candidate builds the per-field plan (defaults from the book's
     /// empty fields) and moves to the merge review.
     private func startMerge(with candidate: MetadataCandidate) {
-        let plan = MetadataMergePlan.make(book: book, candidate: candidate)
+        let plan = MetadataMergePlan.make(book: currentBook, candidate: candidate)
         var choices: [MetadataMergeItem.Field: MetadataMergeChoice] = [:]
         for item in plan.items {
             choices[item.field] = item.defaultChoice
@@ -236,7 +435,7 @@ struct MetadataEditorView: View {
         currentCoverImage = nil
         fetchedCoverImage = nil
         let repository = session?.repository
-        let book = self.book
+        let book = currentBook
         Task {
             let image = await ThumbnailCache.shared.thumbnail(for: book, repository: repository)
             guard !Task.isCancelled else { return }
@@ -254,7 +453,7 @@ struct MetadataEditorView: View {
     /// is populated from `MetadataMergePlan.apply`'s edit (single source of
     /// truth — no hand-mirrored field mapping).
     private func confirmMerge(plan: MetadataMergePlan, candidate: MetadataCandidate) {
-        let result = MetadataMergePlan.apply(choices: mergeChoices, book: book, candidate: candidate)
+        let result = MetadataMergePlan.apply(choices: mergeChoices, book: currentBook, candidate: candidate)
         if let newTitle = result.edit.title {
             title = newTitle
         }

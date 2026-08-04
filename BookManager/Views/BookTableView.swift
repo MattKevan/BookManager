@@ -30,22 +30,21 @@ struct BookTableView: View {
             }
         }
         .contextMenu(forSelectionType: IndexedBook.ID.self) { ids in
-            Button("Open") {
-                if let id = ids.first { Task { await session.open(id: id) } }
+            Button("Edit Metadata") {
+                session.metadataEditQueue = session.selectionBooks
             }
-            Button("Reveal in Finder") {
+            .disabled(session.isLibraryUnavailable)
+            Button("Show in Finder") {
                 if let id = ids.first { Task { await session.reveal(id: id) } }
             }
-            Button("Edit Metadata…") {
-                if let id = ids.first, let book = session.books.first(where: { $0.id == id }) {
-                    session.inspectorBook = book
-                }
-            }
+            .disabled(session.isLibraryUnavailable)
             Divider()
-            Button("Move to Trash", role: .destructive) {
+            Button("Delete Book", role: .destructive) {
                 session.requestDelete(ids: ids)
             }
         } primaryAction: { ids in
+            // Double-click opens; the context menu intentionally has no
+            // separate Open item (single-purpose actions only).
             if let id = ids.first { Task { await session.open(id: id) } }
         }
         .overlay {

@@ -227,6 +227,29 @@ private struct CoverTile: View {
         }
         .padding(6)
         .contentShape(Rectangle())
+        .contextMenu {
+            Button("Edit Metadata") {
+                selectForContextMenu()
+                if let session, !session.selection.isEmpty {
+                    session.metadataEditQueue = session.selectionBooks
+                }
+            }
+            .disabled(session?.isLibraryUnavailable ?? false)
+            Button("Show in Finder") {
+                selectForContextMenu()
+                if let id = session?.selection.first {
+                    Task { await session?.reveal(id: id) }
+                }
+            }
+            .disabled(session?.isLibraryUnavailable ?? false)
+            Divider()
+            Button("Delete Book", role: .destructive) {
+                selectForContextMenu()
+                if let ids = session?.selection {
+                    session?.requestDelete(ids: ids)
+                }
+            }
+        }
         .onHover { hovering in
             isHovering = hovering
         }
@@ -245,6 +268,14 @@ private struct CoverTile: View {
         .task {
             image = await ThumbnailCache.shared.thumbnail(for: book, repository: session?.repository)
         }
+    }
+
+    /// Right-click on a tile: Finder semantics — the menu acts on the clicked
+    /// book. A clicked tile that isn't already selected replaces the selection;
+    /// a clicked member of a multi-selection keeps the multi-selection.
+    private func selectForContextMenu() {
+        guard let session, !session.selection.contains(book.id) else { return }
+        session.selection = [book.id]
     }
 
     /// The cover: selection border hugs the image itself (no gap when the
