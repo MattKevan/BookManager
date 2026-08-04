@@ -3,6 +3,7 @@ import SwiftUI
 @main
 struct BookManagerApp: App {
     @State private var session = LibrarySession()
+    @State private var settings = AppSettings()
 
     var body: some Scene {
         WindowGroup {
@@ -18,6 +19,9 @@ struct BookManagerApp: App {
         .defaultSize(width: 1_100, height: 720)
         .commands {
             AppCommands(session: session)
+        }
+        Settings {
+            SettingsView(settings: settings)
         }
     }
 }
@@ -61,6 +65,11 @@ private struct AppCommands: Commands {
             }
             .keyboardShortcut("e", modifiers: .command)
             .disabled(session.selection.count != 1 || session.isLibraryUnavailable)
+            Divider()
+            Button("Fetch Missing Metadata…") {
+                Task { await session.enrichAllBooksMissingMetadata() }
+            }
+            .disabled(session.isLibraryUnavailable)
             Divider()
             Button("Send to Device") {
                 Task { await session.sendSelectionToDevice() }

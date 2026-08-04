@@ -396,6 +396,18 @@ final class LibrarySession {
             ])
         }
         await refreshAll()
+        // Enrich freshly imported books that are missing authors/tags, when
+        // the preference is on. Runs off the import's critical path so the
+        // report feedback is not delayed by network lookups.
+        if AppSettings.automaticallyFetchMissingMetadata() {
+            let importedIDs = (importReport?.imported ?? []).compactMap { item -> UUID? in
+                if case let .imported(id) = item.status { return id }
+                return nil
+            }
+            if !importedIDs.isEmpty {
+                Task { await self.enrichBooksMissingMetadata(importedIDs) }
+            }
+        }
     }
 
     // MARK: - Send to device
@@ -667,6 +679,27 @@ final class LibrarySession {
         } catch {
             metadataLookupError = error.localizedDescription
         }
+    }
+
+    /// Enriches the given books when they are missing authors/tags (see
+    /// `EnrichmentPolicy`). Sequential — the lookup allows one in-flight
+    /// fetch; high-confidence candidates auto-apply, ambiguous ones present
+    /// the review sheet.
+    func enrichBooksMissingMetadata(_ bookIDs: [UUID]) async {
+        for id in bookIDs {
+            guard let book = books.first(where: { $0.id == id }),
+                  EnrichmentPolicy.needsEnrichment(book) else { continue }
+            await fetchMetadata(for: id)
+        }
+    }
+
+    /// Library-wide sweep: fetch metadata for every book missing authors or
+    /// tags. Menu: Library ▸ Fetch Missing Metadata…
+    func enrichAllBooksMissingMetadata() async {
+        let missing = books
+            .filter { EnrichmentPolicy.needsEnrichment($0) }
+            .map(\.id)
+        await enrichBooksMissingMetadata(missing)
     }
 
     /// Returns candidates for the editor's review-first fetch. Never applies —
