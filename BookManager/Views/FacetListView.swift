@@ -41,8 +41,11 @@ struct FacetListView: View {
                 .tag(item.value)
             }
         }
-        .listStyle(.sidebar)
-        .navigationTitle(session.facetNavigation.category?.displayName ?? "")
+        .listStyle(.inset)
+        // No `.navigationTitle` here: a titlebar on the middle column would
+        // make the middle↔detail divider stop below it. Chrome stays on the
+        // detail column (its toolbar + title) so the divider runs the full
+        // window height.
         // The filter is a plain TextField, not `.searchable`: on macOS a
         // `.searchable` field inside a NavigationSplitView column triggers a
         // reentrant NSHostingView layout crash (AppKit layout recursion,

@@ -198,138 +198,144 @@ struct ContentView: View {
         )) {
             BookInspectorView(session: session)
         }
-        .toolbar {
-            ToolbarItemGroup {
+    }
+
+    /// The detail column's toolbar items (Add Books, Open, Reveal, Edit
+    /// Metadata, Inspector, view picker, Send to Device, activity,
+    /// diagnostics, sync, Calibre import). Attached to the detail column —
+    /// not the split view — so the toolbar chrome stays over the detail pane
+    /// and the middle-column divider runs the full window height.
+    private var detailToolbar: some ToolbarContent {
+        ToolbarItemGroup {
+            Button {
+                session.present(.addBooks)
+            } label: {
+                Label("Add Books", systemImage: "plus")
+            }
+            // The library-selection actions (Open / Reveal / Edit
+            // Metadata) act on the library book selection, which is stale
+            // in device mode — hide them while a device is selected.
+            if session.selectedDeviceID == nil {
                 Button {
-                    session.present(.addBooks)
+                    openSelection()
                 } label: {
-                    Label("Add Books", systemImage: "plus")
+                    Label("Open", systemImage: "book")
                 }
-                // The library-selection actions (Open / Reveal / Edit
-                // Metadata) act on the library book selection, which is stale
-                // in device mode — hide them while a device is selected.
-                if session.selectedDeviceID == nil {
-                    Button {
-                        openSelection()
-                    } label: {
-                        Label("Open", systemImage: "book")
-                    }
-                    .disabled(session.selection.isEmpty)
-                    Button {
-                        revealSelection()
-                    } label: {
-                        Label("Reveal in Finder", systemImage: "folder")
-                    }
-                    .disabled(session.selection.isEmpty)
-                    Button {
-                        editSelection()
-                    } label: {
-                        Label("Edit Metadata", systemImage: "pencil")
-                    }
-                    .disabled(session.isLibraryUnavailable || session.selection.count != 1)
+                .disabled(session.selection.isEmpty)
+                Button {
+                    revealSelection()
+                } label: {
+                    Label("Reveal in Finder", systemImage: "folder")
                 }
-                if session.selectedDeviceID == nil {
-                    Button {
-                        session.inspectorPresented.toggle()
-                    } label: {
-                        Label("Inspector", systemImage: "sidebar.trailing")
-                    }
-                    .help("Show or hide the inspector")
+                .disabled(session.selection.isEmpty)
+                Button {
+                    editSelection()
+                } label: {
+                    Label("Edit Metadata", systemImage: "pencil")
                 }
-                // The Table/Grid picker only affects the library browser; the
-                // device view is table-only, so hide it in device mode.
-                if session.selectedDeviceID == nil {
-                    Picker("View", selection: $session.viewMode) {
-                        Image(systemName: "list.bullet")
-                            .accessibilityLabel("Table")
-                            .tag(LibrarySession.ViewMode.table)
-                        Image(systemName: "square.grid.2x2")
-                            .accessibilityLabel("Cover grid")
-                            .tag(LibrarySession.ViewMode.grid)
-                    }
-                    .pickerStyle(.segmented)
-                    .help("Table or cover grid")
+                .disabled(session.isLibraryUnavailable || session.selection.count != 1)
+            }
+            if session.selectedDeviceID == nil {
+                Button {
+                    session.inspectorPresented.toggle()
+                } label: {
+                    Label("Inspector", systemImage: "sidebar.trailing")
                 }
-                if session.devices.devices.isEmpty {
-                    EmptyView()
-                } else if let device = session.devices.devices.first, session.devices.devices.count == 1 {
-                    Button {
-                        Task {
-                            // Mirror the multi-device path: select the sole device
-                            // first so send-to-device works without a prior
-                            // sidebar click (select is same-id guarded).
-                            await session.devices.select(device.id)
-                            await session.sendSelectionToDevice()
-                        }
-                    } label: {
-                        Label("Send to Device", systemImage: "arrow.up.doc")
+                .help("Show or hide the inspector")
+            }
+            // The Table/Grid picker only affects the library browser; the
+            // device view is table-only, so hide it in device mode.
+            if session.selectedDeviceID == nil {
+                Picker("View", selection: $session.viewMode) {
+                    Image(systemName: "list.bullet")
+                        .accessibilityLabel("Table")
+                        .tag(LibrarySession.ViewMode.table)
+                    Image(systemName: "square.grid.2x2")
+                        .accessibilityLabel("Cover grid")
+                        .tag(LibrarySession.ViewMode.grid)
+                }
+                .pickerStyle(.segmented)
+                .help("Table or cover grid")
+            }
+            if session.devices.devices.isEmpty {
+                EmptyView()
+            } else if let device = session.devices.devices.first, session.devices.devices.count == 1 {
+                Button {
+                    Task {
+                        // Mirror the multi-device path: select the sole device
+                        // first so send-to-device works without a prior
+                        // sidebar click (select is same-id guarded).
+                        await session.devices.select(device.id)
+                        await session.sendSelectionToDevice()
                     }
-                    .disabled(session.selection.isEmpty)
-                } else {
-                    Menu {
-                        ForEach(session.devices.devices) { device in
-                            Button(device.name) {
-                                Task {
-                                    await session.devices.select(device.id)
-                                    await session.sendSelectionToDevice()
-                                }
+                } label: {
+                    Label("Send to Device", systemImage: "arrow.up.doc")
+                }
+                .disabled(session.selection.isEmpty)
+            } else {
+                Menu {
+                    ForEach(session.devices.devices) { device in
+                        Button(device.name) {
+                            Task {
+                                await session.devices.select(device.id)
+                                await session.sendSelectionToDevice()
                             }
                         }
-                    } label: {
-                        Label("Send to Device", systemImage: "arrow.up.doc")
                     }
-                    .disabled(session.selection.isEmpty)
-                }
-                if !session.devices.devices.isEmpty {
-                    Button {
-                        showActivityPopover.toggle()
-                    } label: {
-                        activityToolbarLabel
-                            .frame(width: 22, height: 22)
-                    }
-                    .help("Device activity")
-                    .popover(isPresented: $showActivityPopover, arrowEdge: .bottom) {
-                        DeviceActivityPopover(session: session)
-                    }
-                }
-                Button {
-                    showDiagnostics = true
                 } label: {
-                    Label("Diagnostics", systemImage: "wrench.and.screwdriver")
+                    Label("Send to Device", systemImage: "arrow.up.doc")
                 }
-                Button {
-                    Task { await session.syncNow() }
-                } label: {
-                    if session.isLibraryUnavailable {
-                        Label("Library unavailable", systemImage: "exclamationmark.triangle")
-                    } else if session.isSyncing {
-                        HStack(spacing: 4) {
-                            ProgressView()
-                                .controlSize(.small)
-                            Text("Syncing…")
-                        }
-                    } else if session.pendingSyncCount > 0 {
-                        Label("\(session.pendingSyncCount) pending", systemImage: "arrow.triangle.2.circlepath")
-                    } else {
-                        Label("Synced", systemImage: "checkmark.circle")
-                    }
-                }
-                .help(
-                    session.isLibraryUnavailable
-                        ? "Library unavailable — read-only until the library reconnects. Click to try again."
-                        : (session.isSyncing
-                            ? "Syncing — checking the library for changes from other Macs"
-                            : (session.pendingSyncCount > 0
-                                ? "\(session.pendingSyncCount) change(s) waiting to sync — click to sync now"
-                                : "Synced — click to check for changes from other Macs"))
-                )
-                Button {
-                    session.present(.calibre)
-                } label: {
-                    Label("Import from Calibre…", systemImage: "tray.and.arrow.down")
-                }
-                .help("Import a copy of an existing Calibre library")
+                .disabled(session.selection.isEmpty)
             }
+            if !session.devices.devices.isEmpty {
+                Button {
+                    showActivityPopover.toggle()
+                } label: {
+                    activityToolbarLabel
+                        .frame(width: 22, height: 22)
+                }
+                .help("Device activity")
+                .popover(isPresented: $showActivityPopover, arrowEdge: .bottom) {
+                    DeviceActivityPopover(session: session)
+                }
+            }
+            Button {
+                showDiagnostics = true
+            } label: {
+                Label("Diagnostics", systemImage: "wrench.and.screwdriver")
+            }
+            Button {
+                Task { await session.syncNow() }
+            } label: {
+                if session.isLibraryUnavailable {
+                    Label("Library unavailable", systemImage: "exclamationmark.triangle")
+                } else if session.isSyncing {
+                    HStack(spacing: 4) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Syncing…")
+                    }
+                } else if session.pendingSyncCount > 0 {
+                    Label("\(session.pendingSyncCount) pending", systemImage: "arrow.triangle.2.circlepath")
+                } else {
+                    Label("Synced", systemImage: "checkmark.circle")
+                }
+            }
+            .help(
+                session.isLibraryUnavailable
+                    ? "Library unavailable — read-only until the library reconnects. Click to try again."
+                    : (session.isSyncing
+                        ? "Syncing — checking the library for changes from other Macs"
+                        : (session.pendingSyncCount > 0
+                            ? "\(session.pendingSyncCount) change(s) waiting to sync — click to sync now"
+                            : "Synced — click to check for changes from other Macs"))
+            )
+            Button {
+                session.present(.calibre)
+            } label: {
+                Label("Import from Calibre…", systemImage: "tray.and.arrow.down")
+            }
+            .help("Import a copy of an existing Calibre library")
         }
     }
 
@@ -373,6 +379,7 @@ struct ContentView: View {
                     .navigationTitle(session.facetNavigation.value ?? "All Books")
             }
         }
+        .toolbar { detailToolbar }
     }
 
     /// Toolbar label for device activity: a determinate circular ring while a
