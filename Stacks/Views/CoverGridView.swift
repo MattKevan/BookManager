@@ -23,7 +23,10 @@ struct CoverGridView<Browser: LibraryBrowser>: View {
     }
 
     private let columns = [
-        GridItem(.adaptive(minimum: 120, maximum: 180), spacing: 16)
+        // `.bottom` alignment = the "invisible shelf": every cover's bottom
+        // edge sits on the row's bottom line, and the row height expands to
+        // the tallest cover in it (shorter covers don't float).
+        GridItem(.adaptive(minimum: 120, maximum: 180), spacing: 16, alignment: .bottom)
     ]
 
     @State private var marqueeStart: CGPoint?
