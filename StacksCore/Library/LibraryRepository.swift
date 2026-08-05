@@ -117,78 +117,6 @@ public actor LibraryRepository: LibraryRepositoryImporting {
         )
     }
 
-    private func writeChanges(
-        metadata: NewBookMetadata,
-        document: AutomergeBookDocument,
-        bookID: UUID,
-        staged: [BookFolder.StagedFile],
-        cover: Data?
-    ) async throws {
-        func write(_ change: Data, clock: HybridLogicalClock) async throws {
-            _ = try await changeStore.writeBookChange(
-                change, bookID: bookID, deviceID: deviceID, clock: clock
-            )
-        }
-        var current = HybridLogicalClock(nodeID: deviceID)
-
-        try await write(document.setTitle(metadata.title, clock: current.tick()), clock: current)
-        if !metadata.authors.isEmpty {
-            try await write(document.setAuthors(metadata.authors, clock: current.tick()), clock: current)
-        }
-        if let series = metadata.series, !series.isEmpty {
-            try await write(document.setSeries(series, clock: current.tick()), clock: current)
-        }
-        if let seriesIndex = metadata.seriesIndex {
-            try await write(document.setSeriesIndex(seriesIndex, clock: current.tick()), clock: current)
-        }
-        if !metadata.tags.isEmpty {
-            try await write(document.setTags(metadata.tags, clock: current.tick()), clock: current)
-        }
-        if let rating = metadata.rating {
-            try await write(document.setRating(rating, clock: current.tick()), clock: current)
-        }
-        if let publisher = metadata.publisher, !publisher.isEmpty {
-            try await write(document.setPublisher(publisher, clock: current.tick()), clock: current)
-        }
-        if let publicationDate = metadata.publicationDate {
-            try await write(document.setPublicationDate(publicationDate, clock: current.tick()), clock: current)
-        }
-        if let addedDate = metadata.addedDate {
-            try await write(document.setAddedDate(addedDate, clock: current.tick()), clock: current)
-        } else {
-            try await write(document.setAddedDate(.now, clock: current.tick()), clock: current)
-        }
-        if !metadata.languages.isEmpty {
-            try await write(document.setLanguages(metadata.languages, clock: current.tick()), clock: current)
-        }
-        if !metadata.identifiers.isEmpty {
-            try await write(document.setIdentifiers(metadata.identifiers, clock: current.tick()), clock: current)
-        }
-        if let comments = metadata.comments, !comments.isEmpty {
-            try await write(document.setComments(comments, clock: current.tick()), clock: current)
-        }
-        if let rawMetadata = metadata.rawMetadata, !rawMetadata.isEmpty {
-            try await write(document.setRawMetadata(rawMetadata, clock: current.tick()), clock: current)
-        }
-        for file in staged {
-            let filename = CanonicalPathBuilder.formatFileName(
-                title: metadata.title, authors: metadata.authors, kind: file.kind
-            )
-            let format = BookFormatValue(
-                kind: file.kind, filename: filename,
-                contentHash: file.contentHash, size: file.size
-            )
-            try await write(document.setFormat(format, clock: current.tick()), clock: current)
-        }
-        if let cover {
-            let hash = BookFolder.contentHash(cover)
-            try await write(
-                document.setCover(CoverValue(filename: "cover.jpg", contentHash: hash), clock: current.tick()),
-                clock: current
-            )
-        }
-    }
-
     // MARK: - Editing
 
     public func updateBook(id: UUID, edit: BookEdit) async throws -> IndexedBook {
@@ -473,19 +401,81 @@ public enum LibraryRepositoryError: Error, Equatable {
     case libraryAlreadyExists
 }
 
-extension LibraryRepositoryError: LocalizedError {
-    public var errorDescription: String? {
-        switch self {
-        case .unsupportedFormat(let version):
-            return "This library uses an unsupported format version (\(version))."
-        case .missingDependencies(let bookID):
-            return "The library is missing changes for a book (\(bookID.uuidString))."
-        case .bookNotFound(let bookID):
-            return "The requested book (\(bookID.uuidString)) was not found."
-        case .rebuildCancelled:
-            return "The index rebuild was cancelled."
-        case .libraryAlreadyExists:
-            return "A library already exists in this folder. Choose a different folder or name."
+// MARK: - Private helpers
+
+/// Kept out of the actor body (type-body limit): the change-write path used
+/// by `createBook`. Members of a `private` extension in the same file reach
+/// the actor's private stored properties (`changeStore`, `deviceID`).
+private extension LibraryRepository {
+    func writeChanges(
+        metadata: NewBookMetadata,
+        document: AutomergeBookDocument,
+        bookID: UUID,
+        staged: [BookFolder.StagedFile],
+        cover: Data?
+    ) async throws {
+        func write(_ change: Data, clock: HybridLogicalClock) async throws {
+            _ = try await changeStore.writeBookChange(
+                change, bookID: bookID, deviceID: deviceID, clock: clock
+            )
+        }
+        var current = HybridLogicalClock(nodeID: deviceID)
+
+        try await write(document.setTitle(metadata.title, clock: current.tick()), clock: current)
+        if !metadata.authors.isEmpty {
+            try await write(document.setAuthors(metadata.authors, clock: current.tick()), clock: current)
+        }
+        if let series = metadata.series, !series.isEmpty {
+            try await write(document.setSeries(series, clock: current.tick()), clock: current)
+        }
+        if let seriesIndex = metadata.seriesIndex {
+            try await write(document.setSeriesIndex(seriesIndex, clock: current.tick()), clock: current)
+        }
+        if !metadata.tags.isEmpty {
+            try await write(document.setTags(metadata.tags, clock: current.tick()), clock: current)
+        }
+        if let rating = metadata.rating {
+            try await write(document.setRating(rating, clock: current.tick()), clock: current)
+        }
+        if let publisher = metadata.publisher, !publisher.isEmpty {
+            try await write(document.setPublisher(publisher, clock: current.tick()), clock: current)
+        }
+        if let publicationDate = metadata.publicationDate {
+            try await write(document.setPublicationDate(publicationDate, clock: current.tick()), clock: current)
+        }
+        if let addedDate = metadata.addedDate {
+            try await write(document.setAddedDate(addedDate, clock: current.tick()), clock: current)
+        } else {
+            try await write(document.setAddedDate(.now, clock: current.tick()), clock: current)
+        }
+        if !metadata.languages.isEmpty {
+            try await write(document.setLanguages(metadata.languages, clock: current.tick()), clock: current)
+        }
+        if !metadata.identifiers.isEmpty {
+            try await write(document.setIdentifiers(metadata.identifiers, clock: current.tick()), clock: current)
+        }
+        if let comments = metadata.comments, !comments.isEmpty {
+            try await write(document.setComments(comments, clock: current.tick()), clock: current)
+        }
+        if let rawMetadata = metadata.rawMetadata, !rawMetadata.isEmpty {
+            try await write(document.setRawMetadata(rawMetadata, clock: current.tick()), clock: current)
+        }
+        for file in staged {
+            let filename = CanonicalPathBuilder.formatFileName(
+                title: metadata.title, authors: metadata.authors, kind: file.kind
+            )
+            let format = BookFormatValue(
+                kind: file.kind, filename: filename,
+                contentHash: file.contentHash, size: file.size
+            )
+            try await write(document.setFormat(format, clock: current.tick()), clock: current)
+        }
+        if let cover {
+            let hash = BookFolder.contentHash(cover)
+            try await write(
+                document.setCover(CoverValue(filename: "cover.jpg", contentHash: hash), clock: current.tick()),
+                clock: current
+            )
         }
     }
 }
