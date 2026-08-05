@@ -24,12 +24,6 @@ struct ContentView: View {
     @State private var showCalibreImport = false
     @State private var showActivityPopover = false
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
-    /// Facet pane width (persisted across launches); dragged via the divider
-    /// handle. Clamped to 180...420 so the pane never exceeds half the window.
-    @AppStorage("facetPaneWidth") private var facetPaneWidth: Double = 240
-    /// The pane width when the current divider drag started (translation is
-    /// measured from the gesture start, so the start width must be captured).
-    @State private var facetPaneDragStart: Double?
     @FocusState private var searchFocused: Bool
 
     var body: some View {
@@ -461,34 +455,14 @@ extension ContentView {
                     session.presentImportReport()
                 }
             } else if let library = session.activeLibrary {
-                // The facet "middle column" as a draggable pane inside
-                // the detail column (HSplitView's native divider), present
-                // only while a category is active so All Books stays a true
-                // 2-column layout. Replaces the 2/3-column split-view swap
-                // (which crashed macOS); the divider position persists
-                // across facet switches (the HSplitView stays alive).
+                // The facet "middle column" as a resizable pane inside the
+                // detail column, present only while a category is active so
+                // All Books stays a true 2-column layout. Replaces the
+                // 2/3-column split-view swap (which crashed macOS).
+                // `FacetPaneHost` owns the pane width so drag ticks re-render
+                // only this subtree.
                 if library.facetNavigation.category != nil {
-                    HStack(spacing: 0) {
-                        FacetListView(browser: library)
-                            .frame(width: facetPaneWidth)
-                        // Draggable divider: HSplitView's native divider was
-                        // unreliable inside the split view's detail column
-                        // (not draggable, and it defaulted to a 50/50 split),
-                        // so the pane width is stored state driven by a drag
-                        // gesture on this handle (180...420pt, default 240).
-                        Rectangle()
-                            .fill(.separator)
-                            .frame(width: 6)
-                            .contentShape(Rectangle())
-                            .gesture(
-                                DragGesture(minimumDistance: 1)
-                                    .onChanged { value in
-                                        let start = facetPaneDragStart ?? facetPaneWidth
-                                        facetPaneDragStart = start
-                                        facetPaneWidth = min(max(start + Double(value.translation.width), 180), 420)
-                                    }
-                                    .onEnded { _ in facetPaneDragStart = nil }
-                            )
+                    FacetPaneHost(library: library) {
                         libraryBrowser(for: library)
                     }
                 } else {
