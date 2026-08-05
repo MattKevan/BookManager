@@ -73,6 +73,7 @@
 		59E79393194F7EFF36145964 /* MTPKitTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02A436267E10E681BA9F1AB0 /* MTPKitTransport.swift */; };
 		5B11953F9EA7171C6F128FF0 /* EnrichmentPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 618EB6F73511304A648E8A0D /* EnrichmentPolicyTests.swift */; };
 		5D1640540BD0B121C4FFA680 /* LibrarySession+Import.swift in Sources */ = {isa = PBXBuildFile; fileRef = 067D894995AC00A492706E77 /* LibrarySession+Import.swift */; };
+		5E2A2A4EECD4B70E1D2A1E4C /* OpenLibraryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 163E22FEF42F161F699FABE8 /* OpenLibraryStore.swift */; };
 		602A1980E5DBDDAEE5E9DC2E /* ScaffoldTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E0F599668F92A662E7A15F1 /* ScaffoldTests.swift */; };
 		60A10A9CBCF1803968D05182 /* MetadataRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = C854178AA769446A4F17080C /* MetadataRegistry.swift */; };
 		61A79D48F5CA6E63DD4EF83F /* BookFolder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59187984072C9EB85CDD1252 /* BookFolder.swift */; };
@@ -129,6 +130,7 @@
 		B66066A209A316D5B1FC9780 /* MetadataLookupService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C48CC50F9AB6669BB909D5F6 /* MetadataLookupService.swift */; };
 		B6E282F7F8CE9974644AE840 /* OpfGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 977D2B06EA0436435AA4270C /* OpfGenerator.swift */; };
 		B9B64CF291A57ADC058B4A9B /* CalibreImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F5A9548617F4A2D83411C83 /* CalibreImportView.swift */; };
+		B9C764ACC74E223AE700F8CC /* OpenLibraryStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C86BEFE895851DA48B0C5888 /* OpenLibraryStoreTests.swift */; };
 		BE97C022D773D45C2B5A19B6 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 119B68CC9B0AC1BFA5330497 /* README.md */; };
 		C010A848B4F4ABDA96C265C7 /* MetadataLookupServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 521E4489C3DCC4DD7BAD260A /* MetadataLookupServiceTests.swift */; };
 		C12E04EDFF2C7D9C42A49C28 /* MTPEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0E1AD2D43316FDC579C1271 /* MTPEvent.swift */; };
@@ -244,6 +246,7 @@
 		100737ED605340721B0DE098 /* DeviceServicesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceServicesTests.swift; sourceTree = "<group>"; };
 		119B68CC9B0AC1BFA5330497 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		15167DA711CC417585EE880E /* DeviceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceManager.swift; sourceTree = "<group>"; };
+		163E22FEF42F161F699FABE8 /* OpenLibraryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenLibraryStore.swift; sourceTree = "<group>"; };
 		17CFB7EE9BD7D87261A2F471 /* ImportServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportServiceTests.swift; sourceTree = "<group>"; };
 		18143F8F89B3C2F84E0E000F /* ToolbarSearchField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolbarSearchField.swift; sourceTree = "<group>"; };
 		1A78CD2D3F865648FAC55250 /* SendReportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendReportView.swift; sourceTree = "<group>"; };
@@ -352,6 +355,7 @@
 		C48CC50F9AB6669BB909D5F6 /* MetadataLookupService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataLookupService.swift; sourceTree = "<group>"; };
 		C52572FAF899CE1E384265A3 /* ImportReportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportReportView.swift; sourceTree = "<group>"; };
 		C854178AA769446A4F17080C /* MetadataRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataRegistry.swift; sourceTree = "<group>"; };
+		C86BEFE895851DA48B0C5888 /* OpenLibraryStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenLibraryStoreTests.swift; sourceTree = "<group>"; };
 		CA2C9AE23A48CDED03146CEB /* CalibreRawPresenterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalibreRawPresenterTests.swift; sourceTree = "<group>"; };
 		CB1EE100E37BB7A09580117C /* IndexedBook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IndexedBook.swift; sourceTree = "<group>"; };
 		CB98F4013EB90715C0D69776 /* HybridLogicalClock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HybridLogicalClock.swift; sourceTree = "<group>"; };
@@ -607,6 +611,7 @@
 			isa = PBXGroup;
 			children = (
 				8C76059CE163D9575C6CA974 /* LibraryBookmarkStoreTests.swift */,
+				C86BEFE895851DA48B0C5888 /* OpenLibraryStoreTests.swift */,
 			);
 			path = Security;
 			sourceTree = "<group>";
@@ -860,6 +865,7 @@
 			isa = PBXGroup;
 			children = (
 				EF69E66A769F08B05D3CCCF0 /* LibraryBookmarkStore.swift */,
+				163E22FEF42F161F699FABE8 /* OpenLibraryStore.swift */,
 			);
 			path = Security;
 			sourceTree = "<group>";
@@ -1145,6 +1151,7 @@
 				D4379284F5D1878061A21932 /* MobiToEpubConverterTests.swift in Sources */,
 				7B37F00F4972CDB6CD6687BA /* MockTransport.swift in Sources */,
 				EFC2CDE37220349E2B2120B1 /* OfflineBookEditTests.swift in Sources */,
+				B9C764ACC74E223AE700F8CC /* OpenLibraryStoreTests.swift in Sources */,
 				8460BF82F8F408A508E43A02 /* OutboxTests.swift in Sources */,
 				157E365686C8F8023DE603C4 /* PerformanceTests.swift in Sources */,
 				B548E686B164AE619E5843DF /* RebuildProgressTests.swift in Sources */,
@@ -1220,6 +1227,7 @@
 				6B9458758F17C0BA8F232AA6 /* MobiToEpubConverter.swift in Sources */,
 				58D6B82D2DF896866DCF1C13 /* OfflineBookEdit.swift in Sources */,
 				AD79E2C83C0AF342CAE31A50 /* OpenLibrarySource.swift in Sources */,
+				5E2A2A4EECD4B70E1D2A1E4C /* OpenLibraryStore.swift in Sources */,
 				B6E282F7F8CE9974644AE840 /* OpfGenerator.swift in Sources */,
 				043A2013DCCD56EF8DE15C90 /* Outbox.swift in Sources */,
 				49D5A6C093B4701AC19B358A /* SendPlan.swift in Sources */,

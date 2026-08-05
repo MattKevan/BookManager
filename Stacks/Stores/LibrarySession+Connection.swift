@@ -80,6 +80,9 @@ extension LibrarySession {
             } else {
                 peers.append(connection)
             }
+            try openStore.save(url, for: connection.id, name: connection.name)
+            if home === connection { openStore.setHome(connection.id) }
+            persistOpenOrder()
             activeLibraryID = connection.id
             state = .loaded
             // The connection's init already refreshed; this post-wiring pass
@@ -100,6 +103,7 @@ extension LibrarySession {
     func closePeer(_ peer: LibraryConnection) async {
         peer.stop()
         peers.removeAll { $0.id == peer.id }
+        openStore.remove(peer.id)
         if activeLibraryID == peer.id { activeLibraryID = home?.id }
         if home == nil { await promoteNextPeerToHome() }
     }
@@ -166,6 +170,15 @@ extension LibrarySession {
         } else {
             lastError = error.localizedDescription
         }
+    }
+
+    // MARK: - Persistence
+
+    /// Persists the current open-set order (home first) so launch can reopen
+    /// the same set. `openStore.remove` already cleans a closed library's
+    /// position; this re-syncs after role changes and home closes.
+    func persistOpenOrder() {
+        openStore.setOrder(([home?.id] + peers.map(\.id)).compactMap { $0 })
     }
 
     // MARK: - Sidebar selection routing

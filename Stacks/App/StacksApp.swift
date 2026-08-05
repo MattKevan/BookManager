@@ -18,7 +18,7 @@ struct StacksApp: App {
                     // Skip auto-reopen under UI testing so tests start from a
                     // deterministic welcome screen.
                     if !CommandLine.arguments.contains("--ui-testing") {
-                        await session.openMostRecentLibrary()
+                        await session.reopenLibraries()
                     }
                 }
         }

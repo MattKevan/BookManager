@@ -56,6 +56,32 @@ struct LibraryPeersSection: View {
                     }
                 }
             }
+            if !session.offlinePeers.isEmpty {
+                ForEach(session.offlinePeers) { offline in
+                    HStack(spacing: 6) {
+                        Label(offline.name, systemImage: "externaldrive.badge.exclamationmark")
+                            .foregroundStyle(.secondary)
+                        if offline.isHome {
+                            Image(systemName: "star.fill")
+                                .font(.caption)
+                                .foregroundStyle(.yellow)
+                                .help("Was the home library")
+                        }
+                        Spacer()
+                    }
+                    .contentShape(Rectangle())
+                    .contextMenu {
+                        if offline.url != nil {
+                            Button("Retry") {
+                                Task { await session.retryOffline(offline) }
+                            }
+                        }
+                        Button("Remove") {
+                            session.removeOffline(offline)
+                        }
+                    }
+                }
+            }
         }
     }
 

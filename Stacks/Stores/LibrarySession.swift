@@ -3,6 +3,22 @@ import StacksCore
 import Foundation
 import Observation
 
+/// A library that was open last session but could not be reopened (offline
+/// NAS, missing volume, unresolvable bookmark). Rendered as a flat sidebar row
+/// in the Libraries section with Retry/Remove. Not a `LibraryConnection` — a
+/// connection requires an opened repository, so unreachable libraries are
+/// tracked separately.
+struct OfflineLibrary: Identifiable {
+    let id: UUID
+    let name: String
+    /// Nil when the bookmark itself is unresolvable (no path to retry).
+    let url: URL?
+    /// Whether it was the home library when the session closed — Retry uses
+    /// this to re-open it as home (unless a home already exists, in which
+    /// case it joins as a peer).
+    let isHome: Bool
+}
+
 @MainActor
 @Observable
 final class LibrarySession {
@@ -85,6 +101,17 @@ final class LibrarySession {
     }
     private var _home: LibraryConnection?
     var peers: [LibraryConnection] = []
+
+    /// Libraries from the persisted open set that failed to reopen (offline
+    /// NAS, missing volume, unresolvable bookmark). Populated by
+    /// `reopenLibraries`; Retry/Remove act on them directly.
+    var offlinePeers: [OfflineLibrary] = []
+
+    /// Persists the open set (bookmarks, order, home designation, names) so
+    /// launch can reopen exactly what the user had open. Separate from
+    /// `bookmarks` (Open Recent). Internal (like `bookmarks`) so the hub
+    /// extension in `LibrarySession+Connection.swift` can read it.
+    let openStore = OpenLibraryStore()
     var activeLibraryID: UUID? {
         get { _activeLibraryID ?? home?.id }
         set { _activeLibraryID = newValue }
@@ -152,30 +179,91 @@ final class LibrarySession {
         }
     }
 
-    /// Opens the most recently used library at launch. Falls back to the
-    /// welcome (open/create) screen when there is no bookmark, it cannot be
-    /// resolved, or the library can no longer be opened. No-op when a library
-    /// is already loaded (e.g. the window reappeared mid-session).
-    func openMostRecentLibrary() async {
-        guard repository == nil else { return }
-        guard let id = bookmarks.mostRecentlyOpenedLibraryID(),
-              let resolved = try? bookmarks.resolve(id) else {
+    /// Reopens the persisted open set at launch: the home library first (as
+    /// home), then each peer, in the saved order. Libraries whose bookmark
+    /// cannot be resolved or whose folder is unreachable become offline rows
+    /// (Retry available when a path is recoverable). The welcome screen
+    /// appears when nothing is persisted or every entry failed. No-op when a
+    /// library is already loaded (the window reappeared mid-session).
+    func reopenLibraries() async {
+        guard home == nil else { return }
+        let order = openStore.order()
+        let homeID = openStore.home()
+        guard !order.isEmpty else {
             state = .welcome
             return
         }
-        await openLibrary(at: resolved.url, fallbackToWelcome: true)
+        for libraryID in order {
+            guard let resolved = try? openStore.resolve(libraryID) else {
+                // Unresolvable bookmark (missing/corrupt data): no URL to
+                // retry — a name-only offline row lets the user Remove it.
+                offlinePeers.append(OfflineLibrary(
+                    id: libraryID,
+                    name: openStore.names()[libraryID] ?? "Library",
+                    url: nil,
+                    isHome: libraryID == homeID
+                ))
+                continue
+            }
+            await openRequested(
+                at: resolved.url,
+                intent: (libraryID == homeID) ? .home : .peer,
+                fallbackToWelcome: libraryID == homeID
+            )
+            if !isConnected(libraryID) {
+                offlinePeers.append(OfflineLibrary(
+                    id: libraryID,
+                    name: openStore.names()[libraryID] ?? resolved.url.lastPathComponent,
+                    url: resolved.url,
+                    isHome: libraryID == homeID
+                ))
+            }
+        }
+        // A failed home with surviving peers: promote the first peer so the
+        // session is loaded (the failed home stays as an offline row).
+        if home == nil, !peers.isEmpty {
+            await promoteNextPeerToHome()
+        }
+        if home == nil, offlinePeers.isEmpty {
+            state = .welcome
+        }
+    }
+
+    /// Retries opening an offline library with its saved intent (home when it
+    /// was home and no home exists yet; the open policy dedupes and handles
+    /// the role). The offline row is dropped when the library is connected.
+    func retryOffline(_ offline: OfflineLibrary) async {
+        guard let url = offline.url else { return }
+        await openRequested(at: url, intent: offline.isHome ? .home : .peer)
+        if isConnected(offline.id) {
+            offlinePeers.removeAll { $0.id == offline.id }
+        }
+    }
+
+    /// Drops an offline library from the sidebar and forgets it (removes its
+    /// bookmark so it is not reopened next launch).
+    func removeOffline(_ offline: OfflineLibrary) {
+        openStore.remove(offline.id)
+        offlinePeers.removeAll { $0.id == offline.id }
+    }
+
+    /// Whether `libraryID` is an open connection (home or peer).
+    private func isConnected(_ libraryID: UUID) -> Bool {
+        home?.id == libraryID || peers.contains { $0.id == libraryID }
     }
 
     /// Closes the active connection: a peer is dropped by itself; closing
     /// home tears down the session's transient state, promotes the next peer
     /// (or returns to the welcome screen when none remain).
     func closeLibrary() async {
+        let closedHomeID = home?.id
         if let active = activeLibrary, active !== home {
             await closePeer(active)
             return
         }
         home?.stop()
         home = nil
+        if let closedHomeID { openStore.remove(closedHomeID) }
         activeSecurityURL?.stopAccessingSecurityScopedResource()
         activeSecurityURL = nil
         stopCalibreAccess()
@@ -200,6 +288,10 @@ final class LibrarySession {
         isPickerPresented = false
         recentLibraries = Self.resolveRecents(bookmarks)
         await promoteNextPeerToHome()
+        // Record the promoted home (or none) so the store stays accurate for
+        // the next launch; the order re-follows the live set.
+        openStore.setHome(home?.id)
+        persistOpenOrder()
     }
 
     // MARK: - Activation
