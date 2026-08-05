@@ -231,10 +231,6 @@ final class LibrarySession {
 
     var repository: LibraryRepository? { connection?.repository }
     var books: [IndexedBook] { connection?.books ?? [] }
-    var authors: [(value: String, count: Int)] { connection?.authors ?? [] }
-    var series: [(value: String, count: Int)] { connection?.series ?? [] }
-    var tags: [(value: String, count: Int)] { connection?.tags ?? [] }
-    var formats: [(value: String, count: Int)] { connection?.formats ?? [] }
     var deletedBooks: [IndexedBook] { connection?.deletedBooks ?? [] }
     var missingFiles: [(book: IndexedBook, filename: String)] { connection?.missingFiles ?? [] }
     var facetNavigation: FacetNavigation { connection?.facetNavigation ?? FacetNavigation() }
@@ -247,10 +243,6 @@ final class LibrarySession {
     var searchText: String {
         get { connection?.searchText ?? "" }
         set { connection?.searchText = newValue }
-    }
-    var viewMode: BrowserViewMode {
-        get { connection?.viewMode ?? .grid }
-        set { connection?.viewMode = newValue }
     }
     var isLibraryUnavailable: Bool { connection?.isLibraryUnavailable ?? false }
     var isSyncing: Bool { connection?.isSyncing ?? false }
@@ -277,19 +269,14 @@ final class LibrarySession {
     var libraryRoot: URL? { repository?.root }
 
     func refreshAll() async { await connection?.refreshAll() }
-    func refreshBooks() async { await connection?.refreshBooks() }
     func refreshFacets() async { await connection?.refreshFacets() }
     func refreshDeleted() async { await connection?.refreshDeleted() }
     func selectCategory(_ type: FacetType?) { connection?.selectCategory(type) }
-    func selectValue(_ value: String?) { connection?.selectValue(value) }
-    func selectInGrid(_ book: IndexedBook) { connection?.selectInGrid(book) }
-    func clearGridSelection() { connection?.clearGridSelection() }
     func requestDelete(ids: Set<UUID>) { connection?.requestDelete(ids: ids) }
     func delete(ids: Set<UUID>) async { await connection?.delete(ids: ids) }
     func restore(id: UUID) async { await connection?.restore(id: id) }
     func open(id: UUID) async { await connection?.open(id: id) }
     func reveal(id: UUID) async { await connection?.reveal(id: id) }
-    func formatFileURL(for book: IndexedBook) -> URL? { connection?.formatFileURL(for: book) }
     func runSyncSequence(manual: Bool) async { await connection?.runSyncSequence(manual: manual) }
     func syncNow() async { await connection?.syncNow() }
     func startMonitor() async { await connection?.startMonitor() }

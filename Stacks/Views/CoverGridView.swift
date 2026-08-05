@@ -11,8 +11,8 @@ private struct CoverTileFrameKey: PreferenceKey {
     }
 }
 
-struct CoverGridView: View {
-    @Bindable var session: LibrarySession
+struct CoverGridView<Browser: LibraryBrowser>: View {
+    let browser: Browser
 
     private let columns = [
         GridItem(.adaptive(minimum: 120, maximum: 180), spacing: 16)
@@ -45,13 +45,13 @@ struct CoverGridView: View {
             // view: on macOS the ScrollView captures hits across its whole
             // frame, so a background-attached gesture never fires. Tile
             // clicks still win via child-gesture precedence.
-            .onTapGesture { session.clearGridSelection() }
+            .onTapGesture { browser.clearGridSelection() }
             .simultaneousGesture(marqueeDrag)
             .onPreferenceChange(CoverTileFrameKey.self) { tileFrames = $0 }
             .overlay {
                 Group {
                     marqueeOverlay
-                    if session.books.isEmpty {
+                    if browser.books.isEmpty {
                         ContentUnavailableView(
                             "No Books",
                             systemImage: "books.vertical",
@@ -60,18 +60,18 @@ struct CoverGridView: View {
                     }
                 }
             }
-            .onChange(of: session.selection) { _, newValue in
+            .onChange(of: browser.selection) { _, newValue in
                 // Keyboard focus follows a single selection (any mouse click), so
                 // arrow keys work immediately after interaction. Marquee drags are
                 // excluded: their selection is transient and mouse-driven.
-                if !session.isMarqueeSelecting, newValue.count == 1, let id = newValue.first {
+                if !browser.isMarqueeSelecting, newValue.count == 1, let id = newValue.first {
                     focusedID = id
                 }
             }
             .onChange(of: focusedID) { _, newValue in
                 // Single selection follows keyboard focus (Tab into the grid).
-                if let newValue, !session.isMarqueeSelecting {
-                    session.selection = [newValue]
+                if let newValue, !browser.isMarqueeSelecting {
+                    browser.selection = [newValue]
                 }
             }
             .onKeyPress(.leftArrow) { moveFocus(by: -1); return .handled }
@@ -85,7 +85,7 @@ struct CoverGridView: View {
     private var grid: some View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 16) {
-                ForEach(session.books) { book in
+                ForEach(browser.books) { book in
                     tile(book)
                 }
             }
@@ -94,8 +94,7 @@ struct CoverGridView: View {
     }
 
     private func tile(_ book: IndexedBook) -> some View {
-        CoverTile(book: book)
-            .environment(\.librarySession, session)
+        CoverTile(book: book, browser: browser)
             .focusable()
             .focused($focusedID, equals: book.id)
             // No focus ring around the whole item: selection is shown only by
@@ -115,7 +114,7 @@ struct CoverGridView: View {
     /// Makes a tile draggable onto a sidebar device row (sends that book's
     /// primary format file to the device).
     private func dragProvider(for book: IndexedBook) -> NSItemProvider {
-        guard let url = session.formatFileURL(for: book) else { return NSItemProvider() }
+        guard let url = browser.formatFileURL(for: book) else { return NSItemProvider() }
         return NSItemProvider(object: url as NSURL)
     }
 
@@ -124,16 +123,16 @@ struct CoverGridView: View {
             .onChanged { value in
                 if marqueeStart == nil {
                     marqueeStart = value.startLocation
-                    session.isMarqueeSelecting = true
+                    browser.isMarqueeSelecting = true
                 }
                 marqueeCurrent = value.location
                 let rect = marqueeRect(start: value.startLocation, current: value.location)
                 let hit = GridSelectionSemantics.intersecting(tileFrames, rect: rect)
                 let add = NSEvent.modifierFlags.contains(.command)
-                session.selection = add ? session.selection.union(hit) : hit
+                browser.selection = add ? browser.selection.union(hit) : hit
             }
             .onEnded { _ in
-                session.isMarqueeSelecting = false
+                browser.isMarqueeSelecting = false
                 marqueeStart = nil
                 marqueeCurrent = nil
             }
@@ -142,15 +141,15 @@ struct CoverGridView: View {
     // MARK: - Keyboard navigation
 
     /// Moves keyboard focus (and the single selection) by `delta` positions in
-    /// `session.books` order; Left/Right ±1, Up/Down ±columns. Starting from
+    /// `browser.books` order; Left/Right ±1, Up/Down ±columns. Starting from
     /// nothing, the first keypress picks the first (or last) tile.
     private func moveFocus(by delta: Int) {
-        let books = session.books
+        let books = browser.books
         guard !books.isEmpty else { return }
         let targetIndex: Int
         if let focusedID, let index = books.firstIndex(where: { $0.id == focusedID }) {
             targetIndex = min(max(index + delta, 0), books.count - 1)
-        } else if let selected = session.selection.first,
+        } else if let selected = browser.selection.first,
                   let index = books.firstIndex(where: { $0.id == selected }) {
             targetIndex = min(max(index + delta, 0), books.count - 1)
         } else {
@@ -158,17 +157,17 @@ struct CoverGridView: View {
         }
         let book = books[targetIndex]
         focusedID = book.id
-        session.selection = [book.id]
+        browser.selection = [book.id]
     }
 
     private func openFocused() {
         // Selection-first: a mouse/marquee selection must win over a possibly
         // stale keyboard focus (Finder semantics). The arrow-key flow keeps
         // selection == [focusedID] in lockstep, so this never changes it.
-        if let selected = session.selection.first {
-            Task { await session.open(id: selected) }
+        if let selected = browser.selection.first {
+            Task { await browser.open(id: selected) }
         } else if let focusedID {
-            Task { await session.open(id: focusedID) }
+            Task { await browser.open(id: focusedID) }
         }
     }
 
@@ -177,14 +176,14 @@ struct CoverGridView: View {
         // focused book (a click + marquee leaves focus on the clicked book
         // while the visible selection is the marquee set).
         let ids: Set<UUID>
-        if !session.selection.isEmpty {
-            ids = session.selection
+        if !browser.selection.isEmpty {
+            ids = browser.selection
         } else if let focusedID {
             ids = [focusedID]
         } else {
             return
         }
-        session.requestDelete(ids: ids)
+        browser.requestDelete(ids: ids)
     }
 
     private func marqueeRect(start: CGPoint, current: CGPoint) -> CGRect {
@@ -207,9 +206,9 @@ struct CoverGridView: View {
     }
 }
 
-private struct CoverTile: View {
+private struct CoverTile<Browser: LibraryBrowser>: View {
     let book: IndexedBook
-    @Environment(\.librarySession) private var session
+    let browser: Browser
     @State private var image: NSImage?
     @State private var isHovering = false
 
@@ -230,23 +229,23 @@ private struct CoverTile: View {
         .contextMenu {
             Button("Edit Metadata") {
                 selectForContextMenu()
-                if let session, !session.selection.isEmpty {
-                    session.metadataEditQueue = session.selectionBooks
+                if !browser.selection.isEmpty {
+                    browser.metadataEditQueue = browser.selectionBooks
                 }
             }
-            .disabled(session?.isLibraryUnavailable ?? false)
+            .disabled(browser.isLibraryUnavailable)
             Button("Show in Finder") {
                 selectForContextMenu()
-                if let id = session?.selection.first {
-                    Task { await session?.reveal(id: id) }
+                if let id = browser.selection.first {
+                    Task { await browser.reveal(id: id) }
                 }
             }
-            .disabled(session?.isLibraryUnavailable ?? false)
+            .disabled(browser.isLibraryUnavailable)
             Divider()
             Button("Delete Book", role: .destructive) {
                 selectForContextMenu()
-                if let ids = session?.selection {
-                    session?.requestDelete(ids: ids)
+                if !browser.selection.isEmpty {
+                    browser.requestDelete(ids: browser.selection)
                 }
             }
         }
@@ -254,19 +253,19 @@ private struct CoverTile: View {
             isHovering = hovering
         }
         .onTapGesture(count: 2) {
-            Task { await session?.open(id: book.id) }
+            Task { await browser.open(id: book.id) }
         }
         .onTapGesture {
-            session?.selectInGrid(book)
+            browser.selectInGrid(book)
         }
         .accessibilityLabel(book.title)
         .accessibilityHint("Double-click to open")
         .accessibilityAddTraits(.isButton)
         .accessibilityAction {
-            Task { await session?.open(id: book.id) }
+            Task { await browser.open(id: book.id) }
         }
         .task {
-            image = await ThumbnailCache.shared.thumbnail(for: book, repository: session?.repository)
+            image = await ThumbnailCache.shared.thumbnail(for: book, repository: browser.repository)
         }
     }
 
@@ -274,8 +273,8 @@ private struct CoverTile: View {
     /// book. A clicked tile that isn't already selected replaces the selection;
     /// a clicked member of a multi-selection keeps the multi-selection.
     private func selectForContextMenu() {
-        guard let session, !session.selection.contains(book.id) else { return }
-        session.selection = [book.id]
+        guard !browser.selection.contains(book.id) else { return }
+        browser.selection = [book.id]
     }
 
     /// The cover: selection border hugs the image itself (no gap when the
@@ -289,7 +288,7 @@ private struct CoverTile: View {
             .overlay(
                 RoundedRectangle(cornerRadius: 4)
                     .strokeBorder(
-                        session?.selection.contains(book.id) ?? false ? Color.accentColor : .clear,
+                        browser.selection.contains(book.id) ? Color.accentColor : .clear,
                         lineWidth: 3
                     )
             )

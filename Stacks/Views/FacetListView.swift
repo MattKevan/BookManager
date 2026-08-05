@@ -4,17 +4,17 @@ import SwiftUI
 /// The middle column of the 3-column browser: the value list for the active
 /// facet category (authors, series, tags, or formats), with counts and a
 /// filter field. Shown only while a facet category is active in the sidebar.
-struct FacetListView: View {
-    @Bindable var session: LibrarySession
+struct FacetListView<Browser: LibraryBrowser>: View {
+    let browser: Browser
     @State private var filterText = ""
 
     /// The full value list for the active category.
     private var values: [(value: String, count: Int)] {
-        switch session.facetNavigation.category {
-        case .author: session.authors
-        case .series: session.series
-        case .tag: session.tags
-        case .format: session.formats
+        switch browser.facetNavigation.category {
+        case .author: browser.authors
+        case .series: browser.series
+        case .tag: browser.tags
+        case .format: browser.formats
         case nil: []
         }
     }
@@ -28,8 +28,8 @@ struct FacetListView: View {
 
     var body: some View {
         List(selection: Binding<String?>(
-            get: { session.facetNavigation.value },
-            set: { session.selectValue($0) }
+            get: { browser.facetNavigation.value },
+            set: { browser.selectValue($0) }
         )) {
             ForEach(filteredValues, id: \.value) { item in
                 HStack {

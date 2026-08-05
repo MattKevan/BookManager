@@ -2,11 +2,14 @@ import StacksCore
 import Foundation
 import SwiftUI
 
-struct BookTableView: View {
-    @Bindable var session: LibrarySession
+struct BookTableView<Browser: LibraryBrowser>: View {
+    let browser: Browser
 
     var body: some View {
-        Table(session.books, selection: $session.selection) {
+        Table(browser.books, selection: Binding(
+            get: { browser.selection },
+            set: { browser.selection = $0 }
+        )) {
             TableColumn("Title") { book in
                 Text(book.title)
                     .onDrag { dragProvider(for: book) }
@@ -31,24 +34,24 @@ struct BookTableView: View {
         }
         .contextMenu(forSelectionType: IndexedBook.ID.self) { ids in
             Button("Edit Metadata") {
-                session.metadataEditQueue = session.selectionBooks
+                browser.metadataEditQueue = browser.selectionBooks
             }
-            .disabled(session.isLibraryUnavailable)
+            .disabled(browser.isLibraryUnavailable)
             Button("Show in Finder") {
-                if let id = ids.first { Task { await session.reveal(id: id) } }
+                if let id = ids.first { Task { await browser.reveal(id: id) } }
             }
-            .disabled(session.isLibraryUnavailable)
+            .disabled(browser.isLibraryUnavailable)
             Divider()
             Button("Delete Book", role: .destructive) {
-                session.requestDelete(ids: ids)
+                browser.requestDelete(ids: ids)
             }
         } primaryAction: { ids in
             // Double-click opens; the context menu intentionally has no
             // separate Open item (single-purpose actions only).
-            if let id = ids.first { Task { await session.open(id: id) } }
+            if let id = ids.first { Task { await browser.open(id: id) } }
         }
         .overlay {
-            if session.books.isEmpty {
+            if browser.books.isEmpty {
                 ContentUnavailableView(
                     "No Books",
                     systemImage: "books.vertical",
@@ -60,8 +63,8 @@ struct BookTableView: View {
         // onKeyPress delete). Cmd+Delete (Edit > Delete) is the menu path.
         .focusable()
         .onKeyPress(.delete) {
-            guard !session.selection.isEmpty else { return .ignored }
-            session.requestDelete(ids: session.selection)
+            guard !browser.selection.isEmpty else { return .ignored }
+            browser.requestDelete(ids: browser.selection)
             return .handled
         }
     }
@@ -69,7 +72,7 @@ struct BookTableView: View {
     /// Makes a row draggable onto a sidebar device row (sends that book's
     /// primary format file to the device).
     private func dragProvider(for book: IndexedBook) -> NSItemProvider {
-        guard let url = session.formatFileURL(for: book) else { return NSItemProvider() }
+        guard let url = browser.formatFileURL(for: book) else { return NSItemProvider() }
         return NSItemProvider(object: url as NSURL)
     }
 }

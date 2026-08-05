@@ -314,13 +314,13 @@ extension ContentView {
     private var viewPickerToolbarItem: some ToolbarContent {
         ToolbarItemGroup {
             if session.selectedDeviceID == nil {
-                Picker("View", selection: $session.viewMode) {
+                Picker("View", selection: viewModeBinding) {
                     Image(systemName: "list.bullet")
                         .accessibilityLabel("Table")
-                        .tag(LibrarySession.ViewMode.table)
+                        .tag(BrowserViewMode.table)
                     Image(systemName: "square.grid.2x2")
                         .accessibilityLabel("Cover grid")
-                        .tag(LibrarySession.ViewMode.grid)
+                        .tag(BrowserViewMode.grid)
                 }
                 .pickerStyle(.segmented)
                 .help("Table or cover grid")
@@ -409,7 +409,7 @@ extension ContentView {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             sidebarColumn
         } content: {
-            FacetListView(session: session)
+            FacetListView(browser: library)
         } detail: {
             detailColumn
         }
@@ -483,13 +483,32 @@ extension ContentView {
         }
     }
 
+    /// The library connection backing the browser. Only the `.loaded` state
+    /// shows the browser, so the connection is always present there. Task 5
+    /// routes this to the active library (home or a peer); for now it is the
+    /// single connection.
+    private var library: LibraryConnection {
+        guard let connection = session.connection else {
+            preconditionFailure("Browser shown without an open library")
+        }
+        return connection
+    }
+
+    /// Binds the grid/list picker to the active connection's view mode.
+    private var viewModeBinding: Binding<BrowserViewMode> {
+        Binding(
+            get: { library.viewMode },
+            set: { library.viewMode = $0 }
+        )
+    }
+
     private var browser: some View {
         Group {
-            switch session.viewMode {
+            switch library.viewMode {
             case .table:
-                BookTableView(session: session)
+                BookTableView(browser: library)
             case .grid:
-                CoverGridView(session: session)
+                CoverGridView(browser: library)
             }
         }
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in
