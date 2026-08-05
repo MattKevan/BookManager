@@ -238,8 +238,9 @@ extension ContentView {
     /// cluster, leading of the library actions. Attached to the detail
     /// column — not the split view — so the toolbar chrome stays over the
     /// detail pane and the middle-column divider runs the full window height.
-    private var deviceToolbarGroup: some ToolbarContent {
-        ToolbarItemGroup {
+    @ToolbarContentBuilder
+    private var deviceToolbarItems: some ToolbarContent {
+        ToolbarItem(id: "send-to-device") {
             if session.devices.devices.isEmpty {
                 EmptyView()
             } else if let device = session.devices.devices.first, session.devices.devices.count == 1 {
@@ -270,6 +271,8 @@ extension ContentView {
                 }
                 .disabled(session.selection.isEmpty)
             }
+        }
+        ToolbarItem(id: "device-activity") {
             if !session.devices.devices.isEmpty {
                 Button {
                     showActivityPopover.toggle()
@@ -289,13 +292,16 @@ extension ContentView {
     /// selection actions act on the library book selection, which is stale in
     /// device mode — they are hidden while a device is selected. Add Books is
     /// available in both modes.
-    private var libraryActionsToolbarGroup: some ToolbarContent {
-        ToolbarItemGroup {
+    @ToolbarContentBuilder
+    private var libraryActionItems: some ToolbarContent {
+        ToolbarItem(id: "add-books") {
             Button {
                 session.present(.addBooks)
             } label: {
                 Label("Add Books", systemImage: "plus")
             }
+        }
+        ToolbarItem(id: "open") {
             if session.selectedDeviceID == nil {
                 Button {
                     openSelection()
@@ -303,25 +309,31 @@ extension ContentView {
                     Label("Open", systemImage: "book")
                 }
                 .disabled(session.selection.isEmpty)
+            }
+        }
+        ToolbarItem(id: "edit-metadata") {
+            if session.selectedDeviceID == nil {
                 Button {
                     editSelection()
                 } label: {
                     Label("Edit Metadata", systemImage: "pencil")
                 }
                 .disabled(session.isLibraryUnavailable || session.selection.isEmpty)
-                if !session.peers.isEmpty {
-                    Menu {
-                        ForEach(session.peers) { peer in
-                            Button(peer.name) {
-                                Task { await session.copyHomeSelection(to: peer) }
-                            }
+            }
+        }
+        ToolbarItem(id: "copy-to-library") {
+            if session.selectedDeviceID == nil, !session.peers.isEmpty {
+                Menu {
+                    ForEach(session.peers) { peer in
+                        Button(peer.name) {
+                            Task { await session.copyHomeSelection(to: peer) }
                         }
-                    } label: {
-                        Label("Copy to Library…", systemImage: "arrow.up.doc")
                     }
-                    .disabled(session.selection.isEmpty)
-                    .help("Copy the selected books into another open library")
+                } label: {
+                    Label("Copy to Library…", systemImage: "arrow.up.doc")
                 }
+                .disabled(session.selection.isEmpty)
+                .help("Copy the selected books into another open library")
             }
         }
     }
@@ -329,7 +341,7 @@ extension ContentView {
     /// The Table/Grid view picker. Only affects the library browser (the
     /// device view is table-only), so it is hidden in device mode.
     private var viewPickerToolbarItem: some ToolbarContent {
-        ToolbarItemGroup {
+        ToolbarItem(id: "view-picker") {
             if session.selectedDeviceID == nil && session.activeLibrary != nil {
                 Picker("View", selection: viewModeBinding) {
                     Image(systemName: "list.bullet")
@@ -350,7 +362,7 @@ extension ContentView {
     /// label is a bare spinner — no “Syncing…” text — so the item keeps its
     /// icon width and the toolbar doesn't jump when syncing starts/ends.
     private var syncToolbarItem: some ToolbarContent {
-        ToolbarItem {
+        ToolbarItem(id: "sync") {
             Button {
                 Task { await session.syncNow() }
             } label: {
@@ -387,7 +399,7 @@ extension ContentView {
     /// the ACTIVE library's search text (home in device mode, the peer when
     /// a peer is the browser context).
     private var searchToolbarItem: some ToolbarContent {
-        ToolbarItem {
+        ToolbarItem(id: "search") {
             if session.activeLibrary != nil {
                 ToolbarSearchField(
                     text: librarySearchBinding,
@@ -402,7 +414,7 @@ extension ContentView {
     /// field so it sits at the very trailing edge of the toolbar, right of
     /// the search bar.
     private var inspectorToolbarItem: some ToolbarContent {
-        ToolbarItem {
+        ToolbarItem(id: "inspector") {
             if session.selectedDeviceID == nil {
                 Button {
                     session.inspectorPresented.toggle()
@@ -500,12 +512,12 @@ extension ContentView {
             ToolbarSpacer(.flexible)
             syncToolbarItem
             ToolbarSpacer(.fixed)
-            deviceToolbarGroup
+            deviceToolbarItems
             ToolbarSpacer(.fixed)
             if isHomeContext {
-                libraryActionsToolbarGroup
+                libraryActionItems
             } else if session.activeLibrary != nil {
-                peerToolbarGroup
+                peerActionItems
             }
             ToolbarSpacer(.fixed)
             viewPickerToolbarItem
@@ -597,8 +609,9 @@ extension ContentView {
     /// Peer-context toolbar cluster, replacing Add/Open/Edit + the inspector
     /// while a peer library is the browser context: Refresh, Copy to Home
     /// Library (Task 6 wires the real transfer), and Close.
-    private var peerToolbarGroup: some ToolbarContent {
-        ToolbarItemGroup {
+    @ToolbarContentBuilder
+    private var peerActionItems: some ToolbarContent {
+        ToolbarItem(id: "refresh-peer") {
             Button {
                 if let peer = session.activeLibrary {
                     Task { await peer.refreshBooks() }
@@ -607,6 +620,8 @@ extension ContentView {
                 Label("Refresh", systemImage: "arrow.clockwise")
             }
             .help("Reload this library's books")
+        }
+        ToolbarItem(id: "copy-to-home") {
             Button {
                 if let peer = session.activeLibrary, session.home != nil {
                     Task { await session.copySelectionFromPeerToHome(peer) }
@@ -616,6 +631,8 @@ extension ContentView {
             }
             .disabled(session.activeLibrary?.selection.isEmpty ?? true || session.home == nil)
             .help("Copy the selected books into your home library")
+        }
+        ToolbarItem(id: "close-peer") {
             Button {
                 if let peer = session.activeLibrary {
                     Task { await session.closePeer(peer) }
