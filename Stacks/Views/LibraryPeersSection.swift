@@ -95,13 +95,19 @@ struct LibraryPeersSection: View {
                 }
             }
         }
+        .onChange(of: session.activeLibraryID) { _, newID in
+            // Selecting a library expands it; switching away never collapses
+            // it — expansion is user-controlled via the disclosure chevron.
+            if let newID { expandedPeers.insert(newID) }
+        }
     }
 
-    /// Per-peer in-memory expansion state; the active peer's group
-    /// auto-expands so a sidebar selection is always visible.
+    /// Per-peer in-memory expansion state, user-controlled: selecting a peer
+    /// adds it (onChange), collapsing/expanding edits it; nothing derives
+    /// from the active selection, so switching libraries keeps groups open.
     private func expandedBinding(for peer: LibraryConnection) -> Binding<Bool> {
         Binding(
-            get: { expandedPeers.contains(peer.id) || session.activeLibraryID == peer.id },
+            get: { expandedPeers.contains(peer.id) },
             set: { expanded in
                 if expanded {
                     expandedPeers.insert(peer.id)
