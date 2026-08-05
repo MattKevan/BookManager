@@ -23,7 +23,7 @@ struct ContentView: View {
     @State private var showSendReport = false
     @State private var showCalibreImport = false
     @State private var showActivityPopover = false
-    @State private var columnVisibility: NavigationSplitViewVisibility = .doubleColumn
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @FocusState private var searchFocused: Bool
 
     var body: some View {
@@ -183,9 +183,12 @@ struct ContentView: View {
                 twoColumnBrowser
             }
         }
-        .onChange(of: session.activeLibrary?.facetNavigation.category) { _, category in
-            columnVisibility = (category == nil) ? .doubleColumn : .all
-        }
+        // NOTE: `columnVisibility` is intentionally NOT mutated when the
+        // layout switches — changing it in the same transaction as the
+        // 2/3-column split-view structure swap triggers a SwiftUI/AppKit
+        // crash on macOS. `.all` shows the sidebar + detail in both layouts
+        // (equivalent to the old per-layout values), so a fixed value is
+        // safe; the user can still toggle the sidebar, which persists.
         // The search field is a real `NSSearchField` in its own toolbar item
         // (not `.searchable`): the system search item always sits at the
         // toolbar's trailing edge with nothing allowed after it (and expands
@@ -442,11 +445,16 @@ extension ContentView {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             sidebarColumn
         } content: {
-            // The middle column drives the window title in the 3-column
-            // layout (the detail column's title is not picked up there), so
-            // the same computed title is repeated here.
-            FacetListView(browser: library)
-                .navigationTitle(windowTitle)
+            // Guarded: never evaluate `library` (a precondition trap) during
+            // the 2/3-column transition, when activeLibrary may be nil for a
+            // frame. The middle column simply renders empty then.
+            if let library = session.activeLibrary {
+                // The middle column drives the window title in the 3-column
+                // layout (the detail column's title is not picked up there), so
+                // the same computed title is repeated here.
+                FacetListView(browser: library)
+                    .navigationTitle(windowTitle)
+            }
         } detail: {
             detailColumn
         }
