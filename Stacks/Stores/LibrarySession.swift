@@ -6,10 +6,10 @@ import Observation
 @MainActor
 @Observable
 final class LibrarySession {
-    enum ViewMode: String, CaseIterable, Identifiable {
-        case table, grid
-        var id: String { rawValue }
-    }
+    /// The browser view mode now lives on the connection (`BrowserViewMode`);
+    /// this typealias keeps existing `LibrarySession.ViewMode` references
+    /// (e.g. the toolbar picker) compiling until the hub rework.
+    typealias ViewMode = BrowserViewMode
 
     enum State {
         case welcome
@@ -35,96 +35,11 @@ final class LibrarySession {
     }
 
     private(set) var state: State = .welcome
-    private(set) var repository: LibraryRepository?
-    /// Metadata edits queued locally because the library folder is unreachable;
-    /// cleared when `syncNow` drains the outbox.
-    var pendingSyncCount = 0
-
-    /// Rebuild progress (0...1) while `isRebuilding`; nil otherwise.
-    var rebuildProgress: Double?
-    /// True while the Diagnostics rebuild is running (drives the progress UI).
-    var isRebuilding = false
-    let cancelFlag = RebuildCancelFlag()
-
-    /// Undecodable change files moved to the library quarantine by the last
-    /// ingest — surfaced in Diagnostics so nothing silently disappears.
-    var quarantinedChanges: [URL] = []
-    /// Read-only gate: the library folder is known unreachable, so editing is
-    /// disabled until a reconnect succeeds (approved read-only-when-offline
-    /// amendment). Transient mid-session write failures still stage to the
-    /// outbox via `saveOffline`.
-    var isLibraryUnavailable = false
-    /// True while a sync sequence (drain + ingest + reconcile) is running.
-    var isSyncing = false
-    /// The last reconciliation pass's findings — surfaced in Diagnostics so
-    /// re-pointed folders and forked conflicts are never silent.
-    var reconciliationReport: ReconciliationReport?
-    var searchText = "" {
-        didSet {
-            searchTask?.cancel()
-            searchTask = Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(200))
-                guard !Task.isCancelled else { return }
-                await refreshBooks()
-            }
-        }
-    }
     var lastError: String?
-    var viewMode: ViewMode = .grid
-    var inspectorPresented = false
-    /// True while a grid marquee drag is in flight; suppresses the inspector's
-    /// click-driven auto-show so a mid-drag single selection doesn't pop it open.
-    var isMarqueeSelecting = false
-    var selection = Set<UUID>()
-    /// The anchor for ⇧-click range selection in the grid. Ignored by the
-    /// table view (which manages its own selection semantics natively).
-    private(set) var selectionAnchor: UUID?
-    /// Sidebar + middle-column navigation state (which category is active,
-    /// which value is chosen). Drives the 3-column browser.
-    var facetNavigation = FacetNavigation()
-
-    // Device support: the connected-device store and the sidebar selection
-    // bridging into it (selecting a device clears the library facet, and vice
-    // versa is handled by `selectCategory`).
-    let devices = DeviceManager()
-    var selectedDeviceID: UUID? {
-        get { devices.selectedDeviceID }
-        set { devices.selectedDeviceID = newValue }
-    }
-
-    /// Selects a device in the sidebar; choosing a device clears the library
-    /// facet so the detail area shows the device browser. The actual state
-    /// transition (selection + book listing) happens in `DeviceManager.select`
-    /// so selecting a device immediately loads its books.
-    func selectDevice(_ id: UUID?) {
-        if id != nil { facetNavigation.clear() }
-        Task { await devices.select(id) }
-    }
-
-    private(set) var books: [IndexedBook] = []
-    private(set) var authors: [(value: String, count: Int)] = []
-    private(set) var series: [(value: String, count: Int)] = []
-    private(set) var tags: [(value: String, count: Int)] = []
-    private(set) var formats: [(value: String, count: Int)] = []
-    private(set) var deletedBooks: [IndexedBook] = []
-    /// Book ids awaiting delete confirmation; nil when nothing is pending.
-    /// Set by `requestDelete`, consumed by the confirmation alert, then
-    /// cleared before `delete(ids:)` runs.
-    var pendingDelete: Set<UUID>?
-    var missingFiles: [(book: IndexedBook, filename: String)] = []
     var importReport: ImportReport?
-    /// Books queued for the metadata editor. The editor steps through them
-    /// (Book 1 of N with Prev/Next) when more than one is set; nil closes it.
-    /// Populated from `selectionBooks` (or `[book]` for single-book callers).
-    var metadataEditQueue: [IndexedBook]?
+    var inspectorPresented = false
 
-    /// The library books backing the current selection, in catalog order —
-    /// the order the batch metadata editor walks its “1 of N” queue in.
-    var selectionBooks: [IndexedBook] {
-        books.filter { selection.contains($0.id) }
-    }
-
-    // Metadata enrichment state
+    // Metadata enrichment state (home library)
     var metadataCandidates: [MetadataCandidate] = []
     /// Presented by the view; the review sheet binds to this.
     var metadataReviewPresented = false
@@ -148,9 +63,29 @@ final class LibrarySession {
     private let bookmarks: LibraryBookmarkStore
     private var activeSecurityURL: URL?
     var calibreSourceSecurityURL: URL?
-    var syncState: SyncState?
-    var monitor: LibraryMonitor?
-    private var searchTask: Task<Void, Never>?
+
+    /// The currently open library connection. Per-library state (repository,
+    /// sync machinery, browser state) lives on `LibraryConnection`; this
+    /// session delegates to it via the shims below.
+    private(set) var connection: LibraryConnection?
+
+    // Device support: the connected-device store and the sidebar selection
+    // bridging into it (selecting a device clears the library facet, and vice
+    // versa is handled by `selectCategory`).
+    let devices = DeviceManager()
+    var selectedDeviceID: UUID? {
+        get { devices.selectedDeviceID }
+        set { devices.selectedDeviceID = newValue }
+    }
+
+    /// Selects a device in the sidebar; choosing a device clears the library
+    /// facet so the detail area shows the device browser. The actual state
+    /// transition (selection + book listing) happens in `DeviceManager.select`
+    /// so selecting a device immediately loads its books.
+    func selectDevice(_ id: UUID?) {
+        if id != nil { connection?.facetNavigation.clear() }
+        Task { await devices.select(id) }
+    }
 
     init(
         deviceID: UUID = UUID(),
@@ -201,33 +136,14 @@ final class LibrarySession {
     }
 
     func closeLibrary() {
-        searchTask?.cancel()
-        searchTask = nil
+        connection?.stop()
+        connection = nil
         activeSecurityURL?.stopAccessingSecurityScopedResource()
         activeSecurityURL = nil
         stopCalibreAccess()
-        stopMonitor()
-        repository = nil
-        syncState = nil
-        pendingSyncCount = 0
-        quarantinedChanges = []
-        isLibraryUnavailable = false
-        isSyncing = false
-        reconciliationReport = nil
         state = .welcome
-        books = []
-        deletedBooks = []
-        selection = []
-        selectionAnchor = nil
-        pendingDelete = nil
-        facetNavigation.clear()
-        searchText = ""
-        missingFiles = []
-        viewMode = .grid
         inspectorPresented = false
-        isMarqueeSelecting = false
         importReport = nil
-        metadataEditQueue = nil
         metadataCandidates = []
         metadataReviewPresented = false
         metadataLookupError = nil
@@ -250,35 +166,41 @@ final class LibrarySession {
 
     private func activate(url: URL, create: Bool, fallbackToWelcome: Bool = false) async {
         // A mid-session library switch (Cmd+O, Open Recent, Cmd+N) reaches
-        // activate without closeLibrary: stop the old library's monitor so it
-        // never watches the old root against the new library. Idempotent; the
-        // runSyncSequence tail rebuilds the monitor for the new root.
-        stopMonitor()
+        // activate without closeLibrary: stop the old library's monitor and
+        // search debounce so the old connection never touches the new library.
+        // Idempotent; runSyncSequence's tail rebuilds the monitor for the new
+        // library.
+        connection?.stop()
         state = .loading
         let accessed = url.startAccessingSecurityScopedResource()
         do {
             let indexes = try Self.indexDirectory()
-            let repository: LibraryRepository
             if create {
-                repository = try await .create(at: url, indexesDirectory: indexes, deviceID: deviceID)
-            } else {
-                repository = try await .open(at: url, indexesDirectory: indexes, deviceID: deviceID)
+                _ = try await LibraryRepository.create(at: url, indexesDirectory: indexes, deviceID: deviceID)
             }
-            try bookmarks.save(url, for: repository.manifest.id)
+            let connection = try await LibraryConnection(
+                openAt: url, indexesDirectory: indexes, deviceID: deviceID
+            )
+            connection.onLoadFailure = { [weak self] message in
+                self?.state = .failed(message: message)
+            }
+            connection.onError = { [weak self] message in
+                self?.lastError = message
+            }
+            connection.onSelectionChange = { [weak self] in
+                guard let self else { return }
+                Task { await self.devices.select(nil) }
+            }
+            try bookmarks.save(url, for: connection.id)
             recentLibraries = Self.resolveRecents(bookmarks)
-            syncState = try SyncState(root: Self.syncRoot(), libraryID: repository.manifest.id)
             activeSecurityURL?.stopAccessingSecurityScopedResource()
             activeSecurityURL = accessed ? url : nil
-            self.repository = repository
+            self.connection = connection
             state = .loaded
-            isLibraryUnavailable = false
-            refreshPendingSync()
-            await refreshAll()
-            // Ingest-on-open: pull changes made by other Macs and reconcile the
-            // folders before the always-on monitor starts (startMonitor is
-            // idempotent — runSyncSequence may already have started it).
-            await runSyncSequence(manual: false)
-            await startMonitor()
+            // The connection's init already refreshed; this post-wiring pass
+            // guarantees a browse failure after open lands in `state = .failed`
+            // (the init ran before the callbacks above were attached).
+            await connection.refreshAll()
         } catch {
             if accessed { url.stopAccessingSecurityScopedResource() }
             if fallbackToWelcome {
@@ -293,175 +215,98 @@ final class LibrarySession {
         }
     }
 
-    // MARK: - Loading
-
-    func refreshAll() async {
-        await refreshBooks()
-        await refreshFacets()
-        await refreshDeleted()
-    }
-
-    func refreshBooks() async {
-        guard let repository else { return }
-        do {
-            if let facet = facetNavigation.activeFacet {
-                books = try await repository.books(facetType: facet.type, value: facet.value)
-            } else if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                books = try await repository.books()
-            } else {
-                // A malformed FTS5 query (unclosed quote, stray operator) must not
-                // take down the loaded browser: on a search error, show no results
-                // while keeping the library state intact.
-                do {
-                    books = try await repository.search(searchText)
-                } catch {
-                    books = []
-                }
-            }
-        } catch {
-            state = .failed(message: error.localizedDescription)
-        }
-    }
-
-    func refreshFacets() async {
-        guard let repository else { return }
-        authors = (try? await repository.facetCounts(.author)) ?? []
-        series = (try? await repository.facetCounts(.series)) ?? []
-        tags = (try? await repository.facetCounts(.tag)) ?? []
-        formats = (try? await repository.facetCounts(.format)) ?? []
-    }
-
-    func refreshDeleted() async {
-        deletedBooks = (try? await repository?.deletedBooks()) ?? []
-    }
-
-    // MARK: - Facets and search
-
-    /// Sidebar click on a facet category (Authors/Series/Tags/Formats).
-    /// `nil` selects All Books. Selecting any library view deselects a
-    /// connected device — the two selection domains are mutually exclusive.
-    func selectCategory(_ type: FacetType?) {
-        Task { await devices.select(nil) }
-        facetNavigation.selectCategory(type)
-        Task { await refreshBooks() }
-    }
-
-    /// Middle-column click on a specific value. Re-clicking the same value
-    /// toggles it off, back to all books.
-    func selectValue(_ value: String?) {
-        facetNavigation.selectValue(value)
-        Task { await refreshBooks() }
-    }
-
-    /// macOS grid-click semantics: plain click replaces, ⌘ toggles, ⇧ selects
-    /// the anchor→clicked range. Reads the modifier flags at gesture time.
-    func selectInGrid(_ book: IndexedBook) {
-        let flags = NSEvent.modifierFlags
-        let modifier: GridSelectionModifier = flags.contains(.command)
-            ? .command
-            : (flags.contains(.shift) ? .shift : .none)
-        let result = GridSelectionSemantics.applying(
-            click: book.id,
-            modifier: modifier,
-            anchor: selectionAnchor,
-            visible: books.map(\.id),
-            selection: selection
-        )
-        selection = result.selection
-        if let anchor = result.anchor {
-            selectionAnchor = anchor
-        }
-    }
-
-    /// Empty-space click: clear the selection and the range anchor.
-    func clearGridSelection() {
-        selection = []
-        selectionAnchor = nil
-    }
-
-    private static func syncRoot() throws -> URL {
-        let root = URL.applicationSupportDirectory
-            .appending(path: "Stacks", directoryHint: .isDirectory)
-        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        return root
-    }
-
-    private static func indexDirectory() throws -> URL {
+    static func indexDirectory() throws -> URL {
         let root = URL.applicationSupportDirectory
             .appending(path: "Stacks", directoryHint: .isDirectory)
             .appending(path: "Indexes", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         return root
     }
-}
 
-// MARK: - Delete / restore, Open / reveal
+    // MARK: - Delegation shims (removed in the hub rework)
 
-extension LibrarySession {
-    // MARK: - Delete / restore
+    /// Per-library state and behavior now live on `LibraryConnection`; these
+    /// shims keep every existing caller (views, menus, extensions) compiling
+    /// with identical behavior. Task 4 replaces them with the hub model.
 
-    /// Asks for confirmation before deleting the given books: stores the ids
-    /// in `pendingDelete` for the confirmation alert. The actual `delete(ids:)`
-    /// runs only after the user confirms.
-    func requestDelete(ids: Set<UUID>) {
-        guard !ids.isEmpty, !isLibraryUnavailable else { return }
-        pendingDelete = ids
+    var repository: LibraryRepository? { connection?.repository }
+    var books: [IndexedBook] { connection?.books ?? [] }
+    var authors: [(value: String, count: Int)] { connection?.authors ?? [] }
+    var series: [(value: String, count: Int)] { connection?.series ?? [] }
+    var tags: [(value: String, count: Int)] { connection?.tags ?? [] }
+    var formats: [(value: String, count: Int)] { connection?.formats ?? [] }
+    var deletedBooks: [IndexedBook] { connection?.deletedBooks ?? [] }
+    var missingFiles: [(book: IndexedBook, filename: String)] { connection?.missingFiles ?? [] }
+    var facetNavigation: FacetNavigation { connection?.facetNavigation ?? FacetNavigation() }
+    var selection: Set<UUID> {
+        get { connection?.selection ?? [] }
+        set { connection?.selection = newValue }
     }
-
-    func delete(ids: Set<UUID>) async {
-        guard let repository else { return }
-        for id in ids {
-            do {
-                try await repository.deleteBook(id: id)
-            } catch {
-                lastError = error.localizedDescription
-            }
-        }
-        selection.removeAll()
-        await refreshAll()
+    var selectionAnchor: UUID? { connection?.selectionAnchor }
+    var selectionBooks: [IndexedBook] { connection?.selectionBooks ?? [] }
+    var searchText: String {
+        get { connection?.searchText ?? "" }
+        set { connection?.searchText = newValue }
     }
-
-    func restore(id: UUID) async {
-        guard let repository else { return }
-        do {
-            _ = try await repository.restoreBook(id: id)
-        } catch {
-            lastError = error.localizedDescription
-        }
-        await refreshAll()
+    var viewMode: BrowserViewMode {
+        get { connection?.viewMode ?? .grid }
+        set { connection?.viewMode = newValue }
     }
-
-    // MARK: - Open / reveal
-
-    func open(id: UUID) async {
-        guard let repository else { return }
-        do {
-            guard let url = try await repository.formatFileURL(id: id) else { return }
-            NSWorkspace.shared.open(url)
-        } catch {
-            lastError = error.localizedDescription
-        }
+    var isLibraryUnavailable: Bool { connection?.isLibraryUnavailable ?? false }
+    var isSyncing: Bool { connection?.isSyncing ?? false }
+    var pendingSyncCount: Int { connection?.pendingSyncCount ?? 0 }
+    var syncState: SyncState? { connection?.syncState }
+    var monitor: LibraryMonitor? { connection?.monitor }
+    var quarantinedChanges: [URL] { connection?.quarantinedChanges ?? [] }
+    var reconciliationReport: ReconciliationReport? { connection?.reconciliationReport }
+    var rebuildProgress: Double? { connection?.rebuildProgress }
+    var isRebuilding: Bool { connection?.isRebuilding ?? false }
+    var cancelFlag: RebuildCancelFlag { connection?.cancelFlag ?? RebuildCancelFlag() }
+    var isMarqueeSelecting: Bool {
+        get { connection?.isMarqueeSelecting ?? false }
+        set { connection?.isMarqueeSelecting = newValue }
     }
-
-    func reveal(id: UUID) async {
-        guard let repository else { return }
-        do {
-            guard let url = try await repository.bookFolderURL(id: id) else { return }
-            NSWorkspace.shared.activateFileViewerSelecting([url])
-        } catch {
-            lastError = error.localizedDescription
-        }
+    var metadataEditQueue: [IndexedBook]? {
+        get { connection?.metadataEditQueue }
+        set { connection?.metadataEditQueue = newValue }
     }
-
-    var libraryRoot: URL? {
-        repository?.root
+    var pendingDelete: Set<UUID>? {
+        get { connection?.pendingDelete }
+        set { connection?.pendingDelete = newValue }
     }
+    var libraryRoot: URL? { repository?.root }
+
+    func refreshAll() async { await connection?.refreshAll() }
+    func refreshBooks() async { await connection?.refreshBooks() }
+    func refreshFacets() async { await connection?.refreshFacets() }
+    func refreshDeleted() async { await connection?.refreshDeleted() }
+    func selectCategory(_ type: FacetType?) { connection?.selectCategory(type) }
+    func selectValue(_ value: String?) { connection?.selectValue(value) }
+    func selectInGrid(_ book: IndexedBook) { connection?.selectInGrid(book) }
+    func clearGridSelection() { connection?.clearGridSelection() }
+    func requestDelete(ids: Set<UUID>) { connection?.requestDelete(ids: ids) }
+    func delete(ids: Set<UUID>) async { await connection?.delete(ids: ids) }
+    func restore(id: UUID) async { await connection?.restore(id: id) }
+    func open(id: UUID) async { await connection?.open(id: id) }
+    func reveal(id: UUID) async { await connection?.reveal(id: id) }
+    func formatFileURL(for book: IndexedBook) -> URL? { connection?.formatFileURL(for: book) }
+    func runSyncSequence(manual: Bool) async { await connection?.runSyncSequence(manual: manual) }
+    func syncNow() async { await connection?.syncNow() }
+    func startMonitor() async { await connection?.startMonitor() }
+    func stopMonitor() { connection?.stopMonitor() }
+    func refreshPendingSync() { connection?.refreshPendingSync() }
+    func refreshLibraryAvailability() { connection?.refreshLibraryAvailability() }
+    func reconnectIfNeeded() async { await connection?.reconnectIfNeeded() }
+    func rebuildIndex() async { await connection?.rebuildIndex() }
+    func cancelRebuild() { connection?.cancelRebuild() }
+    func reloadDiagnostics() async { await connection?.reloadDiagnostics() }
+    static func syncRoot() throws -> URL { try LibraryConnection.syncRoot() }
 }
 
 /// Lock-protected boolean so the repository's synchronous `cancelled` closure
-/// (called from the repository actor) can read the MainActor session's cancel
-/// request without a data race (a stale read only delays cancellation by one
-/// book — benign for a rebuild-cancel flag).
+/// (called from the repository actor) can read the MainActor connection's
+/// cancel request without a data race (a stale read only delays cancellation
+/// by one book — benign for a rebuild-cancel flag).
 final class RebuildCancelFlag: @unchecked Sendable {
     private let lock = NSLock()
     private var value = false

@@ -30,7 +30,7 @@ extension LibrarySession {
     // MARK: - Import
 
     func importFiles(urls: [URL]) async {
-        guard let repository else { return }
+        guard let repository = connection?.repository else { return }
         let service = ImportService(layout: .init(root: repository.root))
         do {
             importReport = try await service.importFiles(urls, into: repository)
@@ -61,7 +61,7 @@ extension LibrarySession {
     /// with no supported stored format get an explicit "no compatible format"
     /// row in the send report.
     func sendSelectionToDevice() async {
-        guard let repository else { return }
+        guard let repository = connection?.repository else { return }
         let folder = BookFolder(layout: .init(root: repository.root))
         let selectedBooks = books.filter { selection.contains($0.id) }
         var requests: [SendRequest] = []
@@ -108,27 +108,11 @@ extension LibrarySession {
     /// Awaiting the device selection ensures the send targets the right
     /// device.
     func sendDroppedFiles(urls: [URL], to deviceID: UUID) async {
-        facetNavigation.clear()
+        // Mutate the connection's facet state in place — the session shim
+        // returns a copy, so a plain `facetNavigation.clear()` would be dropped.
+        connection?.facetNavigation.clear()
         await devices.select(deviceID)
         await sendFiles(urls: urls)
-    }
-
-    /// The first existing format file for a book, used to make library rows
-    /// draggable (drag onto a device row sends that file). Computed directly
-    /// from the layout (pure path math, mirrors `BookFolder.formatFileURL`) so
-    /// the synchronous drag handler needs no actor hop.
-    func formatFileURL(for book: IndexedBook) -> URL? {
-        guard let repository else { return nil }
-        let root = LibraryLayout(root: repository.root).root
-        for format in book.formats {
-            let url = root
-                .appending(path: book.relativePath, directoryHint: .isDirectory)
-                .appending(path: format.filename)
-            if FileManager.default.fileExists(atPath: url.path) {
-                return url
-            }
-        }
-        return nil
     }
 
     /// Loads a file URL from a drag/drop item provider. Shared by the library
@@ -185,7 +169,7 @@ extension LibrarySession {
     }
 
     func importCalibre() async {
-        guard let repository, let summary = calibreSummary,
+        guard let repository = connection?.repository, let summary = calibreSummary,
               let sourcePath = calibreSourcePath else { return }
         calibreImportInProgress = true
         defer { calibreImportInProgress = false }
