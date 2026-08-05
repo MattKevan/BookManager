@@ -193,262 +193,6 @@ public final class CalibreReader: Sendable {
         }
     }
 
-    /// All per-book lookup tables needed to assemble records, fetched once per
-    /// `books()` call (batched, not N+1 per book).
-    private func makeLookups(db: Database) throws -> BookLookups {
-        var lookups = BookLookups()
-        for entry in try schema.fetchAuthors(db) {
-            lookups.authors[entry.book, default: []].append(
-                CalibreAuthor(name: entry.name, sort: entry.sort)
-            )
-        }
-        for entry in try schema.fetchSeries(db) {
-            lookups.series[entry.book] = entry.name
-        }
-        for entry in try schema.fetchTags(db) {
-            lookups.tags[entry.book, default: []].append(entry.name)
-        }
-        for entry in try schema.fetchRatings(db) {
-            lookups.ratings[entry.book] = entry.rating
-        }
-        for entry in try schema.fetchPublishers(db) {
-            lookups.publishers[entry.book] = entry.name
-        }
-        for entry in try schema.fetchLanguages(db) {
-            lookups.languages[entry.book, default: []].append(entry.code)
-        }
-        for entry in try schema.fetchIdentifiers(db) {
-            let type = entry.type.lowercased()
-            if lookups.identifiers[entry.book]?[type] == nil {
-                lookups.identifiers[entry.book, default: [:]][type] = entry.value
-            } else {
-                // Calibre's identifiers table UNIQUEs (book, type), so a second
-                // value per type is a defensive edge, not the norm.
-                lookups.extraIdentifiers[entry.book, default: [:]][type, default: []].append(entry.value)
-            }
-        }
-        for entry in try schema.fetchComments(db) {
-            lookups.comments[entry.book] = entry.text
-        }
-        for entry in try schema.fetchFormats(db) {
-            lookups.formats[entry.book, default: []].append(
-                CalibreFormatEntry(format: entry.format, name: entry.name, size: entry.size, path: entry.path)
-            )
-        }
-        for entry in try schema.fetchAnnotations(db) {
-            lookups.annotations[entry.book] = entry.payload
-        }
-        for entry in try schema.fetchLastReadPositions(db) {
-            lookups.lastRead[entry.book] = entry.payload
-        }
-        for entry in try schema.fetchPageCounts(db) {
-            lookups.pageCounts[entry.book] = CalibrePageCount(
-                pages: entry.pages,
-                algorithm: entry.algorithm,
-                format: entry.format,
-                formatSize: entry.formatSize
-            )
-        }
-        for entry in try schema.fetchConversionOptions(db) {
-            lookups.conversionOptions[entry.book, default: []].append(
-                CalibreConversionOption(format: entry.format, data: entry.data)
-            )
-        }
-        let customColumns = try schema.customColumns(db)
-        for column in customColumns {
-            lookups.columnDefinitions[column.label] = CalibreColumnDefinition(
-                name: column.name,
-                datatype: column.datatype,
-                display: column.display,
-                isMultiple: column.isMultiple,
-                editable: column.editable,
-                normalized: column.normalized
-            )
-            let values = try schema.fetchCustomValues(db, column: column)
-            if column.isMultiple {
-                var grouped: [Int: [String]] = [:]
-                var extras: [Int: [String]] = [:]
-                for entry in values {
-                    if let value = entry.value {
-                        grouped[entry.book, default: []].append(value)
-                    }
-                    if let extra = entry.extra, !extra.isEmpty {
-                        extras[entry.book, default: []].append(extra)
-                    }
-                }
-                let encoder = JSONEncoder()
-                for (book, items) in grouped {
-                    lookups.raw[book, default: [:]][column.key] =
-                        String(decoding: try encoder.encode(items), as: UTF8.self)
-                }
-                if !extras.isEmpty {
-                    for (book, items) in extras {
-                        lookups.raw[book, default: [:]][column.key + ".extra"] =
-                            String(decoding: try encoder.encode(items), as: UTF8.self)
-                    }
-                }
-            } else {
-                for entry in values {
-                    guard let value = entry.value, !value.isEmpty else { continue }
-                    lookups.raw[entry.book, default: [:]][column.key] = value
-                }
-            }
-        }
-        return lookups
-    }
-
-    /// Assembles one `CalibreBookRecord` from a `books` row plus the shared
-    /// lookup tables. OPF cross-check fills empty title/authors only; the DB
-    /// stays authoritative.
-    private func record(
-        from row: Row,
-        lookups: BookLookups,
-        bookColumns: Set<String>,
-        dataColumns: Set<String>
-    ) throws -> CalibreBookRecord {
-        let id = row["id"] as Int
-        let bookPath = row["path"] as String? ?? ""
-        let sourcePath = bookPath.isEmpty ? nil : bookPath
-        let sourceUUID = (row["uuid"] as String?).flatMap { $0.isEmpty ? nil : $0 }
-        let titleSort = (row["sort"] as String?).flatMap { $0.isEmpty ? nil : $0 }
-        let authorSort = (row["author_sort"] as String?).flatMap { $0.isEmpty ? nil : $0 }
-        let lastModified = Self.date(fromDatabaseValue: row["last_modified"]?.databaseValue)
-        var title = row["title"] as String? ?? ""
-        var authors = lookups.authors[id] ?? []
-
-        var opfPath: String?
-        let opfURL = bookFolderURL(bookPath: bookPath).appending(path: "metadata.opf")
-        if FileManager.default.fileExists(atPath: opfURL.path) {
-            opfPath = "metadata.opf"
-            if title.isEmpty || authors.isEmpty,
-               let opf = try? CalibreOPFParser.parse(fileURL: opfURL) {
-                if title.isEmpty, let opfTitle = opf.title, !opfTitle.isEmpty {
-                    title = opfTitle
-                }
-                if authors.isEmpty {
-                    authors = opf.creators.map { CalibreAuthor(name: $0, sort: $0) }
-                }
-            }
-        }
-
-        let formats: [CalibreFormatRecord] = (lookups.formats[id] ?? []).map { entry in
-            let folder: String
-            if dataColumns.contains("path"), let override = entry.path, !override.isEmpty {
-                folder = override
-            } else {
-                folder = bookPath
-            }
-            let filename = "\(entry.name).\(entry.format.lowercased())"
-            let url = bookFolderURL(bookPath: folder).appending(path: filename)
-            return CalibreFormatRecord(
-                format: entry.format,
-                name: entry.name,
-                sourceURL: url,
-                size: entry.size
-            )
-        }
-
-        var cover: CalibreCover?
-        if bookColumns.contains("cover"),
-           let blob = row["cover"] as Data?, !blob.isEmpty {
-            cover = .blob(blob)
-        } else if (row["has_cover"] as Bool? ?? false) {
-            let coverURL = bookFolderURL(bookPath: bookPath).appending(path: "cover.jpg")
-            if FileManager.default.fileExists(atPath: coverURL.path) {
-                cover = .file(coverURL)
-            }
-        }
-
-        var raw = lookups.raw[id] ?? [:]
-        if bookColumns.contains("lccn"), let lccn = row["lccn"] as String?, !lccn.isEmpty {
-            raw["calibre.lccn"] = lccn
-        }
-        if let pageCount = lookups.pageCounts[id] {
-            raw["calibre.pages"] = "\(pageCount.pages)"
-        } else if bookColumns.contains("pages"), let pages = row["pages"] as Int? {
-            raw["calibre.pages"] = "\(pages)"
-        }
-        if let annotations = lookups.annotations[id] {
-            raw["calibre.annotations"] = annotations
-        }
-        if let lastRead = lookups.lastRead[id] {
-            raw["calibre.lastReadPositions"] = lastRead
-        }
-
-        // Custom-column definitions, but only for columns this book references.
-        var customColumnDefinitions: [String: CalibreColumnDefinition] = [:]
-        for key in raw.keys where key.hasPrefix("calibre.custom.") && !key.hasSuffix(".extra") {
-            let label = String(key.dropFirst("calibre.custom.".count))
-            if let definition = lookups.columnDefinitions[label] {
-                customColumnDefinitions[label] = definition
-            }
-        }
-
-        let originalFormats: [CalibreOriginalFormat] = (lookups.formats[id] ?? []).map {
-            CalibreOriginalFormat(format: $0.format, name: $0.name, path: $0.path)
-        }
-        let conversionOptions = lookups.conversionOptions[id] ?? []
-        let extraIdentifiers = lookups.extraIdentifiers[id] ?? [:]
-
-        if let sourceUUID { raw["calibre.uuid"] = sourceUUID }
-        if let titleSort { raw["calibre.titleSort"] = titleSort }
-        if let authorSort { raw["calibre.authorSort"] = authorSort }
-        if let lastModified { raw["calibre.lastModified"] = Self.isoString(from: lastModified) }
-        if let sourcePath { raw["calibre.sourcePath"] = sourcePath }
-        if !conversionOptions.isEmpty, let json = Self.jsonString(conversionOptions) {
-            raw["calibre.conversionOptions"] = json
-        }
-        if !originalFormats.isEmpty, let json = Self.jsonString(originalFormats) {
-            raw["calibre.originalFormats"] = json
-        }
-        if !extraIdentifiers.isEmpty, let json = Self.jsonString(extraIdentifiers) {
-            raw["calibre.extraIdentifiers"] = json
-        }
-        if !customColumnDefinitions.isEmpty, let json = Self.jsonString(customColumnDefinitions) {
-            raw["calibre.customColumns"] = json
-        }
-
-        let seriesIndexValue: Double?
-        if lookups.series[id] != nil,
-           let index = Self.double(fromDatabaseValue: row["series_index"]?.databaseValue),
-           index != 0 {
-            seriesIndexValue = index
-        } else {
-            seriesIndexValue = nil
-        }
-        let rating = lookups.ratings[id].flatMap { $0 > 0 ? $0 / 2 : nil }
-
-        return CalibreBookRecord(
-            calibreID: id,
-            title: title,
-            authors: authors,
-            series: lookups.series[id],
-            seriesIndex: seriesIndexValue,
-            tags: lookups.tags[id] ?? [],
-            rating: rating,
-            publisher: lookups.publishers[id],
-            publicationDate: Self.date(fromDatabaseValue: row["pubdate"]?.databaseValue),
-            addedDate: Self.date(fromDatabaseValue: row["timestamp"]?.databaseValue),
-            languages: lookups.languages[id] ?? [],
-            identifiers: lookups.identifiers[id] ?? [:],
-            comments: lookups.comments[id],
-            formats: formats,
-            cover: cover,
-            pages: lookups.pageCounts[id],
-            sourceUUID: sourceUUID,
-            titleSort: titleSort,
-            authorSort: authorSort,
-            lastModified: lastModified,
-            sourcePath: sourcePath,
-            originalFormats: originalFormats,
-            conversionOptions: conversionOptions,
-            extraIdentifiers: extraIdentifiers,
-            customColumnDefinitions: customColumnDefinitions,
-            rawMetadata: raw,
-            opfPath: opfPath
-        )
-    }
-
     private func bookFolderURL(bookPath: String) -> URL {
         if bookPath.isEmpty {
             return libraryURL
@@ -556,6 +300,389 @@ public final class CalibreReader: Sendable {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         return (try? encoder.encode(value)).map { String(decoding: $0, as: UTF8.self) }
+    }
+}
+
+// MARK: - Record assembly
+
+/// Record building is split out of the class body (the type-size limit) into
+/// per-table/field helpers, each under the complexity cap — the same pattern
+/// `LibraryRepository` uses for its change-write path.
+private extension CalibreReader {
+    /// All per-book lookup tables needed to assemble records, fetched once per
+    /// `books()` call (batched, not N+1 per book).
+    func makeLookups(db: Database) throws -> BookLookups {
+        var lookups = BookLookups()
+        try fillIdentityLinks(&lookups, db: db)
+        try fillIdentifierLinks(&lookups, db: db)
+        try fillPayloadLinks(&lookups, db: db)
+        try fillCustomColumns(&lookups, db: db)
+        return lookups
+    }
+
+    private func fillIdentityLinks(_ lookups: inout BookLookups, db: Database) throws {
+        for entry in try schema.fetchAuthors(db) {
+            lookups.authors[entry.book, default: []].append(
+                CalibreAuthor(name: entry.name, sort: entry.sort)
+            )
+        }
+        for entry in try schema.fetchSeries(db) {
+            lookups.series[entry.book] = entry.name
+        }
+        for entry in try schema.fetchTags(db) {
+            lookups.tags[entry.book, default: []].append(entry.name)
+        }
+        for entry in try schema.fetchRatings(db) {
+            lookups.ratings[entry.book] = entry.rating
+        }
+        for entry in try schema.fetchPublishers(db) {
+            lookups.publishers[entry.book] = entry.name
+        }
+        for entry in try schema.fetchLanguages(db) {
+            lookups.languages[entry.book, default: []].append(entry.code)
+        }
+        for entry in try schema.fetchComments(db) {
+            lookups.comments[entry.book] = entry.text
+        }
+    }
+
+    private func fillIdentifierLinks(_ lookups: inout BookLookups, db: Database) throws {
+        for entry in try schema.fetchIdentifiers(db) {
+            let type = entry.type.lowercased()
+            if lookups.identifiers[entry.book]?[type] == nil {
+                lookups.identifiers[entry.book, default: [:]][type] = entry.value
+            } else {
+                // Calibre's identifiers table UNIQUEs (book, type), so a second
+                // value per type is a defensive edge, not the norm.
+                lookups.extraIdentifiers[entry.book, default: [:]][type, default: []].append(entry.value)
+            }
+        }
+    }
+
+    private func fillPayloadLinks(_ lookups: inout BookLookups, db: Database) throws {
+        for entry in try schema.fetchFormats(db) {
+            lookups.formats[entry.book, default: []].append(
+                CalibreFormatEntry(format: entry.format, name: entry.name, size: entry.size, path: entry.path)
+            )
+        }
+        for entry in try schema.fetchAnnotations(db) {
+            lookups.annotations[entry.book] = entry.payload
+        }
+        for entry in try schema.fetchLastReadPositions(db) {
+            lookups.lastRead[entry.book] = entry.payload
+        }
+        for entry in try schema.fetchPageCounts(db) {
+            lookups.pageCounts[entry.book] = CalibrePageCount(
+                pages: entry.pages,
+                algorithm: entry.algorithm,
+                format: entry.format,
+                formatSize: entry.formatSize
+            )
+        }
+        for entry in try schema.fetchConversionOptions(db) {
+            lookups.conversionOptions[entry.book, default: []].append(
+                CalibreConversionOption(format: entry.format, data: entry.data)
+            )
+        }
+    }
+
+    private func fillCustomColumns(_ lookups: inout BookLookups, db: Database) throws {
+        let customColumns = try schema.customColumns(db)
+        for column in customColumns {
+            lookups.columnDefinitions[column.label] = CalibreColumnDefinition(
+                name: column.name,
+                datatype: column.datatype,
+                display: column.display,
+                isMultiple: column.isMultiple,
+                editable: column.editable,
+                normalized: column.normalized
+            )
+            let values = try schema.fetchCustomValues(db, column: column)
+            if column.isMultiple {
+                try encodeMultipleCustomColumn(column, values: values, into: &lookups)
+            } else {
+                try encodeScalarCustomColumn(column, values: values, into: &lookups)
+            }
+        }
+    }
+
+    private func encodeMultipleCustomColumn(
+        _ column: CalibreCustomColumn,
+        values: [CalibreCustomValueRow],
+        into lookups: inout BookLookups
+    ) throws {
+        var grouped: [Int: [String]] = [:]
+        var extras: [Int: [String]] = [:]
+        for entry in values {
+            if let value = entry.value {
+                grouped[entry.book, default: []].append(value)
+            }
+            if let extra = entry.extra, !extra.isEmpty {
+                extras[entry.book, default: []].append(extra)
+            }
+        }
+        let encoder = JSONEncoder()
+        for (book, items) in grouped {
+            lookups.raw[book, default: [:]][column.key] =
+                String(decoding: try encoder.encode(items), as: UTF8.self)
+        }
+        if !extras.isEmpty {
+            for (book, items) in extras {
+                lookups.raw[book, default: [:]][column.key + ".extra"] =
+                    String(decoding: try encoder.encode(items), as: UTF8.self)
+            }
+        }
+    }
+
+    private func encodeScalarCustomColumn(
+        _ column: CalibreCustomColumn,
+        values: [CalibreCustomValueRow],
+        into lookups: inout BookLookups
+    ) throws {
+        for entry in values {
+            guard let value = entry.value, !value.isEmpty else { continue }
+            lookups.raw[entry.book, default: [:]][column.key] = value
+        }
+    }
+
+    /// Assembles one `CalibreBookRecord` from a `books` row plus the shared
+    /// lookup tables. OPF cross-check fills empty title/authors only; the DB
+    /// stays authoritative.
+    func record(
+        from row: Row,
+        lookups: BookLookups,
+        bookColumns: Set<String>,
+        dataColumns: Set<String>
+    ) throws -> CalibreBookRecord {
+        let identity = rowIdentity(from: row)
+        var title = row["title"] as String? ?? ""
+        var authors = lookups.authors[identity.id] ?? []
+        let opfPath = applyOPFCrossCheck(&title, &authors, bookPath: identity.bookPath)
+
+        let formats = formatRecords(
+            for: identity.id, bookPath: identity.bookPath, dataColumns: dataColumns, lookups: lookups
+        )
+        let cover = cover(from: row, bookColumns: bookColumns, bookPath: identity.bookPath)
+
+        var raw = baseRawPayload(from: row, id: identity.id, bookColumns: bookColumns, lookups: lookups)
+        let customDefinitions = customColumnDefinitions(from: raw, lookups: lookups)
+        appendIdentitySidecars(
+            to: &raw,
+            sourceUUID: identity.sourceUUID,
+            titleSort: identity.titleSort,
+            authorSort: identity.authorSort,
+            lastModified: identity.lastModified,
+            sourcePath: identity.sourcePath
+        )
+        appendCollectionSidecars(
+            to: &raw,
+            conversionOptions: lookups.conversionOptions[identity.id] ?? [],
+            originalFormats: (lookups.formats[identity.id] ?? []).map {
+                CalibreOriginalFormat(format: $0.format, name: $0.name, path: $0.path)
+            },
+            extraIdentifiers: lookups.extraIdentifiers[identity.id] ?? [:],
+            customColumnDefinitions: customDefinitions
+        )
+
+        let seriesIndexValue = seriesIndex(from: row, id: identity.id, lookups: lookups)
+        let rating = lookups.ratings[identity.id].flatMap { $0 > 0 ? $0 / 2 : nil }
+
+        return CalibreBookRecord(
+            calibreID: identity.id,
+            title: title,
+            authors: authors,
+            series: lookups.series[identity.id],
+            seriesIndex: seriesIndexValue,
+            tags: lookups.tags[identity.id] ?? [],
+            rating: rating,
+            publisher: lookups.publishers[identity.id],
+            publicationDate: Self.date(fromDatabaseValue: row["pubdate"]?.databaseValue),
+            addedDate: Self.date(fromDatabaseValue: row["timestamp"]?.databaseValue),
+            languages: lookups.languages[identity.id] ?? [],
+            identifiers: lookups.identifiers[identity.id] ?? [:],
+            comments: lookups.comments[identity.id],
+            formats: formats,
+            cover: cover,
+            pages: lookups.pageCounts[identity.id],
+            sourceUUID: identity.sourceUUID,
+            titleSort: identity.titleSort,
+            authorSort: identity.authorSort,
+            lastModified: identity.lastModified,
+            sourcePath: identity.sourcePath,
+            originalFormats: (lookups.formats[identity.id] ?? []).map {
+                CalibreOriginalFormat(format: $0.format, name: $0.name, path: $0.path)
+            },
+            conversionOptions: lookups.conversionOptions[identity.id] ?? [],
+            extraIdentifiers: lookups.extraIdentifiers[identity.id] ?? [:],
+            customColumnDefinitions: customDefinitions,
+            rawMetadata: raw,
+            opfPath: opfPath
+        )
+    }
+
+    private struct RowIdentity: Sendable {
+        let id: Int
+        let bookPath: String
+        let sourcePath: String?
+        let sourceUUID: String?
+        let titleSort: String?
+        let authorSort: String?
+        let lastModified: Date?
+    }
+
+    private func rowIdentity(from row: Row) -> RowIdentity {
+        let bookPath = row["path"] as String? ?? ""
+        return RowIdentity(
+            id: row["id"] as Int,
+            bookPath: bookPath,
+            sourcePath: bookPath.isEmpty ? nil : bookPath,
+            sourceUUID: (row["uuid"] as String?).flatMap { $0.isEmpty ? nil : $0 },
+            titleSort: (row["sort"] as String?).flatMap { $0.isEmpty ? nil : $0 },
+            authorSort: (row["author_sort"] as String?).flatMap { $0.isEmpty ? nil : $0 },
+            lastModified: Self.date(fromDatabaseValue: row["last_modified"]?.databaseValue)
+        )
+    }
+
+    /// Fills empty title/authors from the book's `metadata.opf` (the DB stays
+    /// authoritative); returns the OPF path when a `metadata.opf` exists.
+    private func applyOPFCrossCheck(
+        _ title: inout String,
+        _ authors: inout [CalibreAuthor],
+        bookPath: String
+    ) -> String? {
+        let opfURL = bookFolderURL(bookPath: bookPath).appending(path: "metadata.opf")
+        guard FileManager.default.fileExists(atPath: opfURL.path) else { return nil }
+        guard title.isEmpty || authors.isEmpty,
+              let opf = try? CalibreOPFParser.parse(fileURL: opfURL) else {
+            return "metadata.opf"
+        }
+        if title.isEmpty, let opfTitle = opf.title, !opfTitle.isEmpty {
+            title = opfTitle
+        }
+        if authors.isEmpty {
+            authors = opf.creators.map { CalibreAuthor(name: $0, sort: $0) }
+        }
+        return "metadata.opf"
+    }
+
+    private func formatRecords(
+        for id: Int,
+        bookPath: String,
+        dataColumns: Set<String>,
+        lookups: BookLookups
+    ) -> [CalibreFormatRecord] {
+        (lookups.formats[id] ?? []).map { entry in
+            let folder: String
+            if dataColumns.contains("path"), let override = entry.path, !override.isEmpty {
+                folder = override
+            } else {
+                folder = bookPath
+            }
+            let filename = "\(entry.name).\(entry.format.lowercased())"
+            let url = bookFolderURL(bookPath: folder).appending(path: filename)
+            return CalibreFormatRecord(
+                format: entry.format,
+                name: entry.name,
+                sourceURL: url,
+                size: entry.size
+            )
+        }
+    }
+
+    private func cover(from row: Row, bookColumns: Set<String>, bookPath: String) -> CalibreCover? {
+        if bookColumns.contains("cover"),
+           let blob = row["cover"] as Data?, !blob.isEmpty {
+            return .blob(blob)
+        }
+        if (row["has_cover"] as Bool? ?? false) {
+            let coverURL = bookFolderURL(bookPath: bookPath).appending(path: "cover.jpg")
+            if FileManager.default.fileExists(atPath: coverURL.path) {
+                return .file(coverURL)
+            }
+        }
+        return nil
+    }
+
+    private func baseRawPayload(
+        from row: Row,
+        id: Int,
+        bookColumns: Set<String>,
+        lookups: BookLookups
+    ) -> [String: String] {
+        var raw = lookups.raw[id] ?? [:]
+        if bookColumns.contains("lccn"), let lccn = row["lccn"] as String?, !lccn.isEmpty {
+            raw["calibre.lccn"] = lccn
+        }
+        if let pageCount = lookups.pageCounts[id] {
+            raw["calibre.pages"] = "\(pageCount.pages)"
+        } else if bookColumns.contains("pages"), let pages = row["pages"] as Int? {
+            raw["calibre.pages"] = "\(pages)"
+        }
+        if let annotations = lookups.annotations[id] {
+            raw["calibre.annotations"] = annotations
+        }
+        if let lastRead = lookups.lastRead[id] {
+            raw["calibre.lastReadPositions"] = lastRead
+        }
+        return raw
+    }
+
+    /// Custom-column definitions, but only for columns this book references.
+    private func customColumnDefinitions(
+        from raw: [String: String],
+        lookups: BookLookups
+    ) -> [String: CalibreColumnDefinition] {
+        var definitions: [String: CalibreColumnDefinition] = [:]
+        for key in raw.keys where key.hasPrefix("calibre.custom.") && !key.hasSuffix(".extra") {
+            let label = String(key.dropFirst("calibre.custom.".count))
+            if let definition = lookups.columnDefinitions[label] {
+                definitions[label] = definition
+            }
+        }
+        return definitions
+    }
+
+    private func appendIdentitySidecars(
+        to raw: inout [String: String],
+        sourceUUID: String?,
+        titleSort: String?,
+        authorSort: String?,
+        lastModified: Date?,
+        sourcePath: String?
+    ) {
+        if let sourceUUID { raw["calibre.uuid"] = sourceUUID }
+        if let titleSort { raw["calibre.titleSort"] = titleSort }
+        if let authorSort { raw["calibre.authorSort"] = authorSort }
+        if let lastModified { raw["calibre.lastModified"] = Self.isoString(from: lastModified) }
+        if let sourcePath { raw["calibre.sourcePath"] = sourcePath }
+    }
+
+    private func appendCollectionSidecars(
+        to raw: inout [String: String],
+        conversionOptions: [CalibreConversionOption],
+        originalFormats: [CalibreOriginalFormat],
+        extraIdentifiers: [String: [String]],
+        customColumnDefinitions: [String: CalibreColumnDefinition]
+    ) {
+        if !conversionOptions.isEmpty, let json = Self.jsonString(conversionOptions) {
+            raw["calibre.conversionOptions"] = json
+        }
+        if !originalFormats.isEmpty, let json = Self.jsonString(originalFormats) {
+            raw["calibre.originalFormats"] = json
+        }
+        if !extraIdentifiers.isEmpty, let json = Self.jsonString(extraIdentifiers) {
+            raw["calibre.extraIdentifiers"] = json
+        }
+        if !customColumnDefinitions.isEmpty, let json = Self.jsonString(customColumnDefinitions) {
+            raw["calibre.customColumns"] = json
+        }
+    }
+
+    private func seriesIndex(from row: Row, id: Int, lookups: BookLookups) -> Double? {
+        guard lookups.series[id] != nil,
+              let index = Self.double(fromDatabaseValue: row["series_index"]?.databaseValue),
+              index != 0 else { return nil }
+        return index
     }
 }
 

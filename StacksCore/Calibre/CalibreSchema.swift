@@ -25,14 +25,40 @@ protocol CalibreSchemaAdapting: Sendable {
     func fetchLanguages(_ db: Database) throws -> [(book: Int, code: String)]
     func fetchIdentifiers(_ db: Database) throws -> [(book: Int, type: String, value: String)]
     func fetchComments(_ db: Database) throws -> [(book: Int, text: String)]
-    func fetchFormats(_ db: Database) throws -> [(book: Int, format: String, name: String, size: Int64, path: String?)]
+    func fetchFormats(_ db: Database) throws -> [CalibreFormatRow]
     func customColumns(_ db: Database) throws -> [CalibreCustomColumn]
-    func fetchCustomValues(_ db: Database, column: CalibreCustomColumn) throws -> [(book: Int, value: String?, extra: String?)]
+    func fetchCustomValues(_ db: Database, column: CalibreCustomColumn) throws -> [CalibreCustomValueRow]
     func fetchAnnotations(_ db: Database) throws -> [(book: Int, payload: String)]
     func fetchLastReadPositions(_ db: Database) throws -> [(book: Int, payload: String)]
-    func fetchPageCounts(_ db: Database) throws -> [(book: Int, pages: Int, algorithm: Int, format: String, formatSize: Int64)]
+    func fetchPageCounts(_ db: Database) throws -> [CalibrePageCountRow]
     func fetchConversionOptions(_ db: Database) throws -> [(book: Int, format: String, data: Data)]
     func columns(in table: String, _ db: Database) throws -> Set<String>
+}
+
+/// A `data` row — one of a book's format files plus its book id.
+struct CalibreFormatRow: Sendable, Equatable {
+    let book: Int
+    let format: String
+    let name: String
+    let size: Int64
+    let path: String?
+}
+
+/// A `books_pages_link` row — a book's page count plus its book id.
+struct CalibrePageCountRow: Sendable, Equatable {
+    let book: Int
+    let pages: Int
+    let algorithm: Int
+    let format: String
+    let formatSize: Int64
+}
+
+/// A custom-column value row — the value (and multi-value `.extra`) for one
+/// book, plus the book id.
+struct CalibreCustomValueRow: Sendable, Equatable {
+    let book: Int
+    let value: String?
+    let extra: String?
 }
 
 /// A custom column definition read from `custom_columns`.
@@ -191,7 +217,7 @@ class CalibreSchemaBase: CalibreSchemaAdapting, @unchecked Sendable {
         ).map { (book: $0["book"] as Int, text: $0["text"] as String) }
     }
 
-    func fetchFormats(_ db: Database) throws -> [(book: Int, format: String, name: String, size: Int64, path: String?)] {
+    func fetchFormats(_ db: Database) throws -> [CalibreFormatRow] {
         let dataColumns = try columns(in: "data", db)
         if dataColumns.contains("path") {
             return try Row.fetchAll(
@@ -202,7 +228,7 @@ class CalibreSchemaBase: CalibreSchemaAdapting, @unchecked Sendable {
                     FROM data ORDER BY book, id
                     """
             ).map {
-                (
+                CalibreFormatRow(
                     book: $0["book"] as Int,
                     format: $0["format"] as String,
                     name: $0["name"] as String,
@@ -218,7 +244,7 @@ class CalibreSchemaBase: CalibreSchemaAdapting, @unchecked Sendable {
                 FROM data ORDER BY book, id
                 """
         ).map {
-            (
+            CalibreFormatRow(
                 book: $0["book"] as Int,
                 format: $0["format"] as String,
                 name: $0["name"] as String,
@@ -253,7 +279,7 @@ class CalibreSchemaBase: CalibreSchemaAdapting, @unchecked Sendable {
         }
     }
 
-    func fetchCustomValues(_ db: Database, column: CalibreCustomColumn) throws -> [(book: Int, value: String?, extra: String?)] {
+    func fetchCustomValues(_ db: Database, column: CalibreCustomColumn) throws -> [CalibreCustomValueRow] {
         if column.isMultiple {
             let table = "books_custom_column_\(column.id)_link"
             guard try !columns(in: table, db).isEmpty else { return [] }
@@ -261,7 +287,7 @@ class CalibreSchemaBase: CalibreSchemaAdapting, @unchecked Sendable {
                 db,
                 sql: "SELECT book AS book, value AS value, extra AS extra FROM \(table) ORDER BY book, id"
             ).map {
-                (
+                CalibreCustomValueRow(
                     book: $0["book"] as Int,
                     value: Self.valueString($0["value"]?.databaseValue),
                     extra: Self.valueString($0["extra"]?.databaseValue)
@@ -273,7 +299,13 @@ class CalibreSchemaBase: CalibreSchemaAdapting, @unchecked Sendable {
         return try Row.fetchAll(
             db,
             sql: "SELECT book AS book, value AS value FROM \(table) ORDER BY book"
-        ).map { (book: $0["book"] as Int, value: Self.valueString($0["value"]?.databaseValue), extra: nil) }
+        ).map {
+            CalibreCustomValueRow(
+                book: $0["book"] as Int,
+                value: Self.valueString($0["value"]?.databaseValue),
+                extra: nil
+            )
+        }
     }
 
     func fetchAnnotations(_ db: Database) throws -> [(book: Int, payload: String)] {
@@ -315,14 +347,14 @@ class CalibreSchemaBase: CalibreSchemaAdapting, @unchecked Sendable {
         return try Self.groupJSON(rows: rows, keys: ["format", "user", "device", "cfi", "epoch", "pos_frac"])
     }
 
-    func fetchPageCounts(_ db: Database) throws -> [(book: Int, pages: Int, algorithm: Int, format: String, formatSize: Int64)] {
+    func fetchPageCounts(_ db: Database) throws -> [CalibrePageCountRow] {
         guard try !columns(in: "books_pages_link", db).isEmpty else { return [] }
         return try Row.fetchAll(db, sql: """
             SELECT book AS book, pages AS pages, algorithm AS algorithm,
                    format AS format, format_size AS format_size
             FROM books_pages_link
             """).map {
-                (
+                CalibrePageCountRow(
                     book: $0["book"] as Int,
                     pages: $0["pages"] as Int,
                     algorithm: $0["algorithm"] as Int,
