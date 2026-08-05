@@ -44,9 +44,9 @@ private struct AppCommands: Commands {
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
             Button("Create Library…") { session.present(.create) }
-                .keyboardShortcut("n", modifiers: .command)
+                .keyboardShortcut("n", modifiers: [.command, .shift])   // Cmd+N reserved
             Divider()
-            Button("Close Library") { session.closeLibrary() }
+            Button("Close Library") { Task { await session.closeLibrary() } }
                 .keyboardShortcut("w", modifiers: [.command, .shift])
         }
         // File menu: library open/import actions (the old custom Library menu
@@ -60,7 +60,7 @@ private struct AppCommands: Commands {
                 }
                 ForEach(session.recentLibraries) { entry in
                     Button(entry.name) {
-                        Task { await session.openLibrary(at: entry.url) }
+                        Task { await session.openLibraryAsPeer(at: entry.url) }
                     }
                 }
             }

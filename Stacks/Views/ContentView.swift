@@ -45,7 +45,7 @@ struct ContentView: View {
                 } description: {
                     Text(message)
                 } actions: {
-                    Button("Choose Another Library") { session.closeLibrary() }
+                    Button("Choose Another Library") { Task { await session.closeLibrary() } }
                 }
             }
         }
@@ -96,7 +96,7 @@ struct ContentView: View {
                 case .create:
                     Task { await session.createLibrary(at: urls[0]) }
                 case .open:
-                    Task { await session.openLibrary(at: urls[0]) }
+                    Task { await session.openLibraryAsPeer(at: urls[0]) }
                 case .addBooks:
                     Task {
                         await session.importFiles(urls: urls)
@@ -484,14 +484,14 @@ extension ContentView {
     }
 
     /// The library connection backing the browser. Only the `.loaded` state
-    /// shows the browser, so the connection is always present there. Task 5
-    /// routes this to the active library (home or a peer); for now it is the
-    /// single connection.
+    /// shows the browser, so the active library is always present there. Task 5
+    /// routes the sidebar selection between home and peers; for now the active
+    /// library is home (or the most recently opened peer).
     private var library: LibraryConnection {
-        guard let connection = session.connection else {
+        guard let library = session.activeLibrary else {
             preconditionFailure("Browser shown without an open library")
         }
-        return connection
+        return library
     }
 
     /// Binds the grid/list picker to the active connection's view mode.

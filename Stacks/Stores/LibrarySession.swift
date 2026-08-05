@@ -34,7 +34,9 @@ final class LibrarySession {
         var name: String { url.lastPathComponent }
     }
 
-    private(set) var state: State = .welcome
+    /// Internal setter: the hub (`LibrarySession+Connection`) transitions
+    /// this state machine when opening/closing libraries.
+    var state: State = .welcome
     var lastError: String?
     var importReport: ImportReport?
     var inspectorPresented = false
@@ -60,14 +62,30 @@ final class LibrarySession {
     var calibreSourcePath: String?
 
     let deviceID: UUID
-    private let bookmarks: LibraryBookmarkStore
-    private var activeSecurityURL: URL?
+    let bookmarks: LibraryBookmarkStore
+    var activeSecurityURL: URL?
     var calibreSourceSecurityURL: URL?
 
-    /// The currently open library connection. Per-library state (repository,
-    /// sync machinery, browser state) lives on `LibraryConnection`; this
-    /// session delegates to it via the shims below.
-    private(set) var connection: LibraryConnection?
+    /// The home library connection — the hub's primary library. `connection`
+    /// is a computed alias for `home` so existing home-scoped callers (the
+    /// shims below, views) keep compiling until Task 5 routes them to the
+    /// active library.
+    var connection: LibraryConnection? { home }
+
+    // Hub state: the home library, open peers, and the browser-context
+    // selection. Stored here (not in the `+Connection` extension) because
+    // Swift extensions cannot hold stored properties.
+    var home: LibraryConnection? {
+        get { _home }
+        set { _home = newValue }
+    }
+    private var _home: LibraryConnection?
+    var peers: [LibraryConnection] = []
+    var activeLibraryID: UUID? {
+        get { _activeLibraryID ?? home?.id }
+        set { _activeLibraryID = newValue }
+    }
+    private var _activeLibraryID: UUID?
 
     // Device support: the connected-device store and the sidebar selection
     // bridging into it (selecting a device clears the library facet, and vice
@@ -78,12 +96,12 @@ final class LibrarySession {
         set { devices.selectedDeviceID = newValue }
     }
 
-    /// Selects a device in the sidebar; choosing a device clears the library
-    /// facet so the detail area shows the device browser. The actual state
-    /// transition (selection + book listing) happens in `DeviceManager.select`
+    /// Selects a device in the sidebar; choosing a device clears the active
+    /// library's facet so the detail area shows the device browser. The actual
+    /// state transition (selection + book listing) happens in `DeviceManager.select`
     /// so selecting a device immediately loads its books.
     func selectDevice(_ id: UUID?) {
-        if id != nil { connection?.facetNavigation.clear() }
+        if id != nil { activeLibrary?.facetNavigation.clear() }
         Task { await devices.select(id) }
     }
 
@@ -112,9 +130,9 @@ final class LibrarySession {
     /// Bookmarked libraries with their resolved URLs, newest first. Stored so
     /// the Open Recent menu observes refreshes; updated whenever a library is
     /// opened or closed.
-    private(set) var recentLibraries: [RecentLibraryEntry]
+    var recentLibraries: [RecentLibraryEntry]
 
-    private static func resolveRecents(_ bookmarks: LibraryBookmarkStore) -> [RecentLibraryEntry] {
+    static func resolveRecents(_ bookmarks: LibraryBookmarkStore) -> [RecentLibraryEntry] {
         bookmarks.recentLibraries().compactMap { entry in
             guard let resolved = try? bookmarks.resolve(entry.id) else { return nil }
             return RecentLibraryEntry(id: entry.id, url: resolved.url)
@@ -135,9 +153,16 @@ final class LibrarySession {
         await openLibrary(at: resolved.url, fallbackToWelcome: true)
     }
 
-    func closeLibrary() {
-        connection?.stop()
-        connection = nil
+    /// Closes the active connection: a peer is dropped by itself; closing
+    /// home tears down the session's transient state, promotes the next peer
+    /// (or returns to the welcome screen when none remain).
+    func closeLibrary() async {
+        if let active = activeLibrary, active !== home {
+            await closePeer(active)
+            return
+        }
+        home?.stop()
+        home = nil
         activeSecurityURL?.stopAccessingSecurityScopedResource()
         activeSecurityURL = nil
         stopCalibreAccess()
@@ -160,53 +185,31 @@ final class LibrarySession {
         pickerAction = nil
         isPickerPresented = false
         recentLibraries = Self.resolveRecents(bookmarks)
+        await promoteNextPeerToHome()
     }
 
     // MARK: - Activation
 
     private func activate(url: URL, create: Bool, fallbackToWelcome: Bool = false) async {
-        // A mid-session library switch (Cmd+O, Open Recent, Cmd+N) reaches
-        // activate without closeLibrary: stop the old library's monitor and
-        // search debounce so the old connection never touches the new library.
-        // Idempotent; runSyncSequence's tail rebuilds the monitor for the new
-        // library.
-        connection?.stop()
+        // The hub owns opening: create writes the library skeleton first, then
+        // both paths route through `openRequested` — the first library becomes
+        // home, every later open becomes a peer (never switches home).
         state = .loading
-        let accessed = url.startAccessingSecurityScopedResource()
         do {
-            let indexes = try Self.indexDirectory()
             if create {
-                _ = try await LibraryRepository.create(at: url, indexesDirectory: indexes, deviceID: deviceID)
+                _ = try await LibraryRepository.create(
+                    at: url, indexesDirectory: try Self.indexDirectory(), deviceID: deviceID
+                )
             }
-            let connection = try await LibraryConnection(
-                openAt: url, indexesDirectory: indexes, deviceID: deviceID
+            await openRequested(
+                at: url,
+                intent: (home == nil) ? .home : .peer,
+                fallbackToWelcome: fallbackToWelcome
             )
-            connection.onLoadFailure = { [weak self] message in
-                self?.state = .failed(message: message)
-            }
-            connection.onError = { [weak self] message in
-                self?.lastError = message
-            }
-            connection.onSelectionChange = { [weak self] in
-                guard let self else { return }
-                Task { await self.devices.select(nil) }
-            }
-            try bookmarks.save(url, for: connection.id)
-            recentLibraries = Self.resolveRecents(bookmarks)
-            activeSecurityURL?.stopAccessingSecurityScopedResource()
-            activeSecurityURL = accessed ? url : nil
-            self.connection = connection
-            state = .loaded
-            // The connection's init already refreshed; this post-wiring pass
-            // guarantees a browse failure after open lands in `state = .failed`
-            // (the init ran before the callbacks above were attached).
-            await connection.refreshAll()
         } catch {
-            if accessed { url.stopAccessingSecurityScopedResource() }
+            // Only the create step throws here; `openRequested` handles its own
+            // failures (including the fallbackToWelcome path).
             if fallbackToWelcome {
-                // Auto-reopen on launch: a missing or unopenable last library
-                // drops back to the open/create screen instead of the failure
-                // screen, with an explanation.
                 lastError = "Couldn’t reopen “\(url.lastPathComponent)”: \(error.localizedDescription)"
                 state = .welcome
             } else {
