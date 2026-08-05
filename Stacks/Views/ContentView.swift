@@ -430,7 +430,11 @@ extension ContentView {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             sidebarColumn
         } content: {
+            // The middle column drives the window title in the 3-column
+            // layout (the detail column's title is not picked up there), so
+            // the same computed title is repeated here.
             FacetListView(browser: library)
+                .navigationTitle(windowTitle)
         } detail: {
             detailColumn
         }
@@ -445,13 +449,18 @@ extension ContentView {
             .navigationTitle(session.activeLibrary?.name ?? "Stacks")
     }
 
-    /// The window title: the currently browsed device or library. Falls back
-    /// to the app name only when nothing is open.
+    /// The window title: the currently browsed device or library — with the
+    /// active facet category when browsing one (e.g. "Library3 — Authors").
+    /// Falls back to the app name only when nothing is open.
     private var windowTitle: String {
         if session.selectedDeviceID != nil {
             return session.devices.selectedDevice?.name ?? "Device"
         }
-        return session.activeLibrary?.name ?? "Stacks"
+        guard let library = session.activeLibrary else { return "Stacks" }
+        if let category = library.facetNavigation.category {
+            return "\(library.name) — \(category.displayName)"
+        }
+        return library.name
     }
 
     /// The trailing column: the device books table, the active library's
