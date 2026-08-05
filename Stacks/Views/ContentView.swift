@@ -455,16 +455,20 @@ extension ContentView {
                     session.presentImportReport()
                 }
             } else if let library = session.activeLibrary {
-                HStack(spacing: 0) {
-                    // The facet "middle column" as a pane inside the detail
-                    // column: present only while a category is active, so All
-                    // Books stays a true 2-column layout. This replaces the
-                    // 2/3-column split-view swap (which crashed macOS).
-                    if library.facetNavigation.category != nil {
+                // The facet "middle column" as a draggable pane inside
+                // the detail column (HSplitView's native divider), present
+                // only while a category is active so All Books stays a true
+                // 2-column layout. Replaces the 2/3-column split-view swap
+                // (which crashed macOS); the divider position persists
+                // across facet switches (the HSplitView stays alive).
+                if library.facetNavigation.category != nil {
+                    HSplitView {
                         FacetListView(browser: library)
-                            .frame(width: 240)
-                        Divider()
+                            .frame(minWidth: 180, idealWidth: 240, maxWidth: 420)
+                        libraryBrowser(for: library)
+                            .frame(minWidth: 320)
                     }
+                } else {
                     libraryBrowser(for: library)
                 }
             } else {
