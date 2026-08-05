@@ -17,31 +17,6 @@ extension FocusedValues {
     }
 }
 
-/// Progress overlay shown while the pre-wizard Calibre scan runs off the main
-/// actor — the file picker is closed but the wizard has not appeared yet.
-private struct CalibreScanOverlay: View {
-    let phase: CalibreScanPhase
-
-    var body: some View {
-        HStack(spacing: 8) {
-            ProgressView()
-                .controlSize(.small)
-            Text(phase.label)
-                .font(.caption)
-        }
-        .padding(10)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
-    }
-}
-
-private extension CalibreScanPhase {
-    var label: String {
-        switch self {
-        case .copyingDatabase: "Copying Calibre database…"
-        case .readingBooks: "Reading Calibre books…"
-        }
-    }
-}
 
 struct ContentView: View {
     @Bindable var session: LibrarySession
@@ -83,11 +58,6 @@ struct ContentView: View {
             // Device support: rescan the USB bus on activation so a device
             // plugged in while the app was inactive appears in the sidebar.
             Task { await session.devices.scanForDevices() }
-        }
-        .overlay {
-            if let phase = session.calibreScanProgress {
-                CalibreScanOverlay(phase: phase)
-            }
         }
         .onChange(of: session.selection) { _, newValue in
             if newValue.count == 1 && !session.isMarqueeSelecting && isHomeContext {
@@ -300,16 +270,16 @@ extension ContentView {
             }
         }
         ToolbarItem(id: "device-activity") {
-            if !session.devices.devices.isEmpty {
+            if !session.devices.devices.isEmpty || session.calibreActivity != nil {
                 Button {
                     showActivityPopover.toggle()
                 } label: {
                     activityToolbarLabel
                         .frame(width: 22, height: 22)
                 }
-                .help("Device activity")
+                .help("Activity")
                 .popover(isPresented: $showActivityPopover, arrowEdge: .bottom) {
-                    DeviceActivityPopover(session: session)
+                    ActivityPopover(session: session)
                 }
             }
         }
@@ -550,7 +520,17 @@ extension ContentView {
     /// site) keeps the toolbar from jumping between states.
     @ViewBuilder
     private var activityToolbarLabel: some View {
-        if let activity = session.devices.currentActivity {
+        if let activity = session.calibreActivity {
+            if let progress = activity.progress {
+                Circle()
+                    .trim(from: 0, to: max(0.02, progress))
+                    .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+            } else {
+                ProgressView()
+                    .controlSize(.small)
+            }
+        } else if let activity = session.devices.currentActivity {
             if let progress = activity.progress {
                 Circle()
                     .trim(from: 0, to: max(0.02, progress))
@@ -699,16 +679,21 @@ extension ContentView {
     }
 }
 
-/// Toolbar popover showing device connection status, the current queue
-/// operation (with detail and progress), and the queued backlog — the
-/// Safari-Downloads style activity surface. Activity is secondary chrome in
-/// the toolbar; the main content view stays stable.
-private struct DeviceActivityPopover: View {
+/// Toolbar popover showing live activity: device connection status, the
+/// current queue operation (with detail and progress), the queued backlog,
+/// and Calibre import/scan progress — the Safari-Downloads style activity
+/// surface. Activity is secondary chrome in the toolbar; the main content
+/// view stays stable.
+private struct ActivityPopover: View {
     @Bindable var session: LibrarySession
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
+            if let activity = session.calibreActivity {
+                calibreActivityRow(activity)
+                Divider()
+            }
             HStack(spacing: 6) {
                 Image(systemName: session.devices.deviceError != nil
                     ? "exclamationmark.triangle"
@@ -745,6 +730,35 @@ private struct DeviceActivityPopover: View {
         }
         .padding(14)
         .frame(minWidth: 300)
+    }
+
+    /// Live Calibre import/scan: headline + progress, the book being
+    /// processed, and the last outcome — enough to see it is advancing, not
+    /// frozen.
+    private func calibreActivityRow(_ activity: CalibreImportActivity) -> some View {
+        HStack(spacing: 8) {
+            if let progress = activity.progress {
+                ProgressView(value: progress)
+                    .frame(width: 90)
+            } else {
+                ProgressView()
+                    .controlSize(.small)
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(activity.title)
+                if let currentTitle = activity.currentTitle {
+                    Text(currentTitle)
+                        .font(.caption)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                if let detail = activity.detail {
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
     }
 
     private func activityRow(_ activity: DeviceActivity) -> some View {

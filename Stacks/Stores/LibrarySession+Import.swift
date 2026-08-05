@@ -2,6 +2,40 @@ import AppKit
 import StacksCore
 import Foundation
 
+/// Live Calibre activity surfaced in the toolbar activity popover — the scan
+/// phases while the source is read, then per-book import progress with the
+/// current book and the last outcome. Enough detail to see the import is
+/// advancing, not frozen.
+struct CalibreImportActivity: Equatable {
+    enum Phase: Equatable {
+        case scanning(CalibreScanPhase)
+        case importing(completed: Int, total: Int)
+    }
+
+    let phase: Phase
+    /// Book currently being processed (import only).
+    let currentTitle: String?
+    /// Outcome after a book is decided; nil while processing.
+    let detail: String?
+
+    /// 0...1 determinate progress; nil during the scan (indeterminate).
+    var progress: Double? {
+        if case .importing(let completed, let total) = phase, total > 0 {
+            return Double(completed) / Double(total)
+        }
+        return nil
+    }
+
+    /// Headline shown above the progress.
+    var title: String {
+        switch phase {
+        case .scanning(.copyingDatabase): "Copying Calibre database…"
+        case .scanning(.readingBooks): "Reading Calibre books…"
+        case .importing(let completed, let total): "Importing \(completed) of \(total)"
+        }
+    }
+}
+
 // MARK: - Calibre wizard lifecycle
 
 extension LibrarySession {
@@ -18,7 +52,8 @@ extension LibrarySession {
         calibreImportReport = nil
         calibreImportInProgress = false
         calibreImportProgress = nil
-        calibreScanProgress = nil
+        calibreActivity = nil
+        lastCalibreLiveRefresh = nil
         calibreSourcePath = nil
     }
 
@@ -224,12 +259,21 @@ extension LibrarySession {
         // metadata.db (Calibre embeds cover blobs — hundreds of MB for large
         // libraries) and books() hydrates every cover, both far too heavy for
         // the main thread (the old synchronous path beachballed). Only the
-        // state assignment below hops back to the main actor.
+        // state assignment below hops back to the main actor. Activity is
+        // surfaced through the toolbar popover so the scan's progress is
+        // visible.
+        calibreActivity = CalibreImportActivity(
+            phase: .scanning(.copyingDatabase), currentTitle: nil, detail: nil
+        )
         let scanned: CalibreScanResult?
         do {
             scanned = try await Task.detached(priority: .userInitiated) {
                 try CalibreLibraryScanner.scan(libraryURL: url) { [weak self] phase in
-                    Task { @MainActor in self?.calibreScanProgress = phase }
+                    Task { @MainActor in
+                        self?.calibreActivity = CalibreImportActivity(
+                            phase: .scanning(phase), currentTitle: nil, detail: nil
+                        )
+                    }
                 }
             }.value
         } catch {
@@ -237,7 +281,7 @@ extension LibrarySession {
             calibreSummary = nil
             calibreBooks = []
             calibreSourcePath = nil
-            calibreScanProgress = nil
+            calibreActivity = nil
             calibreReader = nil
             return
         }
@@ -249,7 +293,7 @@ extension LibrarySession {
         calibreSelectedIDs = Set((scanned?.books ?? []).map(\.calibreID))
         calibreImportReport = nil
         calibreSourcePath = url.standardizedFileURL.path
-        calibreScanProgress = nil
+        calibreActivity = nil
     }
 
     func importCalibre() async {
@@ -257,9 +301,11 @@ extension LibrarySession {
               let sourcePath = calibreSourcePath else { return }
         calibreImportInProgress = true
         calibreImportProgress = 0
+        lastCalibreLiveRefresh = nil
         defer {
             calibreImportInProgress = false
             calibreImportProgress = nil
+            calibreActivity = nil
         }
         let service = CalibreImportService(layout: .init(root: repository.root))
         // The scan deferred blob covers; the import fetches them per book from
@@ -273,8 +319,17 @@ extension LibrarySession {
                 libraryID: summary.libraryID,
                 selection: Array(calibreSelectedIDs),
                 into: repository,
-                progress: { [weak self] value in
-                    Task { @MainActor in self?.calibreImportProgress = value }
+                progress: { [weak self] update in
+                    Task { @MainActor in
+                        guard let self else { return }
+                        self.calibreImportProgress = update.fraction
+                        self.calibreActivity = CalibreImportActivity(
+                            phase: .importing(completed: update.completed, total: update.total),
+                            currentTitle: update.currentTitle,
+                            detail: update.detail
+                        )
+                        self.scheduleCalibreLiveRefresh()
+                    }
                 },
                 coverProvider: { [reader] calibreID in
                     try reader?.coverData(for: calibreID)
@@ -290,5 +345,17 @@ extension LibrarySession {
             lastError = error.localizedDescription
         }
         await refreshAll()
+    }
+
+    /// Live library updates during the import: refresh the visible books at
+    /// most every half second, so the browser fills in as books land without
+    /// re-reading the whole catalog on every book.
+    private func scheduleCalibreLiveRefresh() {
+        let now = Date()
+        if let last = lastCalibreLiveRefresh, now.timeIntervalSince(last) < 0.5 {
+            return
+        }
+        lastCalibreLiveRefresh = now
+        Task { await connection?.refreshBooks() }
     }
 }

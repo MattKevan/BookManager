@@ -246,14 +246,14 @@ struct CalibreImportServiceTests {
     }
 
     @Test
-    func reportsMonotonicProgressAcrossSelectedBooks() async throws {
+    func reportsProgressBeforeAndAfterEachBook() async throws {
         let layout = try layout()
         let service = CalibreImportService(layout: layout)
         let repository = CalibreMemoryRepository()
         let library = try CalibreFixture.makeLibrary(named: "svc-progress-frac-\(UUID().uuidString)")
         let records = try records(from: library)
 
-        let samples = LockedBox<[Double]>([])
+        let samples = LockedBox<[CalibreImportUpdate]>([])
         let report = try await service.importBooks(
             records, from: library.path,
             libraryID: "acceptance-fixture-uuid",
@@ -263,8 +263,17 @@ struct CalibreImportServiceTests {
         )
 
         #expect(report.imported.map(\.calibreID) == [1, 2, 4])
-        // One report per selected book, ending at 1.0.
-        #expect(samples.value == [1.0 / 3.0, 2.0 / 3.0, 1.0])
+        // Two updates per selected book: before processing (no outcome detail,
+        // carries the book title so the UI can show "Importing <title>…") and
+        // after (with the outcome), ending at 1.0.
+        let updates = samples.value
+        #expect(updates.count == 6)
+        #expect(updates.last?.fraction == 1)
+        #expect(updates.enumerated().filter { $0.offset.isMultiple(of: 2) }
+            .allSatisfy { $0.element.detail == nil && $0.element.currentTitle != nil })
+        #expect(updates.enumerated().filter { !$0.offset.isMultiple(of: 2) }
+            .allSatisfy { $0.element.detail == "Imported" })
+        #expect(updates.map(\.fraction) == updates.map(\.fraction).sorted())
     }
 
     @Test

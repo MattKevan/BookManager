@@ -81,8 +81,11 @@ final class LibrarySession {
     var calibreImportInProgress = false
     /// Fraction (0...1) of the selected books decided by the import loop.
     var calibreImportProgress: Double?
-    /// Phase label while the pre-wizard Calibre scan runs off the main actor.
-    var calibreScanProgress: CalibreScanPhase?
+    /// Live Calibre activity (scan phases, per-book import progress) for the
+    /// toolbar activity popover.
+    var calibreActivity: CalibreImportActivity?
+    /// Throttle timestamp for live library refreshes during a Calibre import.
+    var lastCalibreLiveRefresh: Date?
     var calibreSourcePath: String?
 
     let deviceID: UUID

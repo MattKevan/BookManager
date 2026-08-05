@@ -81,6 +81,30 @@ public enum CalibreImportError: Error, LocalizedError, Equatable {
     }
 }
 
+/// Live progress update for one import run, delivered before and after each
+/// decided book. `detail` is nil while a book is being processed (the UI shows
+/// "Importing <title>…") and carries the outcome after it is decided.
+public struct CalibreImportUpdate: Sendable, Equatable {
+    /// Number of selected books decided so far (including the current one).
+    public let completed: Int
+    /// Total number of selected books.
+    public let total: Int
+    /// Title of the book currently being processed / most recently decided.
+    public let currentTitle: String?
+    /// Outcome detail after a book is decided; nil while processing.
+    public let detail: String?
+
+    public init(completed: Int, total: Int, currentTitle: String?, detail: String?) {
+        self.completed = completed
+        self.total = total
+        self.currentTitle = currentTitle
+        self.detail = detail
+    }
+
+    /// 0...1 fraction of selected books decided (1 when nothing is selected).
+    public var fraction: Double { total > 0 ? Double(completed) / Double(total) : 1 }
+}
+
 /// Imports a copy of a Calibre library (as `CalibreBookRecord`s read by
 /// `CalibreReader`) into a Stacks library through the repository,
 /// mirroring `ImportService`'s staged pipeline.
@@ -111,7 +135,7 @@ public actor CalibreImportService {
         libraryID: String,
         selection: [Int]?,
         into repository: LibraryRepositoryImporting,
-        progress: @Sendable (Double) -> Void = { _ in },
+        progress: @Sendable (CalibreImportUpdate) -> Void = { _ in },
         coverProvider: @Sendable (Int) throws -> Data? = { _ in nil }
     ) async throws -> CalibreImportReport {
         let selectedIDs = selection.map(Set.init)
@@ -136,13 +160,18 @@ public actor CalibreImportService {
         let selectedCount = selectedIDs.map { set in
             ordered.filter { set.contains($0.calibreID) }.count
         } ?? ordered.count
-        let total = Double(max(selectedCount, 1))
         var decided = 0
 
         for record in ordered {
             if let selectedIDs, !selectedIDs.contains(record.calibreID) {
                 continue
             }
+            // Report before processing so the UI shows "Importing <title>…"
+            // while a book's files are copied (large files take seconds).
+            progress(CalibreImportUpdate(
+                completed: decided, total: selectedCount,
+                currentTitle: record.title, detail: nil
+            ))
             let item: CalibreImportItem
             if progressRecord.completedBookIDs.contains(record.calibreID) {
                 item = CalibreImportItem(
@@ -150,7 +179,10 @@ public actor CalibreImportService {
                 )
             } else {
                 do {
-                    switch try await importOne(record, into: repository, duplicateLookup: &duplicateLookup, coverProvider: coverProvider) {
+                    switch try await importOne(
+                        record, into: repository,
+                        duplicateLookup: &duplicateLookup, coverProvider: coverProvider
+                    ) {
                     case .imported(let book, let likelyDuplicate):
                         progressRecord.completedBookIDs.append(record.calibreID)
                         try writeProgress(progressRecord, sourcePath: sourcePath)
@@ -177,9 +209,22 @@ public actor CalibreImportService {
             }
             items.append(item)
             decided += 1
-            progress(Double(decided) / total)
+            progress(CalibreImportUpdate(
+                completed: decided, total: selectedCount,
+                currentTitle: record.title, detail: Self.outcomeDetail(for: item.status)
+            ))
         }
         return CalibreImportReport(items: items)
+    }
+
+    /// Short outcome text for the progress update's `detail`.
+    private static func outcomeDetail(for status: CalibreImportItem.Status) -> String {
+        switch status {
+        case .imported: "Imported"
+        case .duplicate: "Duplicate — already in library"
+        case .failed(let message): "Failed: \(message)"
+        case .skipped: "Skipped (already imported)"
+        }
     }
 
     // MARK: - Per-book pipeline
