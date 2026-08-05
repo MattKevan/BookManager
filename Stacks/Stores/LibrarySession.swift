@@ -227,6 +227,11 @@ final class LibrarySession {
             state = .welcome
             return
         }
+        // Previously-opened libraries exist: show the loading spinner, never
+        // the welcome screen, while they reopen (openRequested flips to
+        // `.loaded` as soon as the first library is ready; the all-failed
+        // path below falls back to `.welcome`).
+        state = .loading
         // The persisted order's FIRST entry is the home library
         // (`persistOpenOrder` always writes home first). Deriving home from
         // the order — not from `openStore.home()`, which can be stale or
