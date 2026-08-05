@@ -447,6 +447,7 @@ extension ContentView {
     private var sidebarColumn: some View {
         SidebarView(session: session)
             .navigationTitle(session.activeLibrary?.name ?? "Stacks")
+            .navigationSplitViewColumnWidth(220)
     }
 
     /// The window title: the currently browsed device or library — with the
