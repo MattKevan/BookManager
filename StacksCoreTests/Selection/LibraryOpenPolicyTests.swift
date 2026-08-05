@@ -64,6 +64,18 @@ struct LibraryOpenPolicyTests {
     }
 
     @Test
+    func createIntentWithNoHomeIsHome() {
+        #expect(LibraryOpenPolicy.createIntent(homeExists: false) == .home)
+    }
+
+    @Test
+    func createIntentWithExistingHomeIsPeer() {
+        // Creating a new library must never demote the existing home — that
+        // is Change Home's explicit job, not a side effect of Create New.
+        #expect(LibraryOpenPolicy.createIntent(homeExists: true) == .peer)
+    }
+
+    @Test
     func nonMatchingExistingLibrariesOpenNew() {
         let resolution = LibraryOpenPolicy.resolve(
             existing: [

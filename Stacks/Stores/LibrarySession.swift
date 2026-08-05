@@ -368,16 +368,17 @@ final class LibrarySession {
                     at: url, indexesDirectory: try Self.indexDirectory(), deviceID: deviceID
                 )
             }
-            // Create always targets home (Cmd+Shift+N / Settings Create New):
-            // a folder already open as a peer role-swaps via makeHomeExisting.
-            // Plain open becomes home only while no home exists; otherwise it
-            // adds a peer (never switches home).
-            let intent: OpenIntent = create ? .home : ((home == nil) ? .home : .peer)
-            await openRequested(
-                at: url,
-                intent: intent,
-                fallbackToWelcome: fallbackToWelcome
-            )
+        // Create opens as home only when nothing is open yet; with an existing
+        // home it adds a peer (never switches home) — creating must not demote
+        // the active library. Plain open follows the same rule. A folder
+        // already open as a peer role-swaps via makeHomeExisting only on the
+        // explicit Change Home path.
+        let intent = LibraryOpenPolicy.createIntent(homeExists: home != nil)
+        await openRequested(
+            at: url,
+            intent: intent,
+            fallbackToWelcome: fallbackToWelcome
+        )
         } catch {
             // Only the create step throws here; `openRequested` handles its own
             // failures (including the fallbackToWelcome path). Errors surface

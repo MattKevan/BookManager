@@ -110,11 +110,12 @@ extension LibrarySession {
             try bookmarks.save(url, for: connection.id)
             recentLibraries = Self.resolveRecents(bookmarks)
             if intent == .home {
-                // Change-Home / Create-New with an existing home: the new
-                // connection becomes home and the old home is demoted to a
-                // peer (never two homes, never a silently-ignored role
-                // request). The policy's selectExisting/makeHomeExisting
-                // paths above already handled already-open folders.
+                // Change Home with an existing home: the new connection
+                // becomes home and the old home is demoted to a peer (never
+                // two homes, never a silently-ignored role request). The
+                // policy's selectExisting/makeHomeExisting paths above already
+                // handled already-open folders. Create New never sends .home
+                // with an existing home (LibraryOpenPolicy.createIntent).
                 let oldHome = home
                 home = connection
                 if let oldHome { peers.insert(oldHome, at: 0) }

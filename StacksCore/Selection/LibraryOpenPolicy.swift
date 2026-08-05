@@ -24,6 +24,14 @@ public struct ExistingLibrary: Sendable, Equatable {
 }
 
 public enum LibraryOpenPolicy {
+    /// The intent a CREATE request should carry: `.home` only when nothing is
+    /// open yet (the first library becomes home), otherwise `.peer`. Creating
+    /// a new library never demotes the existing home — replacing the home role
+    /// is Change Home's explicit job, not a side effect of Create New Library.
+    public static func createIntent(homeExists: Bool) -> OpenIntent {
+        homeExists ? .peer : .home
+    }
+
     public static func resolve(
         existing: [ExistingLibrary],
         manifestID: UUID,
