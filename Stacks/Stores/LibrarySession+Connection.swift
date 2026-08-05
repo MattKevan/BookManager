@@ -142,6 +142,15 @@ extension LibrarySession {
     /// browser context re-points at home (or promotes a peer when home is
     /// gone — defensive; home is normally present whenever peers exist).
     func closePeer(_ peer: LibraryConnection) async {
+        // The Libraries Close button must never close the home library: home
+        // closes via closeLibrary (Cmd+Shift+W). If a duplicate connection
+        // for the home library ever lands in `peers`, closing it routes to
+        // the real home-close path (promote/welcome) instead of leaving a
+        // half-torn session.
+        guard peer.id != home?.id else {
+            await closeLibrary()
+            return
+        }
         peer.stop()
         peers.removeAll { $0.id == peer.id }
         openStore.remove(peer.id)

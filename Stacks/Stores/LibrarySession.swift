@@ -196,11 +196,17 @@ final class LibrarySession {
     func reopenLibraries() async {
         guard home == nil else { return }
         let order = openStore.order()
-        let homeID = openStore.home()
         guard !order.isEmpty else {
             state = .welcome
             return
         }
+        // The persisted order's FIRST entry is the home library
+        // (`persistOpenOrder` always writes home first). Deriving home from
+        // the order — not from `openStore.home()`, which can be stale or
+        // missing in stores written by earlier builds — guarantees the
+        // default library reopens as home and never lands in the Libraries
+        // (peers) section on relaunch.
+        let homeID = order.first
         for libraryID in order {
             guard let resolved = try? openStore.resolve(libraryID) else {
                 // Unresolvable bookmark (missing/corrupt data): no URL to
@@ -232,6 +238,9 @@ final class LibrarySession {
         if home == nil, !peers.isEmpty {
             await promoteNextPeerToHome()
         }
+        // Heal a stale/missing home() designation so the store agrees with
+        // the order (order.first is authoritative).
+        if openStore.home() != homeID { openStore.setHome(homeID) }
         if home == nil, offlinePeers.isEmpty {
             state = .welcome
         }

@@ -19,7 +19,11 @@ struct LibraryPeersSection: View {
 
     var body: some View {
         Section("Libraries") {
-            ForEach(session.peers) { peer in
+            // The home library never appears here — it owns the Library
+            // section. Filter by id as a hard guarantee: a duplicate
+            // connection for the home library would otherwise render a second
+            // row for it.
+            ForEach(session.peers.filter { $0.id != session.home?.id }) { peer in
                 DisclosureGroup(isExpanded: expandedBinding(for: peer)) {
                     Label("All Books", systemImage: "books.vertical")
                         .tag(SidebarItem.library(peer.id, .allBooks))
