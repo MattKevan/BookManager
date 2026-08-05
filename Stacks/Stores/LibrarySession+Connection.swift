@@ -4,8 +4,9 @@ import StacksCore
 // MARK: - Hub: home library + open peer libraries
 
 extension LibrarySession {
-    /// The connection whose browser is currently shown; nil while a device is
-    /// selected or nothing is open.
+    /// The connection whose browser is currently shown: home or an open peer.
+    /// Nil only when nothing is open — a device selection clears
+    /// `activeLibraryID`, so the context resolves to home in device mode.
     var activeLibrary: LibraryConnection? {
         guard let id = activeLibraryID else { return nil }
         if let home, home.id == id { return home }

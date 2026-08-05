@@ -101,7 +101,16 @@ final class LibrarySession {
     /// state transition (selection + book listing) happens in `DeviceManager.select`
     /// so selecting a device immediately loads its books.
     func selectDevice(_ id: UUID?) {
-        if id != nil { activeLibrary?.facetNavigation.clear() }
+        if id != nil {
+            // Device mode: the browser context returns to home — clearing
+            // activeLibraryID makes `activeLibrary` resolve to home while a
+            // device is selected, so the home toolbar cluster (Add Books),
+            // search, and sync bindings stay correct over the device listing.
+            // Deselecting returns to home; a peer's facet state is preserved
+            // on its connection, just not auto-restored.
+            activeLibraryID = nil
+            activeLibrary?.facetNavigation.clear()
+        }
         Task { await devices.select(id) }
     }
 

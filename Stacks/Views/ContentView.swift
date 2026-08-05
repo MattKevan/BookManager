@@ -312,7 +312,7 @@ extension ContentView {
     /// device view is table-only), so it is hidden in device mode.
     private var viewPickerToolbarItem: some ToolbarContent {
         ToolbarItemGroup {
-            if session.selectedDeviceID == nil {
+            if session.selectedDeviceID == nil && session.activeLibrary != nil {
                 Picker("View", selection: viewModeBinding) {
                     Image(systemName: "list.bullet")
                         .accessibilityLabel("Table")
@@ -370,11 +370,13 @@ extension ContentView {
     /// a peer is the browser context).
     private var searchToolbarItem: some ToolbarContent {
         ToolbarItem {
-            ToolbarSearchField(
-                text: librarySearchBinding,
-                prompt: "Search books",
-                isFocused: $searchFocused
-            )
+            if session.activeLibrary != nil {
+                ToolbarSearchField(
+                    text: librarySearchBinding,
+                    prompt: "Search books",
+                    isFocused: $searchFocused
+                )
+            }
         }
     }
 
@@ -540,9 +542,10 @@ extension ContentView {
         }
     }
 
-    /// True when the browser context is the home library. Device mode counts
-    /// (the active library is still home there); peer mode does not — the
-    /// home-only toolbar cluster and inspector apply only to home.
+    /// True when the browser context is the home library. Device selection
+    /// clears `activeLibraryID`, so the context resolves to home in device
+    /// mode and counts as home context; peer mode does not — the home-only
+    /// toolbar cluster and inspector apply only to home.
     private var isHomeContext: Bool {
         session.activeLibrary === session.home
     }
