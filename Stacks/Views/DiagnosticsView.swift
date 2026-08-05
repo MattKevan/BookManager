@@ -3,32 +3,39 @@ import StacksCore
 import SwiftUI
 
 /// Diagnostics content, embedded in the Settings ▸ Diagnostics tab (it moved
-/// out of the window toolbar). Reads the library session from the environment,
-/// which the Settings scene injects.
+/// out of the window toolbar). Inspects the ACTIVE library connection (falls
+/// back to home when nothing is active, e.g. device mode), so rebuilding or
+/// reloading diagnostics always targets the library the user is looking at.
 struct DiagnosticsView: View {
     @Environment(\.librarySession) private var session
+
+    /// The connection Diagnostics inspects: the active library, falling back
+    /// to home when nothing is active.
+    private var connection: LibraryConnection? {
+        session?.activeLibrary ?? session?.home
+    }
 
     var body: some View {
         List {
             Section("Library") {
-                LabeledContent("Library", value: session?.repository?.root.lastPathComponent ?? "—")
-                LabeledContent("Books", value: "\(session?.books.count ?? 0)")
-                if session?.isRebuilding == true {
-                    ProgressView(value: session?.rebuildProgress ?? 0)
+                LabeledContent("Library", value: connection?.repository.root.lastPathComponent ?? "—")
+                LabeledContent("Books", value: "\(connection?.books.count ?? 0)")
+                if connection?.isRebuilding == true {
+                    ProgressView(value: connection?.rebuildProgress ?? 0)
                     Button("Cancel Rebuild") {
-                        session?.cancelRebuild()
+                        connection?.cancelRebuild()
                     }
                 } else {
                     Button("Rebuild Local Index") {
-                        Task { await session?.rebuildIndex() }
+                        if let connection { Task { await connection.rebuildIndex() } }
                     }
                 }
             }
             Section("Missing Format Files") {
-                if let session, session.missingFiles.isEmpty {
+                if let connection, connection.missingFiles.isEmpty {
                     Text("None").foregroundStyle(.secondary)
                 } else {
-                    ForEach(session?.missingFiles ?? [], id: \.book.id) { entry in
+                    ForEach(connection?.missingFiles ?? [], id: \.book.id) { entry in
                         HStack {
                             Text(entry.book.title)
                             Spacer()
@@ -38,10 +45,10 @@ struct DiagnosticsView: View {
                 }
             }
             Section {
-                if let session, session.quarantinedChanges.isEmpty {
+                if let connection, connection.quarantinedChanges.isEmpty {
                     Text("None").foregroundStyle(.secondary)
                 } else {
-                    ForEach(session?.quarantinedChanges ?? [], id: \.path) { url in
+                    ForEach(connection?.quarantinedChanges ?? [], id: \.path) { url in
                         Text(url.lastPathComponent).foregroundStyle(.secondary)
                     }
                 }
@@ -51,7 +58,7 @@ struct DiagnosticsView: View {
                 Text("Undecodable change files, preserved instead of deleted.")
             }
             Section {
-                if let session, let report = session.reconciliationReport {
+                if let connection, let report = connection.reconciliationReport {
                     if report.renamed.isEmpty && report.adopted.isEmpty
                         && report.conflictCopies.isEmpty && report.restoredFromTrash.isEmpty
                         && report.missingFolders.isEmpty && report.errors.isEmpty {
@@ -87,15 +94,15 @@ struct DiagnosticsView: View {
                 Text("Folders re-pointed to canonical paths after merges; conflicts are forked, never overwritten.")
             }
             Section("Trash") {
-                if let session, session.deletedBooks.isEmpty {
+                if let connection, connection.deletedBooks.isEmpty {
                     Text("Empty").foregroundStyle(.secondary)
                 } else {
-                    ForEach(session?.deletedBooks ?? [], id: \.id) { book in
+                    ForEach(connection?.deletedBooks ?? [], id: \.id) { book in
                         HStack {
                             Text(book.title)
                             Spacer()
                             Button("Restore") {
-                                Task { await session?.restore(id: book.id) }
+                                if let connection { Task { await connection.restore(id: book.id) } }
                             }
                         }
                     }
@@ -103,6 +110,6 @@ struct DiagnosticsView: View {
             }
         }
         .frame(minWidth: 520, minHeight: 420)
-        .task { await session?.reloadDiagnostics() }
+        .task { if let connection { await connection.reloadDiagnostics() } }
     }
 }

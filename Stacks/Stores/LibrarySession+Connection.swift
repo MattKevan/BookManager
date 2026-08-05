@@ -166,4 +166,39 @@ extension LibrarySession {
             lastError = error.localizedDescription
         }
     }
+
+    // MARK: - Sidebar selection routing
+
+    /// Routes a sidebar sub-section click to the target library: home rows
+    /// arrive here through `selectCategory`; peer rows carry the peer's id.
+    /// Sets the browser context, clears device selection, applies the
+    /// sub-section to that library's facet navigation, and refreshes it.
+    func selectLibrarySubsection(_ item: (UUID, LibrarySubsection)) {
+        let (libraryID, subsection) = item
+        let connection = ([home] + peers).compactMap { $0 }.first { $0.id == libraryID }
+        guard let connection else { return }
+        activeLibraryID = libraryID
+        Task { await devices.select(nil) }
+        switch subsection {
+        case .allBooks:
+            connection.facetNavigation.clear()
+        case let .category(type):
+            connection.facetNavigation.selectCategory(type)
+        }
+        Task { await connection.refreshBooks() }
+    }
+
+    // MARK: - Task 6 placeholders
+
+    /// Placeholder wired in Task 6: resolves dropped file URLs and imports
+    /// them into `peer` via the existing import pipeline.
+    func importDroppedFiles(providers: [NSItemProvider], into peer: LibraryConnection) async {
+        // Task 6: LibrarySession.loadURL per provider, then importFiles(into:urls:).
+    }
+
+    /// Placeholder wired in Task 6: copies the peer's selection into home via
+    /// ImportService (staged, content-hash dedup, report).
+    func copySelectionFromPeerToHome(_ peer: LibraryConnection) async {
+        // Task 6: resolve peer.selectionBooks' format files, import into home.
+    }
 }

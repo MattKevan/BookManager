@@ -2,11 +2,19 @@ import StacksCore
 import Foundation
 import SwiftUI
 
-/// One selectable row in the sidebar: All Books, a library facet category,
-/// or a connected device (Finder-style, with eject).
+/// One selectable row in the sidebar: All Books, a library facet category, a
+/// peer library's sub-section, or a connected device (Finder-style, with
+/// eject). Home's rows are `.allBooks`/`.category`; every other open library
+/// is a `.library` row carrying its sub-section.
+enum LibrarySubsection: Hashable {
+    case allBooks
+    case category(FacetType)
+}
+
 enum SidebarItem: Hashable {
     case allBooks
     case category(FacetType)
+    case library(UUID, LibrarySubsection)
     case device(UUID)
 }
 
@@ -21,11 +29,18 @@ struct SidebarView: View {
             get: {
                 if let id = session.selectedDeviceID {
                     return .device(id)
-                } else if let category = session.facetNavigation.category {
-                    return .category(category)
-                } else {
-                    return .allBooks
                 }
+                // The browser context is the active library: home rows map to
+                // `.allBooks`/`.category`, peer rows to `.library(id, sub)`.
+                guard let library = session.activeLibrary else { return .allBooks }
+                if let category = library.facetNavigation.category {
+                    return library === session.home
+                        ? .category(category)
+                        : .library(library.id, .category(category))
+                }
+                return library === session.home
+                    ? .allBooks
+                    : .library(library.id, .allBooks)
             },
             set: { item in
                 switch item {
@@ -33,6 +48,8 @@ struct SidebarView: View {
                     session.selectCategory(nil)
                 case let .category(category):
                     session.selectCategory(category)
+                case let .library(id, subsection):
+                    session.selectLibrarySubsection((id, subsection))
                 case let .device(id):
                     session.selectDevice(id)
                 case nil:
@@ -47,6 +64,9 @@ struct SidebarView: View {
                     Label(category.displayName, systemImage: category.sidebarSymbol)
                         .tag(SidebarItem.category(category))
                 }
+            }
+            if !session.peers.isEmpty {
+                LibraryPeersSection(session: session)
             }
             if !session.devices.devices.isEmpty {
                 Section("Devices") {

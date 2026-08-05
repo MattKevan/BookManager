@@ -60,7 +60,7 @@ struct ContentView: View {
             Task { await session.devices.scanForDevices() }
         }
         .onChange(of: session.selection) { _, newValue in
-            if newValue.count == 1 && !session.isMarqueeSelecting {
+            if newValue.count == 1 && !session.isMarqueeSelecting && isHomeContext {
                 session.inspectorPresented = true
             }
         }
@@ -175,13 +175,13 @@ struct ContentView: View {
         // `.doubleColumn` below keeps the sidebar visible in the 2-column
         // layout (where it is equivalent to `.all`).
         Group {
-            if session.facetNavigation.category != nil {
+            if session.activeLibrary?.facetNavigation.category != nil {
                 threeColumnBrowser
             } else {
                 twoColumnBrowser
             }
         }
-        .onChange(of: session.facetNavigation.category) { _, category in
+        .onChange(of: session.activeLibrary?.facetNavigation.category) { _, category in
             columnVisibility = (category == nil) ? .doubleColumn : .all
         }
         // The search field is a real `NSSearchField` in its own toolbar item
@@ -192,11 +192,10 @@ struct ContentView: View {
         // toolbar item makes the item order deterministic and prevents one
         // item's state change from re-laying-out the others.
         .focusedValue(\.searchFocus, $searchFocused)
-        // The inspector shows LIBRARY book metadata; the device view has no
-        // inspector detail, so suppress it while a device is selected (a stale
-        // library book must never appear alongside a device-book selection).
+        // The inspector shows HOME library book metadata (peers are browse +
+        // transfer only in this slice): suppress it for devices and peers.
         .inspector(isPresented: Binding(
-            get: { session.inspectorPresented && session.selectedDeviceID == nil },
+            get: { session.inspectorPresented && session.selectedDeviceID == nil && isHomeContext },
             set: { session.inspectorPresented = $0 }
         )) {
             BookInspectorView(session: session)
@@ -366,11 +365,13 @@ extension ContentView {
     }
 
     /// The search field in its own toolbar item, so the sync spinner swap
-    /// never re-lays-out it (or the Inspector toggle) and vice versa.
+    /// never re-lays-out it (or the Inspector toggle) and vice versa. Binds
+    /// the ACTIVE library's search text (home in device mode, the peer when
+    /// a peer is the browser context).
     private var searchToolbarItem: some ToolbarContent {
         ToolbarItem {
             ToolbarSearchField(
-                text: $session.searchText,
+                text: librarySearchBinding,
                 prompt: "Search books",
                 isFocused: $searchFocused
             )
@@ -418,20 +419,26 @@ extension ContentView {
     /// The library/device navigation sidebar, shared by both layouts.
     private var sidebarColumn: some View {
         SidebarView(session: session)
-            .navigationTitle(session.repository?.root.lastPathComponent ?? "Library")
+            .navigationTitle(session.activeLibrary?.name ?? "Library")
     }
 
-    /// The trailing column: the device books table, or the library browser
-    /// with the active facet filter applied.
+    /// The trailing column: the device books table, the active library's
+    /// browser, or a no-library placeholder.
     private var detailColumn: some View {
         Group {
             if session.selectedDeviceID != nil {
                 DeviceBooksView(session: session) {
                     Task { await presentImportFeedback() }
                 }
+            } else if let library = session.activeLibrary {
+                libraryBrowser(for: library)
+                    .navigationTitle(library.facetNavigation.value ?? "All Books")
             } else {
-                browser
-                    .navigationTitle(session.facetNavigation.value ?? "All Books")
+                ContentUnavailableView {
+                    Label("No Library Open", systemImage: "books.vertical")
+                } description: {
+                    Text("Open or create a library to begin.")
+                }
             }
         }
         // One `.toolbar` with separate items (not multiple `.toolbar`
@@ -439,23 +446,29 @@ extension ContentView {
         // order here is the toolbar order, and a leading flexible spacer
         // aligns the whole cluster to the trailing edge. Fixed spacers break
         // the macOS 26 glass surface into the distinct clusters below.
-        // Right-to-left from the edge: Inspector toggle, search field,
-        // grid/list picker, library actions (Add Books / Open / Edit
-        // Metadata), device management, then the sync status at the leading
-        // end of the cluster.
+        // Right-to-left from the edge: Inspector toggle (home only), search
+        // field, grid/list picker, library actions (home: Add Books / Open /
+        // Edit Metadata; peer: Refresh / Copy to Home Library / Close),
+        // device management, then the sync status at the leading end.
         .toolbar {
             ToolbarSpacer(.flexible)
             syncToolbarItem
             ToolbarSpacer(.fixed)
             deviceToolbarGroup
             ToolbarSpacer(.fixed)
-            libraryActionsToolbarGroup
+            if isHomeContext {
+                libraryActionsToolbarGroup
+            } else if session.activeLibrary != nil {
+                peerToolbarGroup
+            }
             ToolbarSpacer(.fixed)
             viewPickerToolbarItem
             ToolbarSpacer(.fixed)
             searchToolbarItem
             ToolbarSpacer(.fixed)
-            inspectorToolbarItem
+            if isHomeContext {
+                inspectorToolbarItem
+            }
         }
     }
 
@@ -502,18 +515,77 @@ extension ContentView {
         )
     }
 
-    private var browser: some View {
-        Group {
-            switch library.viewMode {
-            case .table:
-                BookTableView(browser: library)
-            case .grid:
-                CoverGridView(browser: library)
+    /// The browser content for a library. Home keeps the drag-drop import
+    /// handler (dropped files land in home); a peer gets the PeerLibraryView
+    /// wrapper, whose context menu adds Copy to Home Library (the copy itself
+    /// is wired in Task 6).
+    @ViewBuilder
+    private func libraryBrowser(for library: LibraryConnection) -> some View {
+        if library === session.home {
+            Group {
+                switch library.viewMode {
+                case .table:
+                    BookTableView(browser: library)
+                case .grid:
+                    CoverGridView(browser: library)
+                }
+            }
+            .onDrop(of: [.fileURL], isTargeted: nil) { providers in
+                handleDrop(providers)
+            }
+        } else {
+            PeerLibraryView(peer: library) {
+                Task { await session.copySelectionFromPeerToHome(library) }
             }
         }
-        .onDrop(of: [.fileURL], isTargeted: nil) { providers in
-            handleDrop(providers)
+    }
+
+    /// True when the browser context is the home library. Device mode counts
+    /// (the active library is still home there); peer mode does not — the
+    /// home-only toolbar cluster and inspector apply only to home.
+    private var isHomeContext: Bool {
+        session.activeLibrary === session.home
+    }
+
+    /// Peer-context toolbar cluster, replacing Add/Open/Edit + the inspector
+    /// while a peer library is the browser context: Refresh, Copy to Home
+    /// Library (Task 6 wires the real transfer), and Close.
+    private var peerToolbarGroup: some ToolbarContent {
+        ToolbarItemGroup {
+            Button {
+                if let peer = session.activeLibrary {
+                    Task { await peer.refreshBooks() }
+                }
+            } label: {
+                Label("Refresh", systemImage: "arrow.clockwise")
+            }
+            .help("Reload this library's books")
+            Button {
+                if let peer = session.activeLibrary, session.home != nil {
+                    Task { await session.copySelectionFromPeerToHome(peer) }
+                }
+            } label: {
+                Label("Copy to Home Library", systemImage: "arrow.down.doc")
+            }
+            .disabled(session.activeLibrary?.selection.isEmpty ?? true || session.home == nil)
+            .help("Copy the selected books into your home library")
+            Button {
+                if let peer = session.activeLibrary {
+                    Task { await session.closePeer(peer) }
+                }
+            } label: {
+                Label("Close", systemImage: "xmark")
+            }
+            .help("Close this library")
         }
+    }
+
+    /// Binds the toolbar search field to the active library's search text.
+    private var librarySearchBinding: Binding<String> {
+        Binding(
+            get: { library.searchText },
+            set: { library.searchText = $0 }
+        )
     }
 
     /// Posts a system notification for the completed import; falls back to the

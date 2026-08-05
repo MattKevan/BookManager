@@ -279,7 +279,12 @@ final class LibrarySession {
     func refreshAll() async { await connection?.refreshAll() }
     func refreshFacets() async { await connection?.refreshFacets() }
     func refreshDeleted() async { await connection?.refreshDeleted() }
-    func selectCategory(_ type: FacetType?) { connection?.selectCategory(type) }
+    func selectCategory(_ type: FacetType?) {
+        // Selecting a home facet makes home the browser context (a sidebar
+        // click on a Library-section row switches back from a peer or device).
+        activeLibraryID = home?.id
+        connection?.selectCategory(type)
+    }
     func requestDelete(ids: Set<UUID>) { connection?.requestDelete(ids: ids) }
     func delete(ids: Set<UUID>) async { await connection?.delete(ids: ids) }
     func restore(id: UUID) async { await connection?.restore(id: id) }
