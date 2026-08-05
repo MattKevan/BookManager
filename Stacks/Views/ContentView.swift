@@ -437,13 +437,21 @@ extension ContentView {
     }
 
     /// The library/device navigation sidebar, shared by both layouts. Its
-    /// navigationTitle becomes the window title (the detail column sets none
-    /// for the library browser — a facet value like "All Books" must not
-    /// replace the browsed library's name). DeviceBooksView titles itself
-    /// with the device name, which overrides this in device mode.
+    /// navigationTitle shows the browsed library's name as the sidebar header;
+    /// the WINDOW title comes from `detailColumn`'s navigationTitle (the
+    /// sidebar's does not propagate to the window on macOS).
     private var sidebarColumn: some View {
         SidebarView(session: session)
             .navigationTitle(session.activeLibrary?.name ?? "Stacks")
+    }
+
+    /// The window title: the currently browsed device or library. Falls back
+    /// to the app name only when nothing is open.
+    private var windowTitle: String {
+        if session.selectedDeviceID != nil {
+            return session.devices.selectedDevice?.name ?? "Device"
+        }
+        return session.activeLibrary?.name ?? "Stacks"
     }
 
     /// The trailing column: the device books table, the active library's
@@ -464,6 +472,11 @@ extension ContentView {
                 }
             }
         }
+        // The WINDOW title: the browsed device's or library's name. The
+        // detail column is what drives the macOS window title (the sidebar's
+        // navigationTitle does not), so the facet value must never override
+        // it — a facet browser shows the library name, not "All Books".
+        .navigationTitle(windowTitle)
         // One `.toolbar` with separate items (not multiple `.toolbar`
         // attachments — those reorder unpredictably on macOS). Statement
         // order here is the toolbar order, and a leading flexible spacer
