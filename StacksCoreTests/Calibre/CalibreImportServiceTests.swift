@@ -349,6 +349,32 @@ struct CalibreImportServiceTests {
     }
 
     @Test
+    func deferredBlobCoversAreFetchedFromProvider() async throws {
+        let layout = try layout()
+        let service = CalibreImportService(layout: layout)
+        let repository = CalibreMemoryRepository()
+        let library = try CalibreFixture.makeVariantLibrary(
+            named: "svc-deferred-cover-\(UUID().uuidString)", userVersion: 26, extraColumns: true
+        )
+        let scanned = try CalibreLibraryScanner.scan(libraryURL: library)
+        defer { try? scanned.reader.close() }
+
+        // The scan deferred the blob cover (cover == nil); the import fetches
+        // it per book from the still-open reader.
+        let report = try await service.importBooks(
+            scanned.books, from: library.path,
+            libraryID: "acceptance-fixture-uuid",
+            selection: [1],
+            into: repository,
+            coverProvider: { id in try scanned.reader.coverData(for: id) }
+        )
+
+        #expect(report.imported.map(\.calibreID) == [1])
+        let created = try #require(await repository.createdBooks().first)
+        #expect(created.cover == Data([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10]))
+    }
+
+    @Test
     func importPreservesRawPayloadEndToEnd() async throws {
         let layout = try layout()
         let service = CalibreImportService(layout: layout)

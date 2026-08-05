@@ -13,6 +13,7 @@ struct CalibreLibraryScannerTests {
         defer { try? reader.close() }
         let expectedBooks = try reader.books()
         let expectedSummary = try reader.summary()
+        defer { try? scanned.reader.close() }
 
         // The single-pass scan must produce exactly the same records as a
         // direct books() read (payload JSON is deterministically key-sorted).
@@ -30,8 +31,27 @@ struct CalibreLibraryScannerTests {
     func scanReportsPhasesInOrder() throws {
         let library = try CalibreFixture.makeLibrary(named: "scanner-phases-\(UUID().uuidString)")
         let phases = LockedBox<[CalibreScanPhase]>([])
-        _ = try CalibreLibraryScanner.scan(libraryURL: library) { phases.append($0) }
+        let scanned = try CalibreLibraryScanner.scan(libraryURL: library) { phases.append($0) }
+        defer { try? scanned.reader.close() }
         #expect(phases.value == [.copyingDatabase, .readingBooks])
+    }
+
+    @Test
+    func blobCoversAreDeferredButFetchable() throws {
+        let library = try CalibreFixture.makeVariantLibrary(
+            named: "scanner-blob-\(UUID().uuidString)", userVersion: 26, extraColumns: true
+        )
+        let scanned = try CalibreLibraryScanner.scan(libraryURL: library)
+        defer { try? scanned.reader.close() }
+
+        // Book 1's cover is stored as a BLOB in the variant; the scan must
+        // not materialize it into the record (a large library's embedded
+        // covers can be GBs).
+        let book = try #require(scanned.books.first { $0.calibreID == 1 })
+        #expect(book.cover == nil)
+
+        // ...but the still-open reader can fetch it on demand for the import.
+        #expect(try scanned.reader.coverData(for: 1) == Data([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10]))
     }
 }
 

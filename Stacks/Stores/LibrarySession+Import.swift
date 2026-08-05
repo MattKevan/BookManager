@@ -10,6 +10,8 @@ extension LibrarySession {
     /// idempotent.
     func cancelCalibreImport() {
         stopCalibreAccess()
+        try? calibreReader?.close()
+        calibreReader = nil
         calibreSummary = nil
         calibreBooks = []
         calibreSelectedIDs = []
@@ -223,7 +225,7 @@ extension LibrarySession {
         // libraries) and books() hydrates every cover, both far too heavy for
         // the main thread (the old synchronous path beachballed). Only the
         // state assignment below hops back to the main actor.
-        let scanned: (summary: CalibreLibrarySummary, books: [CalibreBookRecord])?
+        let scanned: CalibreScanResult?
         do {
             scanned = try await Task.detached(priority: .userInitiated) {
                 try CalibreLibraryScanner.scan(libraryURL: url) { [weak self] phase in
@@ -236,8 +238,12 @@ extension LibrarySession {
             calibreBooks = []
             calibreSourcePath = nil
             calibreScanProgress = nil
+            calibreReader = nil
             return
         }
+        // The reader stays open so the import can fetch deferred blob covers
+        // (coverData(for:)); it is closed on cancel or after a successful import.
+        calibreReader = scanned?.reader
         calibreSummary = scanned?.summary
         calibreBooks = scanned?.books ?? []
         calibreSelectedIDs = Set((scanned?.books ?? []).map(\.calibreID))
@@ -256,6 +262,10 @@ extension LibrarySession {
             calibreImportProgress = nil
         }
         let service = CalibreImportService(layout: .init(root: repository.root))
+        // The scan deferred blob covers; the import fetches them per book from
+        // the still-open reader (a Sendable value — captured directly so the
+        // background call does not touch the main actor).
+        let reader = calibreReader
         do {
             calibreImportReport = try await service.importBooks(
                 calibreBooks,
@@ -265,11 +275,17 @@ extension LibrarySession {
                 into: repository,
                 progress: { [weak self] value in
                     Task { @MainActor in self?.calibreImportProgress = value }
+                },
+                coverProvider: { [reader] calibreID in
+                    try reader?.coverData(for: calibreID)
                 }
             )
             // The source is no longer read after the import completes; a
-            // failed import keeps the scope so the wizard's retry can read it.
+            // failed import keeps the scope and reader so the wizard's retry
+            // can read it.
             stopCalibreAccess()
+            try? calibreReader?.close()
+            calibreReader = nil
         } catch {
             lastError = error.localizedDescription
         }

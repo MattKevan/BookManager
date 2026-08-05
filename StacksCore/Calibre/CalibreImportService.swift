@@ -111,7 +111,8 @@ public actor CalibreImportService {
         libraryID: String,
         selection: [Int]?,
         into repository: LibraryRepositoryImporting,
-        progress: @Sendable (Double) -> Void = { _ in }
+        progress: @Sendable (Double) -> Void = { _ in },
+        coverProvider: @Sendable (Int) throws -> Data? = { _ in nil }
     ) async throws -> CalibreImportReport {
         let selectedIDs = selection.map(Set.init)
         let ordered = records.sorted { $0.calibreID < $1.calibreID }
@@ -132,7 +133,9 @@ public actor CalibreImportService {
             }
         }
 
-        let selectedCount = selectedIDs.map { set in ordered.filter { set.contains($0.calibreID) }.count } ?? ordered.count
+        let selectedCount = selectedIDs.map { set in
+            ordered.filter { set.contains($0.calibreID) }.count
+        } ?? ordered.count
         let total = Double(max(selectedCount, 1))
         var decided = 0
 
@@ -147,7 +150,7 @@ public actor CalibreImportService {
                 )
             } else {
                 do {
-                    switch try await importOne(record, into: repository, duplicateLookup: &duplicateLookup) {
+                    switch try await importOne(record, into: repository, duplicateLookup: &duplicateLookup, coverProvider: coverProvider) {
                     case .imported(let book, let likelyDuplicate):
                         progressRecord.completedBookIDs.append(record.calibreID)
                         try writeProgress(progressRecord, sourcePath: sourcePath)
@@ -189,7 +192,8 @@ public actor CalibreImportService {
     private func importOne(
         _ record: CalibreBookRecord,
         into repository: LibraryRepositoryImporting,
-        duplicateLookup: inout [String: UUID]
+        duplicateLookup: inout [String: UUID],
+        coverProvider: @Sendable (Int) throws -> Data?
     ) async throws -> ImportOutcome {
         // A book with any missing format file cannot be copied at all.
         if let missing = record.formats.first(where: { $0.isMissing }) {
@@ -222,20 +226,9 @@ public actor CalibreImportService {
         // Cover: stage a copy (blob → temp file) and pass the staged bytes as
         // the cover Data the repository stores and materializes.
         var coverData: Data?
-        switch record.cover {
-        case .blob(let data):
-            let tempDir = layout.controlRoot.appending(path: "calibre-covers", directoryHint: .isDirectory)
-            try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-            let tempURL = tempDir.appending(path: "\(UUID().uuidString).jpg")
-            try data.write(to: tempURL)
-            stagedCover = try await folder.stage(from: tempURL)
-            coverData = try Data(contentsOf: stagedCover!.url)
-            try? FileManager.default.removeItem(at: tempURL)
-        case .file(let url):
-            stagedCover = try await folder.stage(from: url)
-            coverData = try Data(contentsOf: stagedCover!.url)
-        case nil:
-            break
+        if let resolved = try await resolveCover(of: record, coverProvider: coverProvider) {
+            stagedCover = resolved.staged
+            coverData = resolved.data
         }
 
         // Exact-duplicate gate: if ANY staged format hash already exists in the
@@ -280,6 +273,37 @@ public actor CalibreImportService {
             if duplicateLookup[key] == nil { duplicateLookup[key] = book.id }
         }
         return .imported(book: book, likelyDuplicateOf: likelyDuplicate)
+    }
+
+    /// Resolves the cover for a book: the record's own cover when present,
+    /// otherwise a deferred blob cover fetched on demand from the still-open
+    /// reader (a fetch failure degrades to no cover — covers are optional
+    /// metadata, never a reason to fail a book). Returns the staged cover file
+    /// and its bytes; nil when the book has no cover.
+    private func resolveCover(
+        of record: CalibreBookRecord,
+        coverProvider: @Sendable (Int) throws -> Data?
+    ) async throws -> (staged: BookFolder.StagedFile, data: Data)? {
+        var cover = record.cover
+        if cover == nil, let data = try? coverProvider(record.calibreID), !data.isEmpty {
+            cover = .blob(data)
+        }
+        switch cover {
+        case .blob(let data):
+            let tempDir = layout.controlRoot.appending(path: "calibre-covers", directoryHint: .isDirectory)
+            try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+            let tempURL = tempDir.appending(path: "\(UUID().uuidString).jpg")
+            try data.write(to: tempURL)
+            let staged = try await folder.stage(from: tempURL)
+            let bytes = try Data(contentsOf: staged.url)
+            try? FileManager.default.removeItem(at: tempURL)
+            return (staged, bytes)
+        case .file(let url):
+            let staged = try await folder.stage(from: url)
+            return (staged, try Data(contentsOf: staged.url))
+        case nil:
+            return nil
+        }
     }
 
     // MARK: - Progress record

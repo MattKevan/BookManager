@@ -89,6 +89,9 @@ final class LibrarySession {
     let bookmarks: LibraryBookmarkStore
     var activeSecurityURL: URL?
     var calibreSourceSecurityURL: URL?
+    /// The still-open Calibre snapshot reader while the import wizard is
+    /// active; the import fetches deferred blob covers from it per book.
+    var calibreReader: CalibreReader?
 
     /// The home library connection — the hub's primary library. `connection`
     /// is a computed alias for `home` so existing home-scoped callers (the
