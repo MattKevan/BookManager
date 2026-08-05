@@ -234,13 +234,22 @@ private struct CoverTile<Browser: LibraryBrowser>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             coverArea
+            // Fixed text heights: the title wraps 1-2 lines and authors 1
+            // line, so without reserved heights the cover's offset from the
+            // tile bottom varies per book (covers land on different baselines
+            // "seemingly at random"). Reserving the space keeps every cover's
+            // bottom at a constant offset from the tile bottom, so the grid's
+            // `.bottom` alignment puts them all on the shelf line.
             Text(book.title)
                 .font(.caption)
                 .lineLimit(2)
+                .truncationMode(.tail)
+                .frame(height: 30, alignment: .top)
                 .foregroundStyle(.primary)
             Text(book.authors.joined(separator: ", "))
                 .font(.caption2)
                 .lineLimit(1)
+                .frame(height: 14, alignment: .top)
                 .foregroundStyle(.secondary)
         }
         .padding(6)
@@ -313,7 +322,9 @@ private struct CoverTile<Browser: LibraryBrowser>: View {
                         lineWidth: 3
                     )
             )
-            .frame(height: 160, alignment: .bottom)
+            // Natural height: the cover scales to the column width with its
+            // own aspect ratio, so taller covers expand the row (the shelf
+            // effect) instead of being capped at a fixed height.
             .frame(maxWidth: .infinity)
             .scaleEffect(isHovering ? 1.04 : 1, anchor: .bottom)
             .shadow(
@@ -332,8 +343,12 @@ private struct CoverTile<Browser: LibraryBrowser>: View {
                 .resizable()
                 .scaledToFit()
         } else {
+            // Placeholder only: real covers scale naturally to the column
+            // width (variable height), so give the missing-cover glyph a
+            // sensible fixed footprint instead of its tiny intrinsic size.
             Image(systemName: "book.closed")
-                .font(.system(size: 40))
+                .font(.system(size: 60))
+                .frame(height: 160)
                 .foregroundStyle(.secondary)
         }
     }
