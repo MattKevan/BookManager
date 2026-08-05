@@ -30,7 +30,6 @@
 		1770A41EED6D31D7AD9707EE /* BookInspectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AD63E22E2D0C0772BDB8DA4 /* BookInspectorView.swift */; };
 		19E1AC79CB0A92D363ECE810 /* StacksCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 7FF7C13FC4FD4830CC11BC46 /* StacksCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		1AFBA6DB1E26440157F18276 /* DeviceProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3534AB0D9D88B5FAFD2B9524 /* DeviceProfile.swift */; };
-		1C0255671BC381470BE89892 /* FacetPaneHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30C73BF6E7FEE96AD61C9AA0 /* FacetPaneHost.swift */; };
 		1C4916DDC8222D29FE95CCF1 /* DeviceImportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50354CF07122CF0F77600E51 /* DeviceImportService.swift */; };
 		1EC42FF35169096BB36F0B08 /* AutomergeBookDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BF070FDE01444930EC4A187 /* AutomergeBookDocument.swift */; };
 		21024F170759A5F3044EF208 /* DeviceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15167DA711CC417585EE880E /* DeviceManager.swift */; };
@@ -265,7 +264,6 @@
 		2BC603A9897BAA8A75BB1E14 /* OutboxTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutboxTests.swift; sourceTree = "<group>"; };
 		2CC6F1FE52CAE93A8FC6DD55 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		2D3FC5E7650303734EBED4B8 /* LibraryOpenPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryOpenPolicyTests.swift; sourceTree = "<group>"; };
-		30C73BF6E7FEE96AD61C9AA0 /* FacetPaneHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FacetPaneHost.swift; sourceTree = "<group>"; };
 		318DEBB584ED8ED9AA431185 /* IndexedBookFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IndexedBookFactory.swift; sourceTree = "<group>"; };
 		333AA27F82E50CD8AA8FF956 /* CalibreMetadataCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalibreMetadataCache.swift; sourceTree = "<group>"; };
 		34630FF0B73341FC7C22CBF4 /* SystemNotifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemNotifier.swift; sourceTree = "<group>"; };
@@ -680,7 +678,6 @@
 				EB6667AF18FD651C7A53E901 /* DeviceBooksView.swift */,
 				423611F3F4E1161638E17B58 /* DiagnosticsView.swift */,
 				D9976DB90181B1F2850F6262 /* FacetListView.swift */,
-				30C73BF6E7FEE96AD61C9AA0 /* FacetPaneHost.swift */,
 				FAC8498A2AE9D79E2A678D92 /* FacetType+Display.swift */,
 				C52572FAF899CE1E384265A3 /* ImportReportView.swift */,
 				5D26DAC0CD891B3706A948EC /* LibraryBrowser.swift */,
@@ -1086,7 +1083,6 @@
 				21024F170759A5F3044EF208 /* DeviceManager.swift in Sources */,
 				3981ADFD36D2E05A085EBF98 /* DiagnosticsView.swift in Sources */,
 				CA7426A7F464E1BCBA689FAB /* FacetListView.swift in Sources */,
-				1C0255671BC381470BE89892 /* FacetPaneHost.swift in Sources */,
 				F625C0415ACFF484E9CC1E38 /* FacetType+Display.swift in Sources */,
 				A1C7F766F716220FF9C6EBE7 /* ImportReportView.swift in Sources */,
 				30FCD4463F1CC7070F6BD109 /* LibraryBrowser.swift in Sources */,

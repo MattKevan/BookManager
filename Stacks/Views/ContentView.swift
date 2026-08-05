@@ -455,17 +455,17 @@ extension ContentView {
                     session.presentImportReport()
                 }
             } else if let library = session.activeLibrary {
-                // The facet "middle column" as a resizable pane inside the
+                // The facet "middle column" as a fixed-width pane inside the
                 // detail column, present only while a category is active so
-                // All Books stays a true 2-column layout. Replaces the
-                // 2/3-column split-view swap (which crashed macOS).
-                // `FacetPaneHost` owns the pane width so drag ticks re-render
-                // only this subtree.
-                if library.facetNavigation.category != nil {
-                    FacetPaneHost(library: library) {
-                        libraryBrowser(for: library)
+                // All Books stays a true 2-column layout. Fixed (not
+                // draggable): live resize reflow flickered — SwiftUI's
+                // LazyVGrid cannot animate a continuous reflow.
+                HStack(spacing: 0) {
+                    if library.facetNavigation.category != nil {
+                        FacetListView(browser: library)
+                            .frame(width: 240)
+                        Divider()
                     }
-                } else {
                     libraryBrowser(for: library)
                 }
             } else {
