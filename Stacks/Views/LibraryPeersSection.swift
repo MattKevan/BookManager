@@ -33,16 +33,23 @@ struct LibraryPeersSection: View {
                     }
                 } label: {
                     HStack(spacing: 6) {
-                        // Clicking the heading selects the library and opens
-                        // its All Books view (the expandedBinding auto-expands
-                        // the group because the selection makes it active).
-                        Label(peer.name, systemImage: "books.vertical")
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                session.selectLibrarySubsection((peer.id, .allBooks))
+                        // Best practice for a selectable disclosure header:
+                        // DisclosureGroup overrides a bare onTapGesture on its
+                        // label (macOS), so the label is a plain Button — the
+                        // whole row selects the library's All Books view, the
+                        // chevron still toggles the group, and selection
+                        // auto-expands it via expandedBinding.
+                        Button {
+                            session.selectLibrarySubsection((peer.id, .allBooks))
+                        } label: {
+                            HStack(spacing: 6) {
+                                Label(peer.name, systemImage: "books.vertical")
+                                statusIcon(peer)
                             }
-                        statusIcon(peer)
-                        Spacer()
+                            .contentShape(Rectangle())
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .buttonStyle(.plain)
                         Button {
                             Task { await session.closePeer(peer) }
                         } label: {
