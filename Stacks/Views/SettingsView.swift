@@ -40,7 +40,7 @@ struct SettingsView: View {
                 }
                 .disabled(librarySession == nil)
                 Button("Create New Library…") {
-                    librarySession?.present(.create)
+                    librarySession?.createNewLibrary()
                 }
                 .disabled(librarySession == nil)
             }

@@ -36,7 +36,7 @@ final class LibrarySession {
 
     /// What the file importer should do when it completes.
     enum PickerAction {
-        case create, open, addBooks, calibre, changeHome
+        case open, addBooks, calibre, changeHome
     }
 
     /// Request presented to the file importer (menu, toolbar, or welcome screen).
@@ -162,7 +162,34 @@ final class LibrarySession {
         recentLibraries = Self.resolveRecents(bookmarks)
     }
 
-    func createLibrary(at url: URL) async { await activate(url: url, create: true) }
+    /// Create New Library: NSSavePanel lets the user choose WHERE the library
+    /// lives and NAME its folder. The open-panel flow this replaces could only
+    /// pick an existing folder — it either created the library inside an
+    /// arbitrary folder or hit `libraryAlreadyExists`. The panel returns
+    /// <location>/<name>; the folder is created by `LibraryRepository.create`.
+    func createNewLibrary() {
+        let panel = NSSavePanel()
+        panel.title = "Create New Library"
+        panel.prompt = "Create"
+        panel.nameFieldStringValue = "My Library"
+        panel.canCreateDirectories = true
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        Task { await createLibrary(at: url) }
+    }
+
+    func createLibrary(at url: URL) async {
+        // A library owns its folder: refuse to create inside an existing
+        // non-empty folder; the already-a-library case surfaces as Core's
+        // readable `libraryAlreadyExists` error.
+        if FileManager.default.fileExists(atPath: url.path) {
+            let contents = (try? FileManager.default.contentsOfDirectory(atPath: url.path)) ?? []
+            if !contents.isEmpty {
+                lastError = "“\(url.lastPathComponent)” already exists and is not empty. Choose a new library name."
+                return
+            }
+        }
+        await activate(url: url, create: true)
+    }
     func openLibrary(at url: URL) async { await activate(url: url, create: false) }
     func openLibrary(at url: URL, fallbackToWelcome: Bool) async {
         await activate(url: url, create: false, fallbackToWelcome: fallbackToWelcome)
@@ -316,8 +343,10 @@ final class LibrarySession {
     private func activate(url: URL, create: Bool, fallbackToWelcome: Bool = false) async {
         // The hub owns opening: create writes the library skeleton first, then
         // both paths route through `openRequested` — the first library becomes
-        // home, every later open becomes a peer (never switches home).
-        state = .loading
+        // home, every later open becomes a peer (never switches home). The
+        // loading state only applies when nothing is open yet — creating while
+        // a library is open must not blank the main content.
+        if home == nil { state = .loading }
         do {
             if create {
                 _ = try await LibraryRepository.create(
@@ -336,12 +365,14 @@ final class LibrarySession {
             )
         } catch {
             // Only the create step throws here; `openRequested` handles its own
-            // failures (including the fallbackToWelcome path).
+            // failures (including the fallbackToWelcome path). Errors surface
+            // as a dialog (lastError), never a full-screen takeover.
             if fallbackToWelcome {
                 lastError = "Couldn’t reopen “\(url.lastPathComponent)”: \(error.localizedDescription)"
                 state = .welcome
             } else {
-                state = .failed(message: error.localizedDescription)
+                lastError = error.localizedDescription
+                if home == nil { state = .welcome }
             }
         }
     }

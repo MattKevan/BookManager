@@ -472,3 +472,20 @@ public enum LibraryRepositoryError: Error, Equatable {
     /// would clobber the existing library's identity.
     case libraryAlreadyExists
 }
+
+extension LibraryRepositoryError: LocalizedError {
+    public var errorDescription: String? {
+        switch self {
+        case .unsupportedFormat(let version):
+            return "This library uses an unsupported format version (\(version))."
+        case .missingDependencies(let bookID):
+            return "The library is missing changes for a book (\(bookID.uuidString))."
+        case .bookNotFound(let bookID):
+            return "The requested book (\(bookID.uuidString)) was not found."
+        case .rebuildCancelled:
+            return "The index rebuild was cancelled."
+        case .libraryAlreadyExists:
+            return "A library already exists in this folder. Choose a different folder or name."
+        }
+    }
+}

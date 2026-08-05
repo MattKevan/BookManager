@@ -51,7 +51,7 @@ private struct AppCommands: Commands {
 
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
-            Button("Create Library…") { session.present(.create) }
+            Button("Create Library…") { session.createNewLibrary() }
                 .keyboardShortcut("n", modifiers: [.command, .shift])   // Cmd+N reserved
             Divider()
             Button("Close Library") { Task { await session.closeLibrary() } }

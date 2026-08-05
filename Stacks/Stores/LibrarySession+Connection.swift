@@ -41,7 +41,7 @@ extension LibrarySession {
         do {
             manifestID = try LibraryLayout(root: url).readManifest().id
         } catch {
-            handleOpenFailure(error, intent: intent, fallbackToWelcome: fallbackToWelcome, url: url)
+            handleOpenFailure(error, fallbackToWelcome: fallbackToWelcome, url: url)
             return
         }
         let existing = ([home] + peers).compactMap { $0 }
@@ -132,7 +132,7 @@ extension LibrarySession {
             await connection.refreshAll()
         } catch {
             if accessed { url.stopAccessingSecurityScopedResource() }
-            handleOpenFailure(error, intent: intent, fallbackToWelcome: fallbackToWelcome, url: url)
+            handleOpenFailure(error, fallbackToWelcome: fallbackToWelcome, url: url)
         }
     }
 
@@ -197,7 +197,14 @@ extension LibrarySession {
     /// session state machine (mirrors the pre-hub `activate` wiring).
     private func wire(_ connection: LibraryConnection) {
         connection.onLoadFailure = { [weak self] message in
-            self?.state = .failed(message: message)
+            guard let self else { return }
+            // A load failure takes over the screen only when nothing else is
+            // open; otherwise it is a dialog so the main library stays visible.
+            if self.home == nil {
+                self.state = .failed(message: message)
+            } else {
+                self.lastError = message
+            }
         }
         connection.onError = { [weak self] message in
             self?.lastError = message
@@ -210,17 +217,18 @@ extension LibrarySession {
 
     private func handleOpenFailure(
         _ error: Error,
-        intent: OpenIntent,
         fallbackToWelcome: Bool,
         url: URL
     ) {
         if fallbackToWelcome {
             lastError = "Couldn’t reopen “\(url.lastPathComponent)”: \(error.localizedDescription)"
             state = .welcome
-        } else if intent == .home && home == nil {
-            state = .failed(message: error.localizedDescription)
         } else {
+            // A dialog, never a full-screen takeover: with a library open it
+            // stays visible; with nothing open the welcome screen remains and
+            // the alert explains the failure.
             lastError = error.localizedDescription
+            if home == nil { state = .welcome }
         }
     }
 
