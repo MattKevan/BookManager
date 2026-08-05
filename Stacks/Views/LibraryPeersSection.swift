@@ -25,15 +25,22 @@ struct LibraryPeersSection: View {
             // row for it.
             ForEach(session.peers.filter { $0.id != session.home?.id }) { peer in
                 DisclosureGroup(isExpanded: expandedBinding(for: peer)) {
-                    Label("All Books", systemImage: "books.vertical")
-                        .tag(SidebarItem.library(peer.id, .allBooks))
+                    // The header itself opens All Books; the group expands to
+                    // just the facet categories.
                     ForEach(libraryCategories, id: \.self) { category in
                         Label(category.displayName, systemImage: category.sidebarSymbol)
                             .tag(SidebarItem.library(peer.id, .category(category)))
                     }
                 } label: {
                     HStack(spacing: 6) {
+                        // Clicking the heading selects the library and opens
+                        // its All Books view (the expandedBinding auto-expands
+                        // the group because the selection makes it active).
                         Label(peer.name, systemImage: "books.vertical")
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                session.selectLibrarySubsection((peer.id, .allBooks))
+                            }
                         statusIcon(peer)
                         Spacer()
                         Button {
