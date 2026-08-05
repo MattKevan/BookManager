@@ -32,24 +32,15 @@ struct LibraryPeersSection: View {
                             .tag(SidebarItem.library(peer.id, .category(category)))
                     }
                 } label: {
+                    // Selectable like the Devices rows: the DisclosureGroup is
+                    // tagged with the peer's All Books value, so the native
+                    // List selection highlights the row and opens All Books on
+                    // click; the chevron still toggles, and the Close button
+                    // works independently.
                     HStack(spacing: 6) {
-                        // Best practice for a selectable disclosure header:
-                        // DisclosureGroup overrides a bare onTapGesture on its
-                        // label (macOS), so the label is a plain Button — the
-                        // whole row selects the library's All Books view, the
-                        // chevron still toggles the group, and selection
-                        // auto-expands it via expandedBinding.
-                        Button {
-                            session.selectLibrarySubsection((peer.id, .allBooks))
-                        } label: {
-                            HStack(spacing: 6) {
-                                Label(peer.name, systemImage: "books.vertical")
-                                statusIcon(peer)
-                            }
-                            .contentShape(Rectangle())
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        .buttonStyle(.plain)
+                        Label(peer.name, systemImage: "books.vertical")
+                        statusIcon(peer)
+                        Spacer()
                         Button {
                             Task { await session.closePeer(peer) }
                         } label: {
@@ -72,6 +63,9 @@ struct LibraryPeersSection: View {
                         Task { await session.importDroppedFiles(providers: providers, into: peer) }
                         return true
                     }
+                    // The header is a real selection item: native highlight
+                    // when this peer's All Books view is active.
+                    .tag(SidebarItem.library(peer.id, .allBooks))
                 }
             }
             if !session.offlinePeers.isEmpty {
