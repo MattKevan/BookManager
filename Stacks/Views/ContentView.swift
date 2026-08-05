@@ -106,6 +106,8 @@ struct ContentView: View {
                         await session.selectCalibreLibrary(at: urls[0])
                         showCalibreImport = session.calibreSummary != nil
                     }
+                case .changeHome:
+                    Task { await session.openLibraryAsHome(at: urls[0]) }
                 case nil:
                     break
                 }

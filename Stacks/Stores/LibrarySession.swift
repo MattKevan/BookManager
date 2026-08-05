@@ -36,7 +36,7 @@ final class LibrarySession {
 
     /// What the file importer should do when it completes.
     enum PickerAction {
-        case create, open, addBooks, calibre
+        case create, open, addBooks, calibre, changeHome
     }
 
     /// Request presented to the file importer (menu, toolbar, or welcome screen).

@@ -75,13 +75,20 @@ extension LibrarySession {
             }
             try bookmarks.save(url, for: connection.id)
             recentLibraries = Self.resolveRecents(bookmarks)
-            if intent == .home, home == nil {
+            if intent == .home {
+                // Change-Home / Create-New with an existing home: the new
+                // connection becomes home and the old home is demoted to a
+                // peer (never two homes, never a silently-ignored role
+                // request). The policy's selectExisting/makeHomeExisting
+                // paths above already handled already-open folders.
+                let oldHome = home
                 home = connection
+                if let oldHome { peers.insert(oldHome, at: 0) }
+                openStore.setHome(connection.id)
             } else {
                 peers.append(connection)
             }
             try openStore.save(url, for: connection.id, name: connection.name)
-            if home === connection { openStore.setHome(connection.id) }
             persistOpenOrder()
             activeLibraryID = connection.id
             state = .loaded
@@ -109,10 +116,8 @@ extension LibrarySession {
     }
 
     /// Role swap: the peer becomes home, the old home becomes a peer. No-op
-    /// when `libraryID` is already home or names no open peer. Minimal safe
-    /// behavior for Task 4 (reached via `openLibraryAsHome`'s
-    /// makeHomeExisting policy path); Task 8 completes persistence
-    /// (`OpenLibraryStore`) and the Make Home UI.
+    /// when `libraryID` is already home or names no open peer. Persists the
+    /// designation + order so launch reopens the right home.
     func changeHome(to libraryID: UUID) {
         guard libraryID != home?.id else { return }
         guard let peer = peers.first(where: { $0.id == libraryID }) else { return }
@@ -122,16 +127,20 @@ extension LibrarySession {
         }
         home = peer
         activeLibraryID = libraryID
+        openStore.setHome(libraryID)
+        persistOpenOrder()
     }
 
     /// When the home connection is closed and peers remain, the first peer
-    /// becomes home; when none remain, the welcome screen returns. Minimal
-    /// safe behavior for Task 4 (no persistence); Task 8 completes it.
+    /// becomes home; when none remain, the welcome screen returns. Persists
+    /// the promotion so the store's home designation stays accurate.
     func promoteNextPeerToHome() async {
         if let first = peers.first {
             peers.removeAll { $0.id == first.id }
             home = first
             activeLibraryID = first.id
+            openStore.setHome(first.id)
+            persistOpenOrder()
             state = .loaded
         } else if home == nil {
             state = .welcome
