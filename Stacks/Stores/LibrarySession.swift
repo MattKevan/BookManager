@@ -118,6 +118,14 @@ final class LibrarySession {
     }
     private var _activeLibraryID: UUID?
 
+    /// Library ids with an open currently in flight (manifest read passed,
+    /// connection not yet appended). Guards `openRequested` against creating
+    /// two connections for the same folder when a second open overlaps the
+    /// slow catalog rebuild + sync inside `LibraryConnection(openAt:)`.
+    /// Internal (not `private`) so the hub extension in
+    /// `LibrarySession+Connection.swift` can read it.
+    var pendingOpenLibraryIDs: Set<UUID> = []
+
     // Device support: the connected-device store and the sidebar selection
     // bridging into it (selecting a device clears the library facet, and vice
     // versa is handled by `selectCategory`).

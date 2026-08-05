@@ -65,7 +65,7 @@ struct SidebarView: View {
                         .tag(SidebarItem.category(category))
                 }
             }
-            if !session.peers.isEmpty {
+            if !session.peers.isEmpty || !session.offlinePeers.isEmpty {
                 LibraryPeersSection(session: session)
             }
             if !session.devices.devices.isEmpty {

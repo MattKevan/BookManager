@@ -62,12 +62,46 @@ extension LibrarySession {
         case .openNew:
             break
         }
+        // Dedupe against IN-FLIGHT opens too: `LibraryConnection(openAt:)`
+        // rebuilds the catalog and syncs before returning, and the MainActor
+        // is re-entrant across that await — a second open of the same folder
+        // (Open Recent + Cmd+O, a double-click, launch-reopen overlapping a
+        // manual open) would otherwise create a second connection and, on the
+        // home path, demote the first to a peer (the same library appearing
+        // as both home and a peer). Coalesce: the in-flight open selects it
+        // when it completes.
+        guard pendingOpenLibraryIDs.insert(manifestID).inserted else { return }
+        defer { pendingOpenLibraryIDs.remove(manifestID) }
         // Fresh connection: security-scope the URL, open, then append.
         let accessed = url.startAccessingSecurityScopedResource()
         do {
             let connection = try await LibraryConnection(
                 openAt: url, indexesDirectory: try Self.indexDirectory(), deviceID: deviceID
             )
+            // Belt-and-braces re-validation: if the folder became connected
+            // while the connection was opening (any path that bypassed the
+            // pending guard above), discard the fresh connection and route to
+            // the existing one instead of duplicating it.
+            let current = ([home] + peers).compactMap { $0 }
+                .map { ExistingLibrary(id: $0.id, isHome: $0 === home) }
+            let resolution = LibraryOpenPolicy.resolve(
+                existing: current, manifestID: connection.id, intent: intent
+            )
+            guard resolution == .openNew else {
+                connection.stop()
+                if accessed { url.stopAccessingSecurityScopedResource() }
+                switch resolution {
+                case .selectExisting(let id):
+                    activeLibraryID = id
+                    state = .loaded
+                case .makeHomeExisting(let id):
+                    changeHome(to: id)
+                    state = .loaded
+                case .openNew:
+                    break
+                }
+                return
+            }
             wire(connection)
             if accessed {
                 activeSecurityURL?.stopAccessingSecurityScopedResource()
