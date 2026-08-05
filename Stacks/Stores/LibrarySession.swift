@@ -201,9 +201,14 @@ final class LibrarySession {
                     at: url, indexesDirectory: try Self.indexDirectory(), deviceID: deviceID
                 )
             }
+            // Create always targets home (Cmd+Shift+N / Settings Create New):
+            // a folder already open as a peer role-swaps via makeHomeExisting.
+            // Plain open becomes home only while no home exists; otherwise it
+            // adds a peer (never switches home).
+            let intent: OpenIntent = create ? .home : ((home == nil) ? .home : .peer)
             await openRequested(
                 at: url,
-                intent: (home == nil) ? .home : .peer,
+                intent: intent,
                 fallbackToWelcome: fallbackToWelcome
             )
         } catch {
