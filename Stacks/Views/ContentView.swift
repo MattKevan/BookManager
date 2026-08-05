@@ -169,26 +169,19 @@ struct ContentView: View {
     }
 
     private var loadedBody: some View {
-        // macOS NavigationSplitView cannot hide only the middle column:
-        // `NavigationSplitViewVisibility.doubleColumn` on a three-column view
-        // means "content + detail" (the sidebar collapses), and `detailOnly`
-        // hides both leading columns. So the 2-column and 3-column layouts are
-        // structurally distinct split views, swapped on category selection.
-        // `.doubleColumn` below keeps the sidebar visible in the 2-column
-        // layout (where it is equivalent to `.all`).
-        Group {
-            if session.activeLibrary?.facetNavigation.category != nil {
-                threeColumnBrowser
-            } else {
-                twoColumnBrowser
-            }
+        // ONE stable split view (sidebar + detail), never swapped: the facet
+        // "middle column" is a pane rendered inside the detail column while a
+        // category is active. The previous approach swapped between 2- and
+        // 3-column split views, which made SwiftUI re-register toolbar items
+        // and crashed macOS (duplicate NSToolbar items / reentrant layout) —
+        // so All Books is simply the detail column without the facet pane.
+        NavigationSplitView(columnVisibility: $columnVisibility) {
+            sidebarColumn
+        } detail: {
+            detailColumn
         }
-        // NOTE: `columnVisibility` is intentionally NOT mutated when the
-        // layout switches — changing it in the same transaction as the
-        // 2/3-column split-view structure swap triggers a SwiftUI/AppKit
-        // crash on macOS. `.all` shows the sidebar + detail in both layouts
-        // (equivalent to the old per-layout values), so a fixed value is
-        // safe; the user can still toggle the sidebar, which persists.
+        // `columnVisibility` is fixed at `.all` (sidebar always visible; the
+        // user can still toggle it via the split view's own control).
         // The search field is a real `NSSearchField` in its own toolbar item
         // (not `.searchable`): the system search item always sits at the
         // toolbar's trailing edge with nothing allowed after it (and expands
@@ -429,37 +422,6 @@ extension ContentView {
         }
     }
 
-
-    /// Two-column layout (sidebar + detail): All Books and device views.
-    private var twoColumnBrowser: some View {
-        NavigationSplitView(columnVisibility: $columnVisibility) {
-            sidebarColumn
-        } detail: {
-            detailColumn
-        }
-    }
-
-    /// Three-column layout (sidebar + facet values + detail): a facet
-    /// category is active in the sidebar.
-    private var threeColumnBrowser: some View {
-        NavigationSplitView(columnVisibility: $columnVisibility) {
-            sidebarColumn
-        } content: {
-            // Guarded: never evaluate `library` (a precondition trap) during
-            // the 2/3-column transition, when activeLibrary may be nil for a
-            // frame. The middle column simply renders empty then.
-            if let library = session.activeLibrary {
-                // The middle column drives the window title in the 3-column
-                // layout (the detail column's title is not picked up there), so
-                // the same computed title is repeated here.
-                FacetListView(browser: library)
-                    .navigationTitle(windowTitle)
-            }
-        } detail: {
-            detailColumn
-        }
-    }
-
     /// The library/device navigation sidebar, shared by both layouts. Its
     /// navigationTitle shows the browsed library's name as the sidebar header;
     /// the WINDOW title comes from `detailColumn`'s navigationTitle (the
@@ -493,7 +455,18 @@ extension ContentView {
                     session.presentImportReport()
                 }
             } else if let library = session.activeLibrary {
-                libraryBrowser(for: library)
+                HStack(spacing: 0) {
+                    // The facet "middle column" as a pane inside the detail
+                    // column: present only while a category is active, so All
+                    // Books stays a true 2-column layout. This replaces the
+                    // 2/3-column split-view swap (which crashed macOS).
+                    if library.facetNavigation.category != nil {
+                        FacetListView(browser: library)
+                            .frame(width: 240)
+                        Divider()
+                    }
+                    libraryBrowser(for: library)
+                }
             } else {
                 ContentUnavailableView {
                     Label("No Library Open", systemImage: "books.vertical")
