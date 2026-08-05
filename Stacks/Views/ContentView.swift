@@ -20,7 +20,6 @@ extension FocusedValues {
 struct ContentView: View {
     @Bindable var session: LibrarySession
     @State private var importURLs: [URL] = []
-    @State private var showImportReport = false
     @State private var showSendReport = false
     @State private var showCalibreImport = false
     @State private var showActivityPopover = false
@@ -100,7 +99,7 @@ struct ContentView: View {
                 case .addBooks:
                     Task {
                         await session.importFiles(urls: urls)
-                        await presentImportFeedback()
+                        session.presentImportReport()
                     }
                 case .calibre:
                     Task {
@@ -113,9 +112,12 @@ struct ContentView: View {
             },
             onCancellation: { session.pickerAction = nil }
         )
-        .sheet(isPresented: $showImportReport) {
+        .sheet(isPresented: Binding(
+            get: { session.importReportPresented },
+            set: { session.importReportPresented = $0 }
+        )) {
             if let report = session.importReport {
-                ImportReportView(report: report) { showImportReport = false }
+                ImportReportView(report: report) { session.importReportPresented = false }
             }
         }
         .sheet(isPresented: $showSendReport) {
@@ -304,6 +306,19 @@ extension ContentView {
                     Label("Edit Metadata", systemImage: "pencil")
                 }
                 .disabled(session.isLibraryUnavailable || session.selection.isEmpty)
+                if !session.peers.isEmpty {
+                    Menu {
+                        ForEach(session.peers) { peer in
+                            Button(peer.name) {
+                                Task { await session.copyHomeSelection(to: peer) }
+                            }
+                        }
+                    } label: {
+                        Label("Copy to Library…", systemImage: "arrow.up.doc")
+                    }
+                    .disabled(session.selection.isEmpty)
+                    .help("Copy the selected books into another open library")
+                }
             }
         }
     }
@@ -430,7 +445,7 @@ extension ContentView {
         Group {
             if session.selectedDeviceID != nil {
                 DeviceBooksView(session: session) {
-                    Task { await presentImportFeedback() }
+                    session.presentImportReport()
                 }
             } else if let library = session.activeLibrary {
                 libraryBrowser(for: library)
@@ -591,13 +606,6 @@ extension ContentView {
         )
     }
 
-    /// Posts a system notification for the completed import; falls back to the
-    /// report sheet when notifications are not authorized.
-    private func presentImportFeedback() async {
-        guard let report = session.importReport else { return }
-        if await !SystemNotifier.postImportCompletion(report: report) { showImportReport = true }
-    }
-
     private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
         Task { @MainActor in
             var urls: [URL] = []
@@ -607,8 +615,8 @@ extension ContentView {
                 }
             }
             guard !urls.isEmpty else { return }
-            await session.importFiles(urls: urls)
-            await presentImportFeedback()
+            guard let target = session.activeLibrary else { return }
+            await session.importFiles(into: target, urls: urls)
         }
         return true
     }

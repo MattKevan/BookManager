@@ -189,17 +189,18 @@ extension LibrarySession {
         Task { await connection.refreshBooks() }
     }
 
-    // MARK: - Task 6 placeholders
+    // MARK: - Drag-drop import into a peer
 
-    /// Placeholder wired in Task 6: resolves dropped file URLs and imports
-    /// them into `peer` via the existing import pipeline.
+    /// Resolves dropped file URLs and imports them into `peer` via the
+    /// existing import pipeline (Finder-style drag onto a peer sidebar row).
     func importDroppedFiles(providers: [NSItemProvider], into peer: LibraryConnection) async {
-        // Task 6: LibrarySession.loadURL per provider, then importFiles(into:urls:).
-    }
-
-    /// Placeholder wired in Task 6: copies the peer's selection into home via
-    /// ImportService (staged, content-hash dedup, report).
-    func copySelectionFromPeerToHome(_ peer: LibraryConnection) async {
-        // Task 6: resolve peer.selectionBooks' format files, import into home.
+        var urls: [URL] = []
+        for provider in providers {
+            if let url = await LibrarySession.loadURL(from: provider) {
+                urls.append(url)
+            }
+        }
+        guard !urls.isEmpty else { return }
+        await importFiles(into: peer, urls: urls)
     }
 }

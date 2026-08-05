@@ -100,6 +100,17 @@ private struct AppCommands: Commands {
                 }
             }
             .disabled(session.selection.isEmpty || session.isLibraryUnavailable || session.selectedDeviceID != nil)
+            if !session.peers.isEmpty {
+                Divider()
+                Menu("Copy to Library…") {
+                    ForEach(session.peers) { peer in
+                        Button(peer.name) {
+                            Task { await session.copyHomeSelection(to: peer) }
+                        }
+                    }
+                }
+                .disabled(session.selection.isEmpty || session.isLibraryUnavailable || session.selectedDeviceID != nil)
+            }
         }
         // Edit menu: deletion of the library selection (Cmd+Delete; the bare
         // Delete/Backspace key is handled in the grid/table views).

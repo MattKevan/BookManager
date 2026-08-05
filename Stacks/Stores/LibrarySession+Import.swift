@@ -54,6 +54,80 @@ extension LibrarySession {
         }
     }
 
+    // MARK: - Library transfers (copy to home / copy to library / drag-drop)
+
+    /// Resolves the selected books' first stored format file and imports them
+    /// into the target library through the standard pipeline (staged,
+    /// content-hash dedup, report). Transfers are copies between two different
+    /// libraries — never a merge.
+    private func importBooks(
+        _ books: [IndexedBook],
+        from source: LibraryConnection,
+        into target: LibraryConnection
+    ) async {
+        var urls: [URL] = []
+        for book in books {
+            if let url = source.formatFileURL(for: book) { urls.append(url) }
+        }
+        guard !urls.isEmpty else { return }
+        let service = ImportService(layout: .init(root: target.repository.root))
+        do {
+            importReport = try await service.importFiles(urls, into: target.repository)
+        } catch {
+            importReport = ImportReport(items: [
+                ImportItem(sourceURL: urls.first ?? URL(fileURLWithPath: "/"), kind: .epub,
+                           status: .failed(error.localizedDescription))
+            ])
+        }
+        await target.refreshBooks()
+    }
+
+    /// Peer context: copy the peer's selection into home (download direction).
+    func copySelectionFromPeerToHome(_ peer: LibraryConnection) async {
+        guard let home else { return }
+        await importBooks(peer.selectionBooks, from: peer, into: home)
+        presentImportReport()
+    }
+
+    /// Home context: copy the home selection into the chosen peer (upload
+    /// direction — writes book files + CRDT changes into the peer's folder,
+    /// which any other instance connected to it ingests on its next sync).
+    func copyHomeSelection(to peer: LibraryConnection) async {
+        guard let home else { return }
+        await importBooks(home.selectionBooks, from: home, into: peer)
+        presentImportReport()
+    }
+
+    /// Raw-file import into a specific library (drag-drop onto a peer row, or
+    /// the library browser drop handler). Same pipeline as Add Books, targeted
+    /// at the target's repository.
+    func importFiles(into target: LibraryConnection, urls: [URL]) async {
+        guard !urls.isEmpty else { return }
+        let service = ImportService(layout: .init(root: target.repository.root))
+        do {
+            importReport = try await service.importFiles(urls, into: target.repository)
+        } catch {
+            importReport = ImportReport(items: [
+                ImportItem(sourceURL: urls.first ?? URL(fileURLWithPath: "/"), kind: .epub,
+                           status: .failed(error.localizedDescription))
+            ])
+        }
+        await target.refreshBooks()
+        presentImportReport()
+    }
+
+    /// Posts a system notification for the completed import; falls back to the
+    /// import-report sheet (`importReportPresented`) when notifications are
+    /// not authorized. Moved from ContentView so any view can trigger it.
+    func presentImportReport() {
+        guard let report = importReport else { return }
+        Task {
+            if await !SystemNotifier.postImportCompletion(report: report) {
+                importReportPresented = true
+            }
+        }
+    }
+
     // MARK: - Send to device
 
     /// Resolves each selected book's best stored format file (in the selected
