@@ -10,3 +10,5 @@ xcuserdata/
 # SwiftPM local metadata inside vendored packages
 **/.swiftpm/
 docs/
+# LLVM coverage artifacts from test runs
+*.profraw

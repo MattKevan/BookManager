@@ -1,10 +1,10 @@
 # Third-party notices
 
-Unless a file or directory says otherwise, Book Manager's original source code
+Unless a file or directory says otherwise, Stacks's original source code
 is licensed under the MIT License. The MIT licence text is in `LICENSE`.
 
 The following third-party components are included in the source tree or in the
-application build. Their licences remain separate from Book Manager's licence.
+application build. Their licences remain separate from Stacks's licence.
 
 ## Automerge Swift 0.7.2
 
@@ -32,10 +32,10 @@ upstream release for the notices applicable to that binary.
 - Licence: MIT
 - Source: <https://github.com/5j54d93/MTPKit>
 - Imported revision: `0.1.4`
-- Local licence: `BookManagerCore/Vendored/MTPKit/LICENSE`
+- Local licence: `StacksCore/Vendored/MTPKit/LICENSE`
 
-The vendored files contain Book Manager-specific adaptations described in
-`BookManagerCore/Vendored/MTPKit/README.md`. Those adaptations do not change
+The vendored files contain Stacks-specific adaptations described in
+`StacksCore/Vendored/MTPKit/README.md`. Those adaptations do not change
 the upstream MIT licence for the copied MTPKit code.
 
 ## libmobi-swift 1.0.2 and libmobi
@@ -58,11 +58,11 @@ library as required by LGPLv3. The libmobi source is obtained by Swift Package
 Manager rather than vendored in this repository, so binary release packaging
 must make that source available separately.
 
-The test fixture `BookManagerCoreTests/MobiImport/Fixtures/fixture.mobi` comes
+The test fixture `StacksCoreTests/MobiImport/Fixtures/fixture.mobi` comes
 from the libmobi test corpus and is documented in that directory's README.
 
 ## Notices for binary releases
 
 Binary releases must include this information, the applicable upstream
 copyright notices, and the full licence texts for the included components.
-The application displays the bundled version in `BookManager/Resources/Notices.md`.
+The application displays the bundled version in `Stacks/Resources/Notices.md`.

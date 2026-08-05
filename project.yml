@@ -1,4 +1,4 @@
-name: BookManager
+name: Stacks
 options:
   bundleIdPrefix: com.mattkevan
   deploymentTarget:
@@ -30,14 +30,14 @@ settings:
     MACOSX_DEPLOYMENT_TARGET: "26.0"
 
 targets:
-  BookManagerCore:
+  StacksCore:
     type: framework
     platform: macOS
     sources:
-      - BookManagerCore
+      - StacksCore
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.mattkevan.BookManagerCore
+        PRODUCT_BUNDLE_IDENTIFIER: com.mattkevan.StacksCore
         GENERATE_INFOPLIST_FILE: YES
     dependencies:
       - package: Automerge
@@ -46,20 +46,20 @@ targets:
       - package: libmobi-swift
         product: libmobi
 
-  BookManager:
+  Stacks:
     type: application
     platform: macOS
     sources:
-      - BookManager
+      - Stacks
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.mattkevan.BookManager
-        PRODUCT_NAME: BookManager
+        PRODUCT_BUNDLE_IDENTIFIER: com.mattkevan.Stacks
+        PRODUCT_NAME: Stacks
         GENERATE_INFOPLIST_FILE: YES
-        CODE_SIGN_ENTITLEMENTS: Config/BookManager.entitlements
+        CODE_SIGN_ENTITLEMENTS: Config/Stacks.entitlements
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: N7J3BYZ94H
-        INFOPLIST_KEY_CFBundleDisplayName: Book Manager
+        INFOPLIST_KEY_CFBundleDisplayName: Stacks
         # App Nap suspends idle apps; for an app holding a USB/MTP session this
         # can let the host idle-suspend the device link (Kindle drops ~30s
         # after the last transfer). Opt out so the held session stays live.
@@ -67,52 +67,52 @@ targets:
         INFOPLIST_KEY_LSApplicationCategoryType: >-
           public.app-category.productivity
     dependencies:
-      - target: BookManagerCore
+      - target: StacksCore
 
-  BookManagerCoreTests:
+  StacksCoreTests:
     type: bundle.unit-test
     platform: macOS
     sources:
-      - BookManagerCoreTests
+      - StacksCoreTests
     resources:
-      - path: BookManagerCoreTests/MobiImport/Fixtures
+      - path: StacksCoreTests/MobiImport/Fixtures
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
     dependencies:
-      - target: BookManagerCore
+      - target: StacksCore
       - package: GRDB
       - package: ZIPFoundation
       - package: libmobi-swift
         product: libmobi
 
-  BookManagerUITests:
+  StacksUITests:
     type: bundle.ui-testing
     platform: macOS
     sources:
-      - BookManagerUITests
+      - StacksUITests
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
     dependencies:
-      - target: BookManager
+      - target: Stacks
 
 schemes:
-  BookManager:
+  Stacks:
     build:
       targets:
-        BookManager: all
-        BookManagerCore: all
-        BookManagerCoreTests: [test]
-        BookManagerUITests: [test]
+        Stacks: all
+        StacksCore: all
+        StacksCoreTests: [test]
+        StacksUITests: [test]
     run:
       config: Debug
     test:
       config: Debug
       gatherCoverageData: true
       targets:
-        - BookManagerCoreTests
-        - BookManagerUITests
+        - StacksCoreTests
+        - StacksUITests
     profile:
       config: Release
     analyze:
