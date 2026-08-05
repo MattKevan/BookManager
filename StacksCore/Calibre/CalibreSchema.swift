@@ -386,6 +386,10 @@ class CalibreSchemaBase: CalibreSchemaAdapting, @unchecked Sendable {
             grouped[book, default: []].append(dict)
         }
         let encoder = JSONEncoder()
+        // Sorted keys: these payloads are preserved verbatim in rawMetadata,
+        // and deterministic encoding keeps identical reads byte-identical
+        // (unsorted dictionary output varies per process).
+        encoder.outputFormatting = [.sortedKeys]
         return try grouped.sorted { $0.key < $1.key }.map { book, entries in
             (book: book, payload: String(decoding: try encoder.encode(entries), as: UTF8.self))
         }

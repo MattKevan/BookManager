@@ -15,6 +15,8 @@ extension LibrarySession {
         calibreSelectedIDs = []
         calibreImportReport = nil
         calibreImportInProgress = false
+        calibreImportProgress = nil
+        calibreScanProgress = nil
         calibreSourcePath = nil
     }
 
@@ -215,38 +217,44 @@ extension LibrarySession {
             // The wizard never appears on the failure paths: release the scope.
             if calibreSummary == nil { stopCalibreAccess() }
         }
-        let reader: CalibreReader
+
+        // Scan off the main actor: CalibreReader.open copies the whole
+        // metadata.db (Calibre embeds cover blobs — hundreds of MB for large
+        // libraries) and books() hydrates every cover, both far too heavy for
+        // the main thread (the old synchronous path beachballed). Only the
+        // state assignment below hops back to the main actor.
+        let scanned: (summary: CalibreLibrarySummary, books: [CalibreBookRecord])?
         do {
-            reader = try CalibreReader.open(libraryURL: url)
+            scanned = try await Task.detached(priority: .userInitiated) {
+                try CalibreLibraryScanner.scan(libraryURL: url) { [weak self] phase in
+                    Task { @MainActor in self?.calibreScanProgress = phase }
+                }
+            }.value
         } catch {
             lastError = error.localizedDescription
             calibreSummary = nil
             calibreBooks = []
             calibreSourcePath = nil
+            calibreScanProgress = nil
             return
         }
-        defer { try? reader.close() }
-        do {
-            let summary = try reader.summary()
-            let books = try reader.books()
-            calibreSummary = summary
-            calibreBooks = books
-            calibreSelectedIDs = Set(books.map(\.calibreID))
-            calibreImportReport = nil
-            calibreSourcePath = url.standardizedFileURL.path
-        } catch {
-            lastError = error.localizedDescription
-            calibreSummary = nil
-            calibreBooks = []
-            calibreSourcePath = nil
-        }
+        calibreSummary = scanned?.summary
+        calibreBooks = scanned?.books ?? []
+        calibreSelectedIDs = Set((scanned?.books ?? []).map(\.calibreID))
+        calibreImportReport = nil
+        calibreSourcePath = url.standardizedFileURL.path
+        calibreScanProgress = nil
     }
 
     func importCalibre() async {
         guard let repository = connection?.repository, let summary = calibreSummary,
               let sourcePath = calibreSourcePath else { return }
         calibreImportInProgress = true
-        defer { calibreImportInProgress = false }
+        calibreImportProgress = 0
+        defer {
+            calibreImportInProgress = false
+            calibreImportProgress = nil
+        }
         let service = CalibreImportService(layout: .init(root: repository.root))
         do {
             calibreImportReport = try await service.importBooks(
@@ -254,7 +262,10 @@ extension LibrarySession {
                 from: sourcePath,
                 libraryID: summary.libraryID,
                 selection: Array(calibreSelectedIDs),
-                into: repository
+                into: repository,
+                progress: { [weak self] value in
+                    Task { @MainActor in self?.calibreImportProgress = value }
+                }
             )
             // The source is no longer read after the import completes; a
             // failed import keeps the scope so the wizard's retry can read it.

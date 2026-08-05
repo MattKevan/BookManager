@@ -17,6 +17,32 @@ extension FocusedValues {
     }
 }
 
+/// Progress overlay shown while the pre-wizard Calibre scan runs off the main
+/// actor — the file picker is closed but the wizard has not appeared yet.
+private struct CalibreScanOverlay: View {
+    let phase: CalibreScanPhase
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ProgressView()
+                .controlSize(.small)
+            Text(phase.label)
+                .font(.caption)
+        }
+        .padding(10)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+private extension CalibreScanPhase {
+    var label: String {
+        switch self {
+        case .copyingDatabase: "Copying Calibre database…"
+        case .readingBooks: "Reading Calibre books…"
+        }
+    }
+}
+
 struct ContentView: View {
     @Bindable var session: LibrarySession
     @State private var importURLs: [URL] = []
@@ -57,6 +83,11 @@ struct ContentView: View {
             // Device support: rescan the USB bus on activation so a device
             // plugged in while the app was inactive appears in the sidebar.
             Task { await session.devices.scanForDevices() }
+        }
+        .overlay {
+            if let phase = session.calibreScanProgress {
+                CalibreScanOverlay(phase: phase)
+            }
         }
         .onChange(of: session.selection) { _, newValue in
             if newValue.count == 1 && !session.isMarqueeSelecting && isHomeContext {

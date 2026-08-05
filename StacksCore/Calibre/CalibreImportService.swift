@@ -110,48 +110,71 @@ public actor CalibreImportService {
         from sourcePath: String,
         libraryID: String,
         selection: [Int]?,
-        into repository: LibraryRepositoryImporting
+        into repository: LibraryRepositoryImporting,
+        progress: @Sendable (Double) -> Void = { _ in }
     ) async throws -> CalibreImportReport {
         let selectedIDs = selection.map(Set.init)
         let ordered = records.sorted { $0.calibreID < $1.calibreID }
-        var progress = readProgress(sourcePath: sourcePath, libraryID: libraryID, selection: selection)
+        var progressRecord = readProgress(sourcePath: sourcePath, libraryID: libraryID, selection: selection)
         var items: [CalibreImportItem] = []
+
+        // Likely-duplicate index, built once (O(N) total, not O(N²) — the old
+        // code re-read the whole catalog for every book). A failure to load it
+        // only disables the hint; it never fails a book or the import.
+        var duplicateLookup: [String: UUID] = [:]
+        if let candidates = try? await repository.allBooksForDuplicateCheck() {
+            for candidate in candidates {
+                let key = Self.duplicateKey(
+                    title: candidate.title,
+                    firstAuthor: candidate.authors.first ?? ""
+                )
+                if duplicateLookup[key] == nil { duplicateLookup[key] = candidate.id }
+            }
+        }
+
+        let selectedCount = selectedIDs.map { set in ordered.filter { set.contains($0.calibreID) }.count } ?? ordered.count
+        let total = Double(max(selectedCount, 1))
+        var decided = 0
 
         for record in ordered {
             if let selectedIDs, !selectedIDs.contains(record.calibreID) {
                 continue
             }
-            if progress.completedBookIDs.contains(record.calibreID) {
-                items.append(CalibreImportItem(
+            let item: CalibreImportItem
+            if progressRecord.completedBookIDs.contains(record.calibreID) {
+                item = CalibreImportItem(
                     calibreID: record.calibreID, title: record.title, status: .skipped
-                ))
-                continue
-            }
-            do {
-                switch try await importOne(record, into: repository) {
-                case .imported(let book, let likelyDuplicate):
-                    progress.completedBookIDs.append(record.calibreID)
-                    try writeProgress(progress, sourcePath: sourcePath)
-                    items.append(CalibreImportItem(
+                )
+            } else {
+                do {
+                    switch try await importOne(record, into: repository, duplicateLookup: &duplicateLookup) {
+                    case .imported(let book, let likelyDuplicate):
+                        progressRecord.completedBookIDs.append(record.calibreID)
+                        try writeProgress(progressRecord, sourcePath: sourcePath)
+                        item = CalibreImportItem(
+                            calibreID: record.calibreID, title: record.title,
+                            status: .imported(book.id), likelyDuplicateOf: likelyDuplicate
+                        )
+                    case .duplicate(let matchingBookID):
+                        // A duplicate is NOT completed: it was not copied. If the
+                        // library copy is later removed, a re-run must be able to
+                        // import it. Re-runs simply re-detect the duplicate.
+                        item = CalibreImportItem(
+                            calibreID: record.calibreID, title: record.title,
+                            status: .duplicate(matchingBookID: matchingBookID)
+                        )
+                    }
+                } catch {
+                    // Failed books are NOT completed: a resume retries them.
+                    item = CalibreImportItem(
                         calibreID: record.calibreID, title: record.title,
-                        status: .imported(book.id), likelyDuplicateOf: likelyDuplicate
-                    ))
-                case .duplicate(let matchingBookID):
-                    // A duplicate is NOT completed: it was not copied. If the
-                    // library copy is later removed, a re-run must be able to
-                    // import it. Re-runs simply re-detect the duplicate.
-                    items.append(CalibreImportItem(
-                        calibreID: record.calibreID, title: record.title,
-                        status: .duplicate(matchingBookID: matchingBookID)
-                    ))
+                        status: .failed(error.localizedDescription)
+                    )
                 }
-            } catch {
-                // Failed books are NOT completed: a resume retries them.
-                items.append(CalibreImportItem(
-                    calibreID: record.calibreID, title: record.title,
-                    status: .failed(error.localizedDescription)
-                ))
             }
+            items.append(item)
+            decided += 1
+            progress(Double(decided) / total)
         }
         return CalibreImportReport(items: items)
     }
@@ -165,7 +188,8 @@ public actor CalibreImportService {
 
     private func importOne(
         _ record: CalibreBookRecord,
-        into repository: LibraryRepositoryImporting
+        into repository: LibraryRepositoryImporting,
+        duplicateLookup: inout [String: UUID]
     ) async throws -> ImportOutcome {
         // A book with any missing format file cannot be copied at all.
         if let missing = record.formats.first(where: { $0.isMissing }) {
@@ -224,15 +248,13 @@ public actor CalibreImportService {
         }
 
         // Likely-duplicate hint (never merged silently — surfaced in the report).
+        // Looked up in the pre-built index, which also registers every book
+        // imported earlier in this run.
         var likelyDuplicate: UUID?
         if !record.title.isEmpty {
-            let candidates = try await repository.allBooksForDuplicateCheck()
-            let normalizedTitle = ImportService.normalized(record.title)
-            let firstAuthor = record.authors.first.map { ImportService.normalized($0.name) } ?? ""
-            likelyDuplicate = candidates.first {
-                ImportService.normalized($0.title) == normalizedTitle
-                    && ($0.authors.first.map(ImportService.normalized) ?? "") == firstAuthor
-            }?.id
+            likelyDuplicate = duplicateLookup[
+                Self.duplicateKey(title: record.title, firstAuthor: record.authors.first?.name ?? "")
+            ]
         }
 
         let metadata = NewBookMetadata(
@@ -251,6 +273,12 @@ public actor CalibreImportService {
             rawMetadata: record.rawMetadata.isEmpty ? nil : record.rawMetadata
         )
         let book = try await repository.createBook(metadata: metadata, staged: staged, cover: coverData)
+        // Register the imported book so a later record with the same normalized
+        // title + first author is flagged (intra-run duplicate).
+        if !record.title.isEmpty {
+            let key = Self.duplicateKey(title: record.title, firstAuthor: record.authors.first?.name ?? "")
+            if duplicateLookup[key] == nil { duplicateLookup[key] = book.id }
+        }
         return .imported(book: book, likelyDuplicateOf: likelyDuplicate)
     }
 
@@ -273,6 +301,13 @@ public actor CalibreImportService {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         let data = try JSONEncoder().encode(progress)
         try data.write(to: url, options: .atomic)
+    }
+
+    /// Normalized (title, first-author) key for the likely-duplicate index.
+    /// Both halves are already punctuation-stripped and lowercased by
+    /// `ImportService.normalized`; the separator cannot collide with either.
+    private static func duplicateKey(title: String, firstAuthor: String) -> String {
+        "\(ImportService.normalized(title))|\(ImportService.normalized(firstAuthor))"
     }
 
     /// SHA-256 of the canonical source path, first 32 hex chars.

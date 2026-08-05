@@ -159,6 +159,28 @@ public final class CalibreReader: Sendable {
         }
     }
 
+    /// Schema version, library ID, and format count of an opened Calibre
+    /// library — the summary fields that do not need the books table.
+    struct CalibreSummaryMetadata: Sendable {
+        let userVersion: Int
+        let libraryID: String
+        let formatCount: Int
+    }
+
+    /// Lightweight library metadata (schema version, library ID, format
+    /// count) for callers that already read the books — building a summary
+    /// this way avoids re-reading the books table, which carries every cover
+    /// blob.
+    func summaryMetadata() throws -> CalibreSummaryMetadata {
+        try database.read { db in
+            CalibreSummaryMetadata(
+                userVersion: try schema.userVersion(db),
+                libraryID: try schema.libraryID(db),
+                formatCount: try schema.formatCount(db)
+            )
+        }
+    }
+
     public func books() throws -> [CalibreBookRecord] {
         try database.read { db in
             let bookRows = try schema.fetchBooks(db)

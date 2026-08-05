@@ -246,6 +246,109 @@ struct CalibreImportServiceTests {
     }
 
     @Test
+    func reportsMonotonicProgressAcrossSelectedBooks() async throws {
+        let layout = try layout()
+        let service = CalibreImportService(layout: layout)
+        let repository = CalibreMemoryRepository()
+        let library = try CalibreFixture.makeLibrary(named: "svc-progress-frac-\(UUID().uuidString)")
+        let records = try records(from: library)
+
+        let samples = LockedBox<[Double]>([])
+        let report = try await service.importBooks(
+            records, from: library.path,
+            libraryID: "acceptance-fixture-uuid",
+            selection: [1, 2, 4],
+            into: repository,
+            progress: { samples.append($0) }
+        )
+
+        #expect(report.imported.map(\.calibreID) == [1, 2, 4])
+        // One report per selected book, ending at 1.0.
+        #expect(samples.value == [1.0 / 3.0, 2.0 / 3.0, 1.0])
+    }
+
+    @Test
+    func duplicateCheckRunsOnceNotPerBook() async throws {
+        let layout = try layout()
+        let service = CalibreImportService(layout: layout)
+        let repository = CalibreMemoryRepository()
+        let library = try CalibreFixture.makeLibrary(named: "svc-dupcheck-\(UUID().uuidString)")
+        let records = try records(from: library)
+
+        // Regression: the duplicate-check index must be loaded once per
+        // import, not once per book (O(N) not O(N^2) for large libraries).
+        _ = try await service.importBooks(
+            records, from: library.path,
+            libraryID: "acceptance-fixture-uuid",
+            selection: [1, 2, 4],
+            into: repository
+        )
+
+        #expect(await repository.duplicateCheckCallCount() == 1)
+    }
+
+    @Test
+    func intraRunLikelyDuplicateIsDetected() async throws {
+        let layout = try layout()
+        let service = CalibreImportService(layout: layout)
+        let repository = CalibreMemoryRepository()
+        let library = try CalibreFixture.makeLibrary(named: "svc-intrarun-\(UUID().uuidString)")
+        let records = try records(from: library)
+
+        // A second record with book 1's title + first author but a DIFFERENT
+        // format file (so it is not an exact-content duplicate). Importing
+        // both in one run must flag the second as a likely duplicate of the
+        // first — the incremental index registers each imported book.
+        let book1 = try #require(records.first { $0.calibreID == 1 })
+        let book2 = try #require(records.first { $0.calibreID == 2 })
+        let twin = CalibreBookRecord(
+            calibreID: 101,
+            title: book1.title,
+            authors: book1.authors,
+            series: book1.series,
+            seriesIndex: book1.seriesIndex,
+            tags: book1.tags,
+            rating: book1.rating,
+            publisher: book1.publisher,
+            publicationDate: book1.publicationDate,
+            addedDate: book1.addedDate,
+            languages: book1.languages,
+            identifiers: book1.identifiers,
+            comments: book1.comments,
+            formats: [book2.formats[0]],
+            cover: book1.cover,
+            pages: book1.pages,
+            sourceUUID: book1.sourceUUID,
+            titleSort: book1.titleSort,
+            authorSort: book1.authorSort,
+            lastModified: book1.lastModified,
+            sourcePath: book1.sourcePath,
+            originalFormats: book1.originalFormats,
+            conversionOptions: book1.conversionOptions,
+            extraIdentifiers: book1.extraIdentifiers,
+            customColumnDefinitions: book1.customColumnDefinitions,
+            rawMetadata: book1.rawMetadata,
+            opfPath: book1.opfPath
+        )
+
+        let report = try await service.importBooks(
+            [twin, book1], from: library.path,
+            libraryID: "acceptance-fixture-uuid",
+            selection: [book1.calibreID, twin.calibreID],
+            into: repository
+        )
+
+        #expect(report.imported.map(\.calibreID) == [1, 101])
+        let twinItem = try #require(report.imported.first { $0.calibreID == 101 })
+        let firstItem = try #require(report.imported.first { $0.calibreID == 1 })
+        guard case .imported(let firstBookID) = firstItem.status else {
+            Issue.record("expected .imported status, got \(firstItem.status)")
+            return
+        }
+        #expect(twinItem.likelyDuplicateOf == firstBookID)
+    }
+
+    @Test
     func importPreservesRawPayloadEndToEnd() async throws {
         let layout = try layout()
         let service = CalibreImportService(layout: layout)
@@ -294,6 +397,7 @@ private actor CalibreMemoryRepository: LibraryRepositoryImporting {
     private var books: [IndexedBook]
     private let failOnTitle: String?
     private var created: [CapturedCreate] = []
+    private var duplicateCheckCalls = 0
 
     init(
         seededHashes: [String: UUID] = [:],
@@ -309,7 +413,10 @@ private actor CalibreMemoryRepository: LibraryRepositoryImporting {
         hashes[contentHash].map { [$0] } ?? []
     }
 
-    func allBooksForDuplicateCheck() async throws -> [IndexedBook] { books }
+    func allBooksForDuplicateCheck() async throws -> [IndexedBook] {
+        duplicateCheckCalls += 1
+        return books
+    }
 
     func createBook(
         metadata: NewBookMetadata,
@@ -333,6 +440,33 @@ private actor CalibreMemoryRepository: LibraryRepositoryImporting {
     }
 
     func createdBooks() -> [CapturedCreate] { created }
+
+    func duplicateCheckCallCount() -> Int { duplicateCheckCalls }
+}
+
+/// Minimal thread-safe accumulator for progress/phase callbacks. The import
+/// service invokes progress closures synchronously on its own executor, so a
+/// plain locked box is deterministic: every append completes before
+/// `importBooks` returns.
+private final class LockedBox<Value>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storage: Value
+
+    init(_ value: Value) {
+        storage = value
+    }
+
+    var value: Value {
+        lock.lock()
+        defer { lock.unlock() }
+        return storage
+    }
+
+    func append(_ element: Value.Element) where Value: RangeReplaceableCollection {
+        lock.lock()
+        storage.append(element)
+        lock.unlock()
+    }
 }
 
 private enum TestInjectedError: Error {

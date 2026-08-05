@@ -79,6 +79,10 @@ final class LibrarySession {
     var calibreSelectedIDs = Set<Int>()
     var calibreImportReport: CalibreImportReport?
     var calibreImportInProgress = false
+    /// Fraction (0...1) of the selected books decided by the import loop.
+    var calibreImportProgress: Double?
+    /// Phase label while the pre-wizard Calibre scan runs off the main actor.
+    var calibreScanProgress: CalibreScanPhase?
     var calibreSourcePath: String?
 
     let deviceID: UUID

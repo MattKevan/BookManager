@@ -21,6 +21,7 @@
 		0E680663EED515B06FFCE587 /* LibraryRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62C899914758EB3E8BEE538A /* LibraryRepositoryTests.swift */; };
 		0F230195A99C9086708F764D /* CalibreMetadataCacheTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F90CA6B916CDD3FA97532329 /* CalibreMetadataCacheTests.swift */; };
 		10C8F970D231F4D214B9C8A7 /* GridSelectionSemantics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FAB984F39A89968FEA543BF /* GridSelectionSemantics.swift */; };
+		1211E49D873BB966AB1B3847 /* CalibreLibraryScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC795DD74EBD35B16B5B0140 /* CalibreLibraryScanner.swift */; };
 		13026651A9AA68300F174F71 /* LibraryOpenPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D3FC5E7650303734EBED4B8 /* LibraryOpenPolicyTests.swift */; };
 		139DBD3E2B3221075CA4E1C3 /* ConvergenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFAE9B5D24595970B44482F5 /* ConvergenceTests.swift */; };
 		14BD71038AC6A7132DCB65B1 /* LibraryOpenPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73A4363817AC353D4EA20649 /* LibraryOpenPolicy.swift */; };
@@ -104,6 +105,7 @@
 		8D3528A1D704E9987AAACF29 /* DeviceSendService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CC2BCC19365E631DFAFFA9B /* DeviceSendService.swift */; };
 		8E2E94ED24779663AF996689 /* LibraryMonitorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2369FDF74DB51E8CFDD40F7C /* LibraryMonitorTests.swift */; };
 		8FB22FFFCE6A92FA5F0634E4 /* DeviceRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FD6A4305F8A3E9484774124 /* DeviceRegistry.swift */; };
+		909277D5AACC2F90040BD14D /* CalibreLibraryScannerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2F18D3F03F0446D22DDE330 /* CalibreLibraryScannerTests.swift */; };
 		9108C848D062669D9D8E70BA /* SyncEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CC5F31EBF5C8246752FFD35 /* SyncEngineTests.swift */; };
 		93EF9E8B2FCD413FB592ECEE /* LibraryWelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E61625A94C7F07131F7D1D06 /* LibraryWelcomeView.swift */; };
 		943535EE2144A6EFEF9C3463 /* FacetNavigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D2EF657A967D68607EE3DC7 /* FacetNavigation.swift */; };
@@ -349,7 +351,9 @@
 		AA299DF29733E312648A00F1 /* MobiReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobiReader.swift; sourceTree = "<group>"; };
 		AB12664D17D3B0B039ED84E6 /* LibraryConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryConnection.swift; sourceTree = "<group>"; };
 		AF095A91359CD62AFFBB0DC6 /* MTPCodes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MTPCodes.swift; sourceTree = "<group>"; };
+		B2F18D3F03F0446D22DDE330 /* CalibreLibraryScannerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalibreLibraryScannerTests.swift; sourceTree = "<group>"; };
 		BC283B2D9EBE4AA7CDFFD57A /* DeviceTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceTransport.swift; sourceTree = "<group>"; };
+		BC795DD74EBD35B16B5B0140 /* CalibreLibraryScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalibreLibraryScanner.swift; sourceTree = "<group>"; };
 		BC98DA37EF59493A0C5ACC01 /* FormatConverter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FormatConverter.swift; sourceTree = "<group>"; };
 		BD4CB7A57B899D8EF41C2244 /* MTPDeviceTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MTPDeviceTransport.swift; sourceTree = "<group>"; };
 		BE1052B17AA8F58BB0EFE443 /* StacksUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = StacksUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -517,6 +521,7 @@
 			children = (
 				67C34D5FC526A6DB7667CB8D /* CalibreFixture.swift */,
 				59CE2C952CE8D367753CB9B0 /* CalibreImportServiceTests.swift */,
+				B2F18D3F03F0446D22DDE330 /* CalibreLibraryScannerTests.swift */,
 				CA2C9AE23A48CDED03146CEB /* CalibreRawPresenterTests.swift */,
 				1C53D514F06E5E4259C09651 /* CalibreReaderTests.swift */,
 			);
@@ -752,6 +757,7 @@
 			isa = PBXGroup;
 			children = (
 				8F75CA16BA19CA192099D848 /* CalibreImportService.swift */,
+				BC795DD74EBD35B16B5B0140 /* CalibreLibraryScanner.swift */,
 				51F7875A060BA56F4C22F3EC /* CalibreModels.swift */,
 				E136CDE31A9BB07BB1E6A1D3 /* CalibreRawPresenter.swift */,
 				347AC9BF6FBB7C82B2C7009C /* CalibreReader.swift */,
@@ -1117,6 +1123,7 @@
 				03CDBEEB85085E42B7D33009 /* BookValuesTests.swift in Sources */,
 				C4F9CDB9EC8438975BBB0078 /* CalibreFixture.swift in Sources */,
 				2B25AD8A7C374FB56F31794C /* CalibreImportServiceTests.swift in Sources */,
+				909277D5AACC2F90040BD14D /* CalibreLibraryScannerTests.swift in Sources */,
 				0F230195A99C9086708F764D /* CalibreMetadataCacheTests.swift in Sources */,
 				1537E8E213DFC00704C9EDFF /* CalibreRawPresenterTests.swift in Sources */,
 				46CB9DF080A658B2A6B3F10B /* CalibreReaderTests.swift in Sources */,
@@ -1176,6 +1183,7 @@
 				E3E5A77ED0989CB7F2C188CB /* BookValues.swift in Sources */,
 				D5CB70B08A17A9AD6563E9E4 /* ByteOrder.swift in Sources */,
 				B536B54F5B5311B1E5E06E31 /* CalibreImportService.swift in Sources */,
+				1211E49D873BB966AB1B3847 /* CalibreLibraryScanner.swift in Sources */,
 				0532A9F59CEC53A2007CBB17 /* CalibreMetadataCache.swift in Sources */,
 				803B349C6DBB756A1B236E2C /* CalibreModels.swift in Sources */,
 				F5DF80F7FEB6338C1EC686DF /* CalibreRawPresenter.swift in Sources */,

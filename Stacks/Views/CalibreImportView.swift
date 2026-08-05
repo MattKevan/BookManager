@@ -150,8 +150,14 @@ struct CalibreImportView: View {
             }
             Spacer()
             if session.calibreImportInProgress {
-                ProgressView()
-                    .controlSize(.small)
+                ProgressView(value: session.calibreImportProgress ?? 0)
+                    .frame(width: 120)
+                if let progress = session.calibreImportProgress {
+                    Text("\(Int((progress * 100).rounded()))%")
+                        .font(.caption)
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                }
             }
             if session.calibreImportReport != nil {
                 Button("Done") { dismiss() }
