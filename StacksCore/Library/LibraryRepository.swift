@@ -31,6 +31,13 @@ public actor LibraryRepository: LibraryRepositoryImporting {
         deviceID: UUID
     ) async throws -> LibraryRepository {
         let layout = LibraryLayout(root: root)
+        // Refuse to create over an existing library: writing a fresh manifest
+        // would change its identity and fork the library. Settings > Create
+        // New / Cmd+Shift+N over an existing folder surfaces this as an error
+        // instead of silently damaging it.
+        guard !FileManager.default.fileExists(atPath: layout.manifestURL.path) else {
+            throw LibraryRepositoryError.libraryAlreadyExists
+        }
         let manifest = LibraryManifest(id: UUID())
         try layout.create(manifest: manifest)
         return try LibraryRepository(
@@ -461,4 +468,7 @@ public enum LibraryRepositoryError: Error, Equatable {
     case missingDependencies(UUID)
     case bookNotFound(UUID)
     case rebuildCancelled
+    /// The target folder already contains a library manifest; creating over it
+    /// would clobber the existing library's identity.
+    case libraryAlreadyExists
 }

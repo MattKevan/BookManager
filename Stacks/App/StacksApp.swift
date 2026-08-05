@@ -41,6 +41,14 @@ private struct AppCommands: Commands {
 
     @FocusedValue(\.searchFocus) private var searchFocus: FocusState<Bool>.Binding?
 
+    /// The browser context is the home library (device mode counts — active
+    /// library resolves to home there). Peer mode does not: the Books-menu
+    /// chrome (Edit Metadata, Fetch Missing, Open in Reader, Show in Finder,
+    /// Copy to Library) is home-only.
+    private var isHomeContext: Bool {
+        session.activeLibrary === session.home
+    }
+
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
             Button("Create Library…") { session.present(.create) }
@@ -77,29 +85,31 @@ private struct AppCommands: Commands {
             .disabled(session.selection.isEmpty || session.devices.selectedDeviceID == nil)
         }
         // Books menu: actions on the library selection and its metadata.
+        // All items are HOME-ONLY chrome (peers are browse + transfer in this
+        // slice), so they are disabled when a peer is the browser context.
         CommandMenu("Books") {
             Button("Edit Metadata…") {
                 session.metadataEditQueue = session.selectionBooks
             }
             .keyboardShortcut("e", modifiers: .command)
-            .disabled(session.selection.isEmpty || session.isLibraryUnavailable || session.selectedDeviceID != nil)
+            .disabled(session.selection.isEmpty || session.isLibraryUnavailable || session.selectedDeviceID != nil || !isHomeContext)
             Button("Fetch Missing Metadata…") {
                 Task { await session.enrichAllBooksMissingMetadata() }
             }
-            .disabled(session.isLibraryUnavailable)
+            .disabled(session.isLibraryUnavailable || !isHomeContext)
             Divider()
             Button("Open in Reader") {
                 if let id = session.selection.first {
                     Task { await session.open(id: id) }
                 }
             }
-            .disabled(session.selection.isEmpty || session.isLibraryUnavailable || session.selectedDeviceID != nil)
+            .disabled(session.selection.isEmpty || session.isLibraryUnavailable || session.selectedDeviceID != nil || !isHomeContext)
             Button("Show in Finder") {
                 if let id = session.selection.first {
                     Task { await session.reveal(id: id) }
                 }
             }
-            .disabled(session.selection.isEmpty || session.isLibraryUnavailable || session.selectedDeviceID != nil)
+            .disabled(session.selection.isEmpty || session.isLibraryUnavailable || session.selectedDeviceID != nil || !isHomeContext)
             if !session.peers.isEmpty {
                 Divider()
                 Menu("Copy to Library…") {
@@ -109,17 +119,24 @@ private struct AppCommands: Commands {
                         }
                     }
                 }
-                .disabled(session.selection.isEmpty || session.isLibraryUnavailable || session.selectedDeviceID != nil)
+                .disabled(session.selection.isEmpty || session.isLibraryUnavailable || session.selectedDeviceID != nil || !isHomeContext)
             }
         }
-        // Edit menu: deletion of the library selection (Cmd+Delete; the bare
-        // Delete/Backspace key is handled in the grid/table views).
+        // Edit menu: deletion of the ACTIVE library's selection (Cmd+Delete;
+        // the bare Delete/Backspace key is handled in the grid/table views).
+        // Peers trash into their own trash; device mode stays disabled.
         CommandGroup(after: .pasteboard) {
             Button("Delete") {
-                session.requestDelete(ids: session.selection)
+                if let library = session.activeLibrary {
+                    library.requestDelete(ids: library.selection)
+                }
             }
             .keyboardShortcut(.delete, modifiers: .command)
-            .disabled(session.selection.isEmpty || session.isLibraryUnavailable || session.selectedDeviceID != nil)
+            .disabled(
+                session.activeLibrary?.selection.isEmpty ?? true
+                    || session.activeLibrary?.isLibraryUnavailable ?? true
+                    || session.selectedDeviceID != nil
+            )
         }
         CommandGroup(after: .textEditing) {
             Button("Find") {

@@ -13,6 +13,14 @@ private struct CoverTileFrameKey: PreferenceKey {
 
 struct CoverGridView<Browser: LibraryBrowser>: View {
     let browser: Browser
+    /// Home-only chrome: the Edit Metadata context-menu item is available only
+    /// for the home library (peers are browse + transfer in this slice).
+    let isHome: Bool
+
+    init(browser: Browser, isHome: Bool = true) {
+        self.browser = browser
+        self.isHome = isHome
+    }
 
     private let columns = [
         GridItem(.adaptive(minimum: 120, maximum: 180), spacing: 16)
@@ -94,7 +102,7 @@ struct CoverGridView<Browser: LibraryBrowser>: View {
     }
 
     private func tile(_ book: IndexedBook) -> some View {
-        CoverTile(book: book, browser: browser)
+        CoverTile(book: book, browser: browser, isHome: isHome)
             .focusable()
             .focused($focusedID, equals: book.id)
             // No focus ring around the whole item: selection is shown only by
@@ -209,6 +217,14 @@ struct CoverGridView<Browser: LibraryBrowser>: View {
 private struct CoverTile<Browser: LibraryBrowser>: View {
     let book: IndexedBook
     let browser: Browser
+    let isHome: Bool
+
+    init(book: IndexedBook, browser: Browser, isHome: Bool = true) {
+        self.book = book
+        self.browser = browser
+        self.isHome = isHome
+    }
+
     @State private var image: NSImage?
     @State private var isHovering = false
 
@@ -227,13 +243,15 @@ private struct CoverTile<Browser: LibraryBrowser>: View {
         .padding(6)
         .contentShape(Rectangle())
         .contextMenu {
-            Button("Edit Metadata") {
-                selectForContextMenu()
-                if !browser.selection.isEmpty {
-                    browser.metadataEditQueue = browser.selectionBooks
+            if isHome {
+                Button("Edit Metadata") {
+                    selectForContextMenu()
+                    if !browser.selection.isEmpty {
+                        browser.metadataEditQueue = browser.selectionBooks
+                    }
                 }
+                .disabled(browser.isLibraryUnavailable)
             }
-            .disabled(browser.isLibraryUnavailable)
             Button("Show in Finder") {
                 selectForContextMenu()
                 if let id = browser.selection.first {

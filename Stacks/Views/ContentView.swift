@@ -205,26 +205,29 @@ struct ContentView: View {
             BookInspectorView(session: session)
         }
         // Delete confirmation: all delete paths (menu, Delete key, context
-        // menu) route through `requestDelete`, which sets `pendingDelete`;
-        // the destructive action here runs the actual `delete(ids:)`.
+        // menu) route through `requestDelete`, which sets `pendingDelete` on
+        // the ACTIVE library (home or peer — peers trash into their own
+        // trash); the destructive action here runs the actual `delete(ids:)`.
         .alert(
-            session.pendingDelete.map { "Move \($0.count) book\($0.count == 1 ? "" : "s") to Trash?" } ?? "Move to Trash?",
+            (session.activeLibrary?.pendingDelete).map { "Move \($0.count) book\($0.count == 1 ? "" : "s") to Trash?" } ?? "Move to Trash?",
             isPresented: Binding(
-                get: { session.pendingDelete != nil },
-                set: { if !$0 { session.pendingDelete = nil } }
+                get: { session.activeLibrary?.pendingDelete != nil },
+                set: { if !$0 { session.activeLibrary?.pendingDelete = nil } }
             )
         ) {
             Button("Move to Trash", role: .destructive) {
-                if let ids = session.pendingDelete {
-                    session.pendingDelete = nil
-                    Task { await session.delete(ids: ids) }
+                if let ids = session.activeLibrary?.pendingDelete {
+                    session.activeLibrary?.pendingDelete = nil
+                    if let library = session.activeLibrary {
+                        Task { await library.delete(ids: ids) }
+                    }
                 }
             }
             Button("Cancel", role: .cancel) {
-                session.pendingDelete = nil
+                session.activeLibrary?.pendingDelete = nil
             }
         } message: {
-            Text("The selected book\(session.pendingDelete?.count ?? 1 == 1 ? "" : "s") stays in the library Trash and can be restored later.")
+            Text("The selected book\((session.activeLibrary?.pendingDelete?.count ?? 1) == 1 ? "" : "s") stays in the library Trash and can be restored later.")
         }
     }
 

@@ -50,6 +50,22 @@ struct LibraryRepositoryTests {
             )
         }
     }
+    /// Creating over a folder that is already a library must not clobber its
+    /// manifest (Settings > Create New / Cmd+Shift+N over an existing
+    /// Book Manager library would otherwise fork it with a fresh id).
+    @Test
+    func rejectsCreatingOverExistingLibrary() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        let indexes = FileManager.default.temporaryDirectory
+            .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+
+        _ = try await LibraryRepository.create(at: root, indexesDirectory: indexes, deviceID: UUID())
+
+        await #expect(throws: LibraryRepositoryError.libraryAlreadyExists) {
+            try await LibraryRepository.create(at: root, indexesDirectory: indexes, deviceID: UUID())
+        }
+    }
 }
 
 @Suite

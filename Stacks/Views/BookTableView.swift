@@ -4,6 +4,14 @@ import SwiftUI
 
 struct BookTableView<Browser: LibraryBrowser>: View {
     let browser: Browser
+    /// Home-only chrome: the Edit Metadata context-menu item is available only
+    /// for the home library (peers are browse + transfer in this slice).
+    let isHome: Bool
+
+    init(browser: Browser, isHome: Bool = true) {
+        self.browser = browser
+        self.isHome = isHome
+    }
 
     var body: some View {
         Table(browser.books, selection: Binding(
@@ -33,10 +41,12 @@ struct BookTableView<Browser: LibraryBrowser>: View {
             }
         }
         .contextMenu(forSelectionType: IndexedBook.ID.self) { ids in
-            Button("Edit Metadata") {
-                browser.metadataEditQueue = browser.selectionBooks
+            if isHome {
+                Button("Edit Metadata") {
+                    browser.metadataEditQueue = browser.selectionBooks
+                }
+                .disabled(browser.isLibraryUnavailable)
             }
-            .disabled(browser.isLibraryUnavailable)
             Button("Show in Finder") {
                 if let id = ids.first { Task { await browser.reveal(id: id) } }
             }

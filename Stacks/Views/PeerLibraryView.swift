@@ -14,9 +14,9 @@ struct PeerLibraryView: View {
         Group {
             switch peer.viewMode {
             case .table:
-                BookTableView(browser: peer)
+                BookTableView(browser: peer, isHome: false)
             case .grid:
-                CoverGridView(browser: peer)
+                CoverGridView(browser: peer, isHome: false)
             }
         }
         .contextMenu {

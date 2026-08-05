@@ -376,10 +376,6 @@ final class LibrarySession {
         get { connection?.metadataEditQueue }
         set { connection?.metadataEditQueue = newValue }
     }
-    var pendingDelete: Set<UUID>? {
-        get { connection?.pendingDelete }
-        set { connection?.pendingDelete = newValue }
-    }
     var libraryRoot: URL? { repository?.root }
 
     func refreshAll() async { await connection?.refreshAll() }
@@ -391,8 +387,6 @@ final class LibrarySession {
         activeLibraryID = home?.id
         connection?.selectCategory(type)
     }
-    func requestDelete(ids: Set<UUID>) { connection?.requestDelete(ids: ids) }
-    func delete(ids: Set<UUID>) async { await connection?.delete(ids: ids) }
     func restore(id: UUID) async { await connection?.restore(id: id) }
     func open(id: UUID) async { await connection?.open(id: id) }
     func reveal(id: UUID) async { await connection?.reveal(id: id) }
