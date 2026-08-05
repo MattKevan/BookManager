@@ -436,10 +436,14 @@ extension ContentView {
         }
     }
 
-    /// The library/device navigation sidebar, shared by both layouts.
+    /// The library/device navigation sidebar, shared by both layouts. Its
+    /// navigationTitle becomes the window title (the detail column sets none
+    /// for the library browser — a facet value like "All Books" must not
+    /// replace the browsed library's name). DeviceBooksView titles itself
+    /// with the device name, which overrides this in device mode.
     private var sidebarColumn: some View {
         SidebarView(session: session)
-            .navigationTitle(session.activeLibrary?.name ?? "Library")
+            .navigationTitle(session.activeLibrary?.name ?? "Stacks")
     }
 
     /// The trailing column: the device books table, the active library's
@@ -452,7 +456,6 @@ extension ContentView {
                 }
             } else if let library = session.activeLibrary {
                 libraryBrowser(for: library)
-                    .navigationTitle(library.facetNavigation.value ?? "All Books")
             } else {
                 ContentUnavailableView {
                     Label("No Library Open", systemImage: "books.vertical")
