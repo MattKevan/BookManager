@@ -186,6 +186,39 @@ struct ContentView: View {
         .onChange(of: session.activeLibrary?.facetNavigation.category) { _, category in
             columnVisibility = (category == nil) ? .doubleColumn : .all
         }
+        // The `.toolbar` lives here — on the stable container ABOVE the
+        // swapped split views — not inside `detailColumn`: switching between
+        // the 2-column and 3-column NavigationSplitViews tears down and
+        // rebuilds a toolbar attached inside them on macOS, making the
+        // trailing cluster momentarily jump to the leading edge. A stable
+        // attachment keeps the items' identities across the swap.
+        // Statement order is the toolbar order; a leading flexible spacer
+        // aligns the cluster to the trailing edge. Fixed spacers break the
+        // macOS 26 glass surface into the distinct clusters below.
+        // Right-to-left from the edge: Inspector toggle (home only), search
+        // field, grid/list picker, library actions (home: Add Books / Open /
+        // Edit Metadata; peer: Refresh / Copy to Home Library / Close),
+        // device management, then the sync status at the leading end.
+        .toolbar {
+            ToolbarSpacer(.flexible)
+            syncToolbarItem
+            ToolbarSpacer(.fixed)
+            deviceToolbarGroup
+            ToolbarSpacer(.fixed)
+            if isHomeContext {
+                libraryActionsToolbarGroup
+            } else if session.activeLibrary != nil {
+                peerToolbarGroup
+            }
+            ToolbarSpacer(.fixed)
+            viewPickerToolbarItem
+            ToolbarSpacer(.fixed)
+            searchToolbarItem
+            ToolbarSpacer(.fixed)
+            if isHomeContext {
+                inspectorToolbarItem
+            }
+        }
         // The search field is a real `NSSearchField` in its own toolbar item
         // (not `.searchable`): the system search item always sits at the
         // toolbar's trailing edge with nothing allowed after it (and expands
@@ -487,35 +520,6 @@ extension ContentView {
         // navigationTitle does not), so the facet value must never override
         // it — a facet browser shows the library name, not "All Books".
         .navigationTitle(windowTitle)
-        // One `.toolbar` with separate items (not multiple `.toolbar`
-        // attachments — those reorder unpredictably on macOS). Statement
-        // order here is the toolbar order, and a leading flexible spacer
-        // aligns the whole cluster to the trailing edge. Fixed spacers break
-        // the macOS 26 glass surface into the distinct clusters below.
-        // Right-to-left from the edge: Inspector toggle (home only), search
-        // field, grid/list picker, library actions (home: Add Books / Open /
-        // Edit Metadata; peer: Refresh / Copy to Home Library / Close),
-        // device management, then the sync status at the leading end.
-        .toolbar {
-            ToolbarSpacer(.flexible)
-            syncToolbarItem
-            ToolbarSpacer(.fixed)
-            deviceToolbarGroup
-            ToolbarSpacer(.fixed)
-            if isHomeContext {
-                libraryActionsToolbarGroup
-            } else if session.activeLibrary != nil {
-                peerToolbarGroup
-            }
-            ToolbarSpacer(.fixed)
-            viewPickerToolbarItem
-            ToolbarSpacer(.fixed)
-            searchToolbarItem
-            ToolbarSpacer(.fixed)
-            if isHomeContext {
-                inspectorToolbarItem
-            }
-        }
     }
 
     /// Toolbar label for device activity: a determinate circular ring while a
