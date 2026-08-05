@@ -91,20 +91,13 @@ struct CoverGridView<Browser: LibraryBrowser>: View {
     }
 
     private var grid: some View {
-        // Photos-style reflow: key the animation on the grid's own width so
-        // that when the facet pane drag changes the available width, the
-        // adaptive column count changes and covers glide to their new
-        // positions instead of jumping (jumping reads as flicker mid-drag).
-        GeometryReader { geo in
-            ScrollView {
-                LazyVGrid(columns: columns, spacing: 16) {
-                    ForEach(browser.books) { book in
-                        tile(book)
-                    }
+        ScrollView {
+            LazyVGrid(columns: columns, spacing: 16) {
+                ForEach(browser.books) { book in
+                    tile(book)
                 }
-                .padding(16)
-                .animation(.easeOut(duration: 0.18), value: geo.size.width)
             }
+            .padding(16)
         }
     }
 
