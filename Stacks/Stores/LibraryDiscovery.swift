@@ -2,6 +2,7 @@ import CryptoKit
 import Foundation
 import Network
 import Observation
+import StacksCore
 
 /// One library discovered on the LAN via Bonjour (`_stacks._tcp`), or typed
 /// in manually as host:port.
@@ -56,9 +57,14 @@ public final class LibraryDiscovery {
     public private(set) var browseError: String?
 
     private var browser: NWBrowser?
+    /// Service instance name → resolved library (kept until the service
+    /// stops advertising, so re-browses don't flicker).
     private var resolved: [String: DiscoveredLibrary] = [:]
-
-    public init() {}
+    /// In-flight resolutions, keyed by service name — an NWConnection must
+    /// be retained until it settles, and each service resolves at most once.
+    private var pendingConnections: [String: NWConnection] = [:]
+    /// The service names currently advertised (from the last browse change).
+    private var currentNames: Set<String> = []
 
     public func start() {
         guard browser == nil else { return }
@@ -92,59 +98,77 @@ public final class LibraryDiscovery {
     public func stop() {
         browser?.cancel()
         browser = nil
-        libraries = []
+        for connection in pendingConnections.values {
+            connection.cancel()
+        }
+        pendingConnections = [:]
         resolved = [:]
+        currentNames = []
+        libraries = []
         browseError = nil
     }
 
     private func update(results: Set<NWBrowser.Result>) {
-        var next: [String: DiscoveredLibrary] = [:]
+        var names = Set<String>()
         for result in results {
-            switch result.endpoint {
-            case .service(name: let name, type: _, domain: _, interface: _):
-                next[name] = resolved[name]
-            case .hostPort, .unix, .url, .opaque:
-                break
-            @unknown default:
-                break
+            guard case .service(name: let name, type: _, domain: _, interface: _) = result.endpoint else {
+                continue
             }
-            // Resolve (async) and merge the result.
-            resolve(result)
+            names.insert(name)
+            // Resolve each advertised service once (TXT + host:port); a
+            // service already resolved just re-appears via refreshLibraries.
+            if resolved[name] == nil && pendingConnections[name] == nil {
+                resolve(result)
+            }
         }
-        // Keep stale entries until their re-resolution completes.
-        for (name, library) in resolved where next[name] == nil && results.contains(where: {
-            if case .service(name: name, type: _, domain: _, interface: _) = $0.endpoint { return true }
-            return false
-        }) {
-            next[name] = library
-        }
-        libraries = next.values.sorted { $0.name < $1.name }
+        currentNames = names
+        refreshLibraries()
+    }
+
+    /// Recomputes the visible list from what is resolved AND still advertised.
+    private func refreshLibraries() {
+        libraries = resolved
+            .filter { currentNames.contains($0.key) }
+            .values.sorted {
+                $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+            }
     }
 
     private func resolve(_ result: NWBrowser.Result) {
         guard case .service(name: let name, type: _, domain: _, interface: _) = result.endpoint else {
             return
         }
+        // Resolve the service to a concrete host:port (the connection must
+        // stay retained until it settles).
         let connection = NWConnection(to: result.endpoint, using: .tcp)
+        pendingConnections[name] = connection
         connection.stateUpdateHandler = { [weak self] state in
             switch state {
             case .ready:
-                // The connection resolved the service to a concrete
-                // host:port; the resolved service endpoint carries the TXT
-                // record (library id + display name).
-                if let remote = connection.currentPath?.remoteEndpoint,
-                   case .hostPort(let host, let port) = remote,
-                   let txt = connection.endpoint.txtRecord,
-                   let payload = try? TXTRecordDecoder().decode(TXTPayload.self, from: txt),
-                   let id = payload.id.flatMap(UUID.init(uuidString:)) {
+                let hostAndPort: (host: String, port: Int)?
+                if case .hostPort(let host, let port) = connection.currentPath?.remoteEndpoint {
+                    // IPv4/IPv6 descriptions are clean; strip any interface
+                    // scope suffix ("%en0") defensively.
+                    let hostString = host.debugDescription.split(separator: "%").first
+                        .map(String.init) ?? host.debugDescription
+                    hostAndPort = (hostString, Int(port.rawValue))
+                } else {
+                    hostAndPort = nil
+                }
+                if let hostAndPort {
                     Task { @MainActor in
-                        self?.resolved[name] = DiscoveredLibrary(
-                            id: id,
-                            name: payload.name ?? name,
-                            host: host.debugDescription,
-                            port: Int(port.rawValue)
+                        guard let self else { return }
+                        self.pendingConnections[name] = nil
+                        self.resolved[name] = await Self.fetchLibrary(
+                            host: hostAndPort.host, port: hostAndPort.port, fallbackName: name
                         )
+                        self.refreshLibraries()
                     }
+                }
+                connection.cancel()
+            case .failed:
+                Task { @MainActor in
+                    self?.pendingConnections[name] = nil
                 }
                 connection.cancel()
             default:
@@ -154,13 +178,21 @@ public final class LibraryDiscovery {
         connection.start(queue: .main)
     }
 
-    /// The `_stacks._tcp` TXT record shape: name, library id, protocol
-    /// version, OPDS path, API path.
-    private struct TXTPayload: Decodable {
-        let name: String?
-        let id: String?
-        let v: String?
-        let path: String?
-        let api: String?
+    /// Fetches the server's identity (authoritative library id + display
+    /// name) over HTTP — browse results carry no TXT record in this SDK, so
+    /// `/api/identity` is the source of truth. A passworded server (401)
+    /// yields a provisional entry with a stable derived id and the service
+    /// name; the connect flow then prompts for credentials.
+    private static func fetchLibrary(host: String, port: Int, fallbackName: String) async -> DiscoveredLibrary {
+        var provisional = DiscoveredLibrary(manualHost: host, port: port)
+        provisional.name = fallbackName
+        guard let probe = try? RemoteLibrary(configuration: .init(
+            baseURL: provisional.baseURL,
+            queueDirectory: RemoteLibraryBrowser.queueDirectory(libraryID: provisional.id)
+        )),
+        let identity = try? await probe.fetchIdentity() else {
+            return provisional
+        }
+        return DiscoveredLibrary(id: identity.id, name: identity.name, host: host, port: port)
     }
 }

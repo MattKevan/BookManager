@@ -19,6 +19,7 @@ extension LibrarySession {
             let remote = try RemoteLibraryBrowser(discovered: discovered, credential: effective)
             try await remote.refreshBooks()
             remoteBrowser = remote
+            isRemoteContext = true
         } catch {
             if let remoteError = error as? RemoteLibrary.RemoteError,
                remoteError == .serverError(401) {
@@ -62,5 +63,6 @@ extension LibrarySession {
     /// library.
     func disconnectRemote() {
         remoteBrowser = nil
+        isRemoteContext = false
     }
 }

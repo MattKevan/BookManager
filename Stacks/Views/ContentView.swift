@@ -445,7 +445,7 @@ extension ContentView {
             ToolbarSpacer(.fixed)
             if isHomeContext {
                 libraryActionItems
-            } else if session.remoteBrowser != nil {
+            } else if session.isRemoteContext {
                 remoteActionItems
             }
             ToolbarSpacer(.fixed)
@@ -553,7 +553,7 @@ extension ContentView {
     /// mode and counts as home context; peer mode does not — the home-only
     /// toolbar cluster and inspector apply only to home.
     private var isHomeContext: Bool {
-        session.activeLibrary === session.home && session.remoteBrowser == nil
+        session.activeLibrary === session.home && !session.isRemoteContext
     }
 
     /// Remote-context toolbar cluster: Refresh (re-sync) and Disconnect.

@@ -7,6 +7,7 @@ import SwiftUI
 enum SidebarItem: Hashable {
     case allBooks
     case category(FacetType)
+    case remote(UUID)
     case device(UUID)
 }
 
@@ -19,6 +20,12 @@ struct SidebarView: View {
     var body: some View {
         List(selection: Binding<SidebarItem?>(
             get: {
+                // The connected remote is a selectable context, like the
+                // pre-network peers: clicking it shows its books while home
+                // stays open underneath.
+                if session.isRemoteContext, let remote = session.remoteBrowser {
+                    return .remote(remote.id)
+                }
                 if let id = session.selectedDeviceID {
                     return .device(id)
                 }
@@ -36,6 +43,8 @@ struct SidebarView: View {
                     session.selectCategory(nil)
                 case let .category(category):
                     session.selectCategory(category)
+                case .remote:
+                    session.isRemoteContext = true
                 case let .device(id):
                     session.selectDevice(id)
                 case nil:
@@ -89,34 +98,42 @@ struct SidebarView: View {
                 $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
             }
             Section("Shared") {
-                if libraries.isEmpty {
+                // The connected remote is a selectable browser context —
+                // home stays open underneath, exactly like the pre-network
+                // peers.
+                if let browser = session.remoteBrowser {
+                    HStack(spacing: 6) {
+                        Label(browser.name, systemImage: "network")
+                        Spacer()
+                        PendingBadge(browser: browser)
+                        Button {
+                            session.disconnectRemote()
+                        } label: {
+                            Image(systemName: "eject.fill")
+                        }
+                        .buttonStyle(.borderless)
+                        .help("Disconnect from \(browser.name)")
+                    }
+                    .tag(SidebarItem.remote(browser.id))
+                    .contentShape(Rectangle())
+                }
+                if libraries.isEmpty && session.remoteBrowser == nil {
                     Text(session.discovery.browseError == nil
                         ? "Browsing for libraries on this network…"
                         : "Local Network access is off")
                         .foregroundStyle(.secondary)
                 }
-                ForEach(libraries) { library in
+                ForEach(libraries.filter { session.remoteBrowser?.id != $0.id }) { library in
                     HStack(spacing: 6) {
                         Label(library.name, systemImage: "network")
                         Spacer()
-                        if let browser = session.remoteBrowser, browser.id == library.id {
-                            PendingBadge(browser: browser)
-                            Button {
-                                session.disconnectRemote()
-                            } label: {
-                                Image(systemName: "eject.fill")
-                            }
-                            .buttonStyle(.borderless)
-                            .help("Disconnect from \(library.name)")
-                        } else {
-                            Button {
-                                Task { await session.connect(to: library) }
-                            } label: {
-                                Image(systemName: "arrow.down.circle")
-                            }
-                            .buttonStyle(.borderless)
-                            .help("Connect to \(library.name)")
+                        Button {
+                            Task { await session.connect(to: library) }
+                        } label: {
+                            Image(systemName: "arrow.down.circle")
                         }
+                        .buttonStyle(.borderless)
+                        .help("Connect to \(library.name)")
                     }
                     .contentShape(Rectangle())
                 }

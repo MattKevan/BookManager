@@ -134,7 +134,18 @@ final class LibrarySession {
 
     /// The current browser surface: the remote when connected, else the
     /// active library. Grid/table/facet views are generic over it.
-    var browser: LibraryBrowser? { remoteBrowser ?? activeLibrary }
+    /// The browser context: the connected remote when the user selected it
+    /// in the sidebar, else the open library. A remote never replaces home —
+    /// it coexists (like the pre-network peers) and home stays primary.
+    var browser: LibraryBrowser? {
+        isRemoteContext ? remoteBrowser : activeLibrary
+    }
+    /// Whether the sidebar selection is the connected remote.
+    var isRemoteContext: Bool {
+        get { _remoteContextActive }
+        set { _remoteContextActive = newValue }
+    }
+    private var _remoteContextActive = false
 
     // The open library (single-library model) and the browser-context
     // selection. Stored here (not in the `+Connection` extension) because
@@ -195,9 +206,10 @@ final class LibrarySession {
             // activeLibraryID makes `activeLibrary` resolve to home while a
             // device is selected, so the home toolbar cluster (Add Books),
             // search, and sync bindings stay correct over the device listing.
-            // Deselecting returns to home; a peer's facet state is preserved
-            // on its connection, just not auto-restored.
+            // Deselecting returns to home; the remote's facet state is
+            // preserved on its browser, just not auto-restored.
             activeLibraryID = nil
+            isRemoteContext = false
             activeLibrary?.facetNavigation.clear()
         }
         Task { await devices.select(id) }
@@ -462,8 +474,10 @@ final class LibrarySession {
     func refreshDeleted() async { await connection?.refreshDeleted() }
     func selectCategory(_ type: FacetType?) {
         // Selecting a home facet makes home the browser context (a sidebar
-        // click on a Library-section row switches back from a peer or device).
+        // click on a Library-section row switches back from a remote or
+        // device — same rule the pre-network peers followed).
         activeLibraryID = home?.id
+        isRemoteContext = false
         connection?.selectCategory(type)
     }
     func restore(id: UUID) async { await connection?.restore(id: id) }
