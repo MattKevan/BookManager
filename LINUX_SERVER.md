@@ -28,12 +28,14 @@ so a plain `swift build` works on macOS, Linux arm64 (Raspberry Pi 4/5,
 ## Build
 
 ```bash
-git clone <repository-url> "Book manager"
-cd "Book manager"          # the path contains a space — quote it
+git clone <repository-url> stacks
+cd stacks
 swift build -c release
 ```
 
-The first build resolves and fetches dependencies (needs network). The
+The clone target folder is named explicitly so it doesn't depend on the
+repository's name (`git clone <url>` without a target would use the repo
+name). The first build resolves and fetches dependencies (needs network). The
 executable lands at `.build/release/stacks`.
 
 ## Create a library
