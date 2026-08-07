@@ -4,18 +4,24 @@ import SwiftUI
 
 /// One selectable row in the sidebar: All Books, a library facet category,
 /// or a connected device (Finder-style, with eject).
+/// The selectable rows under a connected remote's disclosure group.
+enum RemoteSubsection: Hashable {
+    case allBooks
+    case category(FacetType)
+}
+
 enum SidebarItem: Hashable {
     case allBooks
     case category(FacetType)
-    case remote(UUID)
+    case remote(UUID, RemoteSubsection)
     case device(UUID)
 }
 
 struct SidebarView: View {
     @Bindable var session: LibrarySession
 
-    /// The facet categories offered in the Library section, in order.
-    private let libraryCategories: [FacetType] = [.author, .series, .tag, .format]
+    /// The facet categories offered in the Library and remote sections, in order.
+    static let libraryCategories: [FacetType] = [.author, .series, .tag, .format]
 
     var body: some View {
         List(selection: Binding<SidebarItem?>(
@@ -24,7 +30,10 @@ struct SidebarView: View {
                 // pre-network peers: clicking it shows its books while home
                 // stays open underneath.
                 if session.isRemoteContext, let remote = session.remoteBrowser {
-                    return .remote(remote.id)
+                    if let category = remote.facetNavigation.category {
+                        return .remote(remote.id, .category(category))
+                    }
+                    return .remote(remote.id, .allBooks)
                 }
                 if let id = session.selectedDeviceID {
                     return .device(id)
@@ -43,8 +52,16 @@ struct SidebarView: View {
                     session.selectCategory(nil)
                 case let .category(category):
                     session.selectCategory(category)
-                case .remote:
+                case let .remote(id, subsection):
                     session.isRemoteContext = true
+                    if let remote = session.remoteBrowser, remote.id == id {
+                        switch subsection {
+                        case .allBooks:
+                            remote.facetNavigation.clear()
+                        case let .category(category):
+                            remote.facetNavigation.selectCategory(category)
+                        }
+                    }
                 case let .device(id):
                     session.selectDevice(id)
                 case nil:
@@ -55,7 +72,7 @@ struct SidebarView: View {
             Section("Library") {
                 Label("All Books", systemImage: "books.vertical")
                     .tag(SidebarItem.allBooks)
-                ForEach(libraryCategories, id: \.self) { category in
+                ForEach(SidebarView.libraryCategories, id: \.self) { category in
                     Label(category.displayName, systemImage: category.sidebarSymbol)
                         .tag(SidebarItem.category(category))
                 }
@@ -102,20 +119,32 @@ struct SidebarView: View {
                 // home stays open underneath, exactly like the pre-network
                 // peers.
                 if let browser = session.remoteBrowser {
-                    HStack(spacing: 6) {
-                        Label(browser.name, systemImage: "network")
-                        Spacer()
-                        PendingBadge(browser: browser)
-                        Button {
-                            session.disconnectRemote()
-                        } label: {
-                            Image(systemName: "eject.fill")
+                    // A disclosure group, like the pre-network peers: the
+                    // header selects the remote (All Books) and toggles the
+                    // facet subsections; eject disconnects but the server
+                    // stays listed (reconnectable) while it advertises.
+                    DisclosureGroup {
+                        Label("All Books", systemImage: "books.vertical")
+                            .tag(SidebarItem.remote(browser.id, .allBooks))
+                        ForEach(SidebarView.libraryCategories, id: \.self) { category in
+                            Label(category.displayName, systemImage: category.sidebarSymbol)
+                                .tag(SidebarItem.remote(browser.id, .category(category)))
                         }
-                        .buttonStyle(.borderless)
-                        .help("Disconnect from \(browser.name)")
+                    } label: {
+                        HStack(spacing: 6) {
+                            Label(browser.name, systemImage: "network")
+                            Spacer()
+                            PendingBadge(browser: browser)
+                            Button {
+                                session.disconnectRemote()
+                            } label: {
+                                Image(systemName: "eject.fill")
+                            }
+                            .buttonStyle(.borderless)
+                            .help("Disconnect from \(browser.name)")
+                        }
                     }
-                    .tag(SidebarItem.remote(browser.id))
-                    .contentShape(Rectangle())
+                    .tag(SidebarItem.remote(browser.id, .allBooks))
                 }
                 if libraries.isEmpty && session.remoteBrowser == nil {
                     Text(session.discovery.browseError == nil

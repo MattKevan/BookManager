@@ -60,7 +60,29 @@ final class RemoteLibraryBrowser: LibraryBrowser {
 
     // MARK: - LibraryBrowser
 
-    var books: [IndexedBook] { remoteBooks }
+    /// Search + facet filtering applied client-side over the pulled books
+    /// (the home library filters in SQL; the remote has only the pulled
+    /// snapshot, so the same UX is a local filter).
+    var books: [IndexedBook] {
+        if let facet = facetNavigation.activeFacet {
+            return remoteBooks.filter { book in
+                switch facet.type {
+                case .author: return book.authors.contains(facet.value)
+                case .series: return book.series == facet.value
+                case .tag: return book.tags.contains(facet.value)
+                case .format: return book.formats.contains { $0.kind.lowercased() == facet.value.lowercased() }
+                }
+            }
+        }
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !query.isEmpty else { return remoteBooks }
+        return remoteBooks.filter {
+            $0.title.lowercased().contains(query)
+                || $0.authors.contains { $0.lowercased().contains(query) }
+                || $0.tags.contains { $0.lowercased().contains(query) }
+                || ($0.series?.lowercased().contains(query) ?? false)
+        }
+    }
     var selectionBooks: [IndexedBook] { books.filter { selection.contains($0.id) } }
 
     var authors: [(value: String, count: Int)] { facetCounts(.author) }
