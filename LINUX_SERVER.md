@@ -60,8 +60,9 @@ from it. Run it once on the box that will serve the library:
 - Imports every book (title, authors, series, tags, ratings, publisher,
   identifiers, comments), all format files, and covers (fetched on demand
   from the Calibre database).
-- The target is created if missing; an existing target is imported into
-  (format-hash duplicates are skipped, never overwritten).
+- The target is created if missing (an empty pre-made folder is adopted
+  too); an existing library is imported into — format-hash duplicates are
+  skipped, never overwritten.
 - Progress goes to stderr; the final summary (imported / duplicates /
   failed / skipped) goes to stdout. Exit code 1 when any book failed.
 - Re-running resumes: books already imported are skipped (per-source
