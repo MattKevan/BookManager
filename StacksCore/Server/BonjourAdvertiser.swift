@@ -1,9 +1,15 @@
 import Foundation
+#if canImport(Network)
 import Network
 
 /// Advertises a library on the LAN via Bonjour (`_bookmanager._tcp`) with
 /// TXT records: display name, library id, protocol version, and the OPDS +
 /// sync API paths (mirrors Calibre's `path=/opds` TXT convention).
+///
+/// macOS-only: `Network` (Network.framework) is unavailable on Linux, where
+/// the headless server runs with `--no-bonjour` and clients reach it by
+/// host:port. The whole type is compiled out on Linux; `LibraryServer`
+/// guards its usage with the same `canImport(Network)` check.
 ///
 /// Uses `NetService` (macOS): it announces a port WITHOUT binding a socket,
 /// so it can sit alongside the Hummingbird listener on the same port. Linux
@@ -44,3 +50,4 @@ public final class BonjourAdvertiser: @unchecked Sendable {
         ]
     }
 }
+#endif

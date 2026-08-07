@@ -224,13 +224,17 @@ public actor LibraryServer {
         return Application(router: router, configuration: .init(address: .hostname("0.0.0.0", port: configuration.port)))
     }
 
+    #if canImport(Network)
     private var advertiser: BonjourAdvertiser?
+    #endif
     private var serviceGroup: ServiceGroup?
     private var runTask: Task<Void, Never>?
 
     /// Runs the server until shutdown — the CLI's `serve` path. Advertises
-    /// over Bonjour first when configured.
+    /// over Bonjour first when configured (macOS only — `Network` is
+    /// unavailable on Linux, where clients reach the server by host:port).
     public func run() async throws {
+        #if canImport(Network)
         if configuration.advertiseBonjour {
             let advertiser = BonjourAdvertiser(
                 displayName: displayName, libraryID: libraryID, port: configuration.port
@@ -238,9 +242,12 @@ public actor LibraryServer {
             advertiser.start()
             self.advertiser = advertiser
         }
+        #endif
         let app = try makeApplication()
         try await app.runService()
+        #if canImport(Network)
         advertiser?.stop()
+        #endif
     }
 
     /// Non-blocking start for in-process embedding (the macOS app's Sharing
@@ -264,8 +271,10 @@ public actor LibraryServer {
     public func stop() async {
         await serviceGroup?.triggerGracefulShutdown()
         runTask?.cancel()
+        #if canImport(Network)
         advertiser?.stop()
         advertiser = nil
+        #endif
         serviceGroup = nil
         runTask = nil
     }

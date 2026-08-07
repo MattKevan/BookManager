@@ -42,6 +42,9 @@ let package = Package(
                 "Devices",
                 "Vendored",
                 "Library/CoverThumbnailer.swift",
+                // macOS sandbox bookmarking (security-scoped URLs); the
+                // headless server opens libraries by path argument.
+                "Security",
             ]
         ),
         .executableTarget(
