@@ -84,7 +84,22 @@ struct ImportCalibre: AsyncParsableCommand {
             indexesDirectory = try serverIndexesDirectory(libraryPath: targetPath)
         }
         let root = URL(fileURLWithPath: targetPath)
-        if !FileManager.default.fileExists(atPath: root.path) {
+        let layout = LibraryLayout(root: root)
+        let manifestExists = FileManager.default.fileExists(atPath: layout.manifestURL.path)
+        if !manifestExists {
+            // Fresh target: create the library when the path is absent or an
+            // empty folder was pre-made (`mkdir` then import is a natural
+            // workflow). A non-empty folder that is not already a Stacks
+            // library is refused — never write a skeleton into user files.
+            let exists = FileManager.default.fileExists(atPath: root.path)
+            if exists {
+                let contents = (try? FileManager.default.contentsOfDirectory(atPath: root.path)) ?? []
+                guard contents.isEmpty else {
+                    throw ValidationError(
+                        "\(targetPath) is not an empty folder or a Stacks library."
+                    )
+                }
+            }
             _ = try await LibraryRepository.create(
                 at: root, indexesDirectory: indexesDirectory, deviceID: UUID()
             )
