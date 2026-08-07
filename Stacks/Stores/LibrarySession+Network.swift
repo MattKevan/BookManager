@@ -29,6 +29,35 @@ extension LibrarySession {
         }
     }
 
+    /// Manual host:port connection (the Shared section's "Connect to
+    /// Server…"): probes `/api/identity` to validate the server and adopt
+    /// its real name, then connects through the standard flow — stored
+    /// credentials, 401 → credential prompt, offline queue.
+    func connectManual(host: String, port: Int, username: String?, password: String?) async {
+        var discovered = DiscoveredLibrary(manualHost: host, port: port)
+        let credential = username.map { RemoteLibrary.Credential(username: $0, password: password ?? "") }
+        do {
+            let probe = try RemoteLibrary(configuration: .init(
+                baseURL: discovered.baseURL,
+                credential: credential,
+                queueDirectory: RemoteLibraryBrowser.queueDirectory(libraryID: discovered.id)
+            ))
+            let identity = try await probe.fetchIdentity()
+            discovered.name = identity.name
+        } catch let error as RemoteLibrary.RemoteError {
+            if case .serverError(401) = error {
+                // Passworded server: the connect flow prompts for credentials.
+            } else {
+                lastError = "Couldn't connect to \(host):\(port): \(error.localizedDescription)"
+                return
+            }
+        } catch {
+            lastError = "Couldn't connect to \(host):\(port): \(error.localizedDescription)"
+            return
+        }
+        await connect(to: discovered, credential: credential)
+    }
+
     /// Disconnects the remote and returns the browser context to the home
     /// library.
     func disconnectRemote() {

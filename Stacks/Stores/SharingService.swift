@@ -15,16 +15,16 @@ final class SharingService {
     private(set) var lastError: String?
     private var server: LibraryServer?
 
-    /// The port the server binds. Fixed at 8080 for v1 (the CLI default);
-    /// a picker is a follow-up.
-    private let port = 8080
-
     /// Starts sharing the given (home) library. Idempotent while already
     /// sharing. Serves the repository the app already has open: one journal,
     /// one writer — local edits flow into the served sync stream and client
     /// commands serialize through the same journal.
-    func start(library: LibraryConnection, advertiseBonjour: Bool, username: String?, password: String?) async {
+    /// The port the active server binds (set at start; drives the copy-URL).
+    private var port = 8080
+
+    func start(library: LibraryConnection, port: Int, advertiseBonjour: Bool, username: String?, password: String?) async {
         guard !isSharing else { return }
+        self.port = port
         let server = await LibraryServer(repository: library.coreRepository, configuration: .init(
             port: port,
             libraryPath: library.coreRepository.root.path,

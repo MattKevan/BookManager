@@ -46,6 +46,13 @@ struct SettingsView: View {
                         SecureField("Password", text: passwordBinding)
                             .textFieldStyle(.roundedBorder)
                     }
+                    LabeledContent("Port") {
+                        TextField("Port", value: $settings.sharePort, format: .number)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 80)
+                            .multilineTextAlignment(.trailing)
+                    }
+                    .help("The port the shared server binds (restart sharing to apply)")
                     if let sharing = librarySession?.sharing {
                         if sharing.isSharing {
                             LabeledContent("Address", value: sharing.addressString)
@@ -84,6 +91,7 @@ struct SettingsView: View {
                         let password = ShareCredentials.load()
                         await session.sharing.start(
                             library: home,
+                            port: settings.sharePort,
                             advertiseBonjour: settings.advertiseWithBonjour,
                             username: password == nil ? nil : settings.shareUsername,
                             password: password

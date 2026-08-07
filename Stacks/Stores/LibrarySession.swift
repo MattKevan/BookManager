@@ -125,6 +125,12 @@ final class LibrarySession {
         set { _credentialPrompt = newValue }
     }
     private var _credentialPrompt: DiscoveredLibrary?
+    /// Non-nil while the "Connect to Server…" sheet is presented.
+    var connectToServerPresented: Bool {
+        get { _connectToServerPresented }
+        set { _connectToServerPresented = newValue }
+    }
+    private var _connectToServerPresented = false
 
     /// The current browser surface: the remote when connected, else the
     /// active library. Grid/table/facet views are generic over it.

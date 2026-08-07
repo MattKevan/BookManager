@@ -147,10 +147,11 @@ curl -o book.epub http://<host>:8080/api/books/<id>/download?format=EPUB
 ### Connect from the macOS app
 
 The app's Shared sidebar discovers `_stacks._tcp` over mDNS — a Linux server
-with Avahi running shows up there like any Mac host. Manual host:port entry
-in the app is not wired yet; until it lands, a server without Avahi can be
-verified with `curl` (above) or connected to by other clients that take a
-URL. The protocol itself is identical on every platform.
+with Avahi running shows up there like any Mac host. For servers that can't
+advertise (no Avahi, other subnets, containers), use **Connect to Server…**
+at the bottom of the Shared section: type the host and port (optionally a
+username/password) and the app validates the server via `/api/identity` and
+connects. The protocol is identical on every platform.
 
 ## Update
 

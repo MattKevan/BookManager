@@ -1,17 +1,47 @@
+import CryptoKit
 import Foundation
 import Network
 import Observation
 
-/// One library discovered on the LAN via Bonjour (`_stacks._tcp`).
+/// One library discovered on the LAN via Bonjour (`_stacks._tcp`), or typed
+/// in manually as host:port.
 public struct DiscoveredLibrary: Identifiable, Equatable, Sendable {
-    /// The library's manifest id from the TXT record.
+    /// The library's manifest id (TXT record for Bonjour discovery). Manual
+    /// connections use a stable id derived from the host:port so credentials
+    /// and the offline queue survive reconnect.
     public let id: UUID
-    public let name: String
+    /// Display name. Manual connections start as the host and adopt the
+    /// server's real name once `/api/identity` answers.
+    public var name: String
     public let host: String
     public let port: Int
 
     public var baseURL: URL {
         URL(string: "http://\(host):\(port)")!
+    }
+
+    /// A manual host:port entry (no Bonjour TXT): id is the SHA-256 of the
+    /// address, stable across sessions.
+    public init(manualHost host: String, port: Int) {
+        let digest = SHA256.hash(data: Data("stacks://\(host):\(port)".utf8))
+        let bytes = Array(digest.prefix(16))
+        self.id = UUID(uuid: (
+            bytes[0], bytes[1], bytes[2], bytes[3],
+            bytes[4], bytes[5], bytes[6], bytes[7],
+            bytes[8], bytes[9], bytes[10], bytes[11],
+            bytes[12], bytes[13], bytes[14], bytes[15]
+        ))
+        self.name = host
+        self.host = host
+        self.port = port
+    }
+
+    /// Bonjour-discovered values (TXT record carries the manifest id + name).
+    public init(id: UUID, name: String, host: String, port: Int) {
+        self.id = id
+        self.name = name
+        self.host = host
+        self.port = port
     }
 }
 

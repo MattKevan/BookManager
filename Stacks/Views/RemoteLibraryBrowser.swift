@@ -12,7 +12,7 @@ import StacksCore
 @Observable
 final class RemoteLibraryBrowser: LibraryBrowser {
     let id: UUID
-    let name: String
+    var name: String
     let remote: RemoteLibrary
 
     var repository: LibraryRepository? { nil }
@@ -51,7 +51,7 @@ final class RemoteLibraryBrowser: LibraryBrowser {
     }
 
     /// The durable offline-queue location for this remote library.
-    private static func queueDirectory(libraryID: UUID) -> URL {
+    static func queueDirectory(libraryID: UUID) -> URL {
         URL.applicationSupportDirectory
             .appending(path: "Stacks", directoryHint: .isDirectory)
             .appending(path: "remote-queues", directoryHint: .isDirectory)

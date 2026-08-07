@@ -36,11 +36,14 @@ final class AppSettings {
     static let requireSharePasswordKey = "requireSharePassword"
     static let requireSharePasswordDefault = false
     static let shareUsernameKey = "shareUsername"
+    static let sharePortKey = "sharePort"
+    static let sharePortDefault = 8080
 
     private var _shareLibraryOverNetwork: Bool
     private var _advertiseWithBonjour: Bool
     private var _requireSharePassword: Bool
     private var _shareUsername: String
+    private var _sharePort: Int
 
     /// Share the open library over the LAN (the Settings → Sharing toggle).
     /// The server lifecycle is owned by `LibrarySession.sharing`; this is the
@@ -81,6 +84,16 @@ final class AppSettings {
         }
     }
 
+    /// The port the shared server binds (8080 default; change it when
+    /// another service already holds 8080).
+    var sharePort: Int {
+        get { _sharePort }
+        set {
+            _sharePort = newValue
+            UserDefaults.standard.set(newValue, forKey: Self.sharePortKey)
+        }
+    }
+
     init(defaults: UserDefaults = .standard) {
         _automaticallyFetchMissingMetadata = defaults.object(forKey: Self.automaticallyFetchMissingMetadataKey) as? Bool
             ?? Self.automaticallyFetchMissingMetadataDefault
@@ -91,5 +104,7 @@ final class AppSettings {
         _requireSharePassword = defaults.object(forKey: Self.requireSharePasswordKey) as? Bool
             ?? Self.requireSharePasswordDefault
         _shareUsername = defaults.string(forKey: Self.shareUsernameKey) ?? ""
+        _sharePort = defaults.object(forKey: Self.sharePortKey) as? Int
+            ?? Self.sharePortDefault
     }
 }
