@@ -9,6 +9,13 @@ public struct JournalCommand: Sendable, Codable, Equatable {
     public let ts: Date
     public let op: Op
 
+    public init(id: UUID, seq: Int64, ts: Date, op: Op) {
+        self.id = id
+        self.seq = seq
+        self.ts = ts
+        self.op = op
+    }
+
     public enum Op: Sendable, Codable, Equatable {
         case addBook(AddBook)
         case updateBook(UpdateBook)

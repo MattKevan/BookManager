@@ -10,9 +10,6 @@ configs:
   Release: release
 
 packages:
-  Automerge:
-    url: https://github.com/automerge/automerge-swift.git
-    exactVersion: 0.7.2
   GRDB:
     url: https://github.com/groue/GRDB.swift.git
     exactVersion: 7.11.1
@@ -22,6 +19,12 @@ packages:
   libmobi-swift:
     url: https://github.com/awxkee/libmobi-swift.git
     exactVersion: 1.0.2
+  Hummingbird:
+    url: https://github.com/hummingbird-project/hummingbird.git
+    exactVersion: 2.26.0
+  swift-argument-parser:
+    url: https://github.com/apple/swift-argument-parser.git
+    exactVersion: 1.8.2
 
 settings:
   base:
@@ -40,11 +43,11 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.mattkevan.StacksCore
         GENERATE_INFOPLIST_FILE: YES
     dependencies:
-      - package: Automerge
       - package: GRDB
       - package: ZIPFoundation
       - package: libmobi-swift
         product: libmobi
+      - package: Hummingbird
 
   Stacks:
     type: application
@@ -85,6 +88,7 @@ targets:
       - package: ZIPFoundation
       - package: libmobi-swift
         product: libmobi
+      - package: Hummingbird
 
   StacksTests:
     type: bundle.unit-test
