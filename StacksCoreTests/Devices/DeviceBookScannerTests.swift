@@ -129,6 +129,23 @@ struct DeviceBookScannerTests {
     }
 
     @Test
+    func enrichRethrowsDownloadFailures() async throws {
+        let transport = MockTransport()
+        let scanner = DeviceBookScanner(transport: transport)
+        // No such file on the device: the download fails. That is a transport
+        // failure, not an absence of metadata — enrich must throw so the
+        // caller surfaces the error and keeps the record retryable, instead of
+        // marking it enriched with filename-title metadata.
+        let record = DeviceBookRecord(
+            file: DeviceFile(name: "Missing.mobi", path: "Documents/Missing.mobi", size: 0),
+            title: "Missing", authors: [], format: "MOBI", isDRM: false
+        )
+        await #expect(throws: DeviceTransportError.self) {
+            _ = try await scanner.enrich(record)
+        }
+    }
+
+    @Test
     func applyCacheFillsMetadataWithoutDownloads() async throws {
         let transport = MockTransport()
         await transport.add(fileNamed: "Alpha - One.mobi", data: Data("x".utf8))

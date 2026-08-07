@@ -86,7 +86,9 @@ public struct DeviceBookScanner: Sendable {
     /// Downloads the record's file and parses it for real title/authors/DRM.
     /// Never throws on an unreadable or malformed file — it degrades to the
     /// filename-only record marked enriched, so the UI stops offering to
-    /// retry. A failed download degrades the same way.
+    /// retry. A failed DOWNLOAD (device removed, stale session) throws: that
+    /// is a transport failure, not an absence of metadata — the caller
+    /// surfaces it and keeps the record un-enriched so a reconnect can retry.
     public func enrich(_ record: DeviceBookRecord) async throws -> DeviceBookRecord {
         let ext = URL(fileURLWithPath: record.file.name).pathExtension.lowercased()
         guard Self.bookExtensions.contains(ext) else {
@@ -102,12 +104,7 @@ public struct DeviceBookScanner: Sendable {
         defer { try? FileManager.default.removeItem(at: scratch) }
 
         let localURL = scratch.appending(path: record.file.name)
-        guard (try? await transport.download(record.file, to: localURL)) != nil else {
-            return DeviceBookRecord(
-                file: record.file, title: record.title, authors: [],
-                format: record.format, isDRM: false, isEnriched: true
-            )
-        }
+        try await transport.download(record.file, to: localURL)
 
         switch ext {
         case "mobi", "azw", "azw3":

@@ -213,7 +213,14 @@ final class DeviceManager {
             ))
         }
         guard !updates.isEmpty else { return }
-        let base = metadataCache ?? CalibreCache(jsonData: Data("[]".utf8))
+        // Only extend a cache this session actually READ. When the browse-time
+        // download failed (or never ran) `metadataCache` is nil — seeding an
+        // empty cache here and uploading it would REPLACE the device's real
+        // metadata.calibre, losing Calibre's metadata for every other book on
+        // the device. A device with no cache gets no seed (Calibre still reads
+        // sent books directly); the cache appears after its first successful
+        // browse download.
+        guard let base = metadataCache else { return }
         let data = base.mergedData(updating: updates, adding: [])
         let scratch = cacheScratchURL(for: device)
         try? FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
@@ -476,14 +483,16 @@ final class DeviceManager {
         defer { isEnriching = false }
         let current = deviceBooks[index]
         let result: DeviceBookRecord
-        if let enriched = try? await DeviceBookScanner(transport: device.transport)
-            .enrich(current) {
-            result = enriched
-        } else {
-            result = DeviceBookRecord(
-                file: current.file, title: current.title, authors: [],
-                format: current.format, isDRM: false, isEnriched: true
-            )
+        do {
+            result = try await DeviceBookScanner(transport: device.transport).enrich(current)
+        } catch {
+            // Transport failure (device removed, stale session — the reconnect
+            // story this screen already has): surface it and keep the record
+            // UN-enriched. Degrading to a fake enriched record here would
+            // poison the row with filename-title metadata and stop the UI
+            // offering a retry until the next full refresh.
+            deviceError = "Couldn't read book details: \(error.localizedDescription)"
+            return
         }
         // Re-check by id: the listing may have been replaced or the row
         // enriched by another call while the download ran.
@@ -514,6 +523,9 @@ final class DeviceManager {
                 .appending(path: UUID().uuidString, directoryHint: .isDirectory)
             do {
                 try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+                // Every failure path (download error, cancelled op) leaves the
+                // partial downloads behind — sweep the temp dir on exit.
+                defer { try? FileManager.default.removeItem(at: directory) }
                 var urls: [URL] = []
                 for (index, file) in files.enumerated() {
                     self.currentActivity?.detail = "Book \(index + 1) of \(files.count)"

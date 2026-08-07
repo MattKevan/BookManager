@@ -172,10 +172,25 @@ public final class MTPTransport: MTPDeviceTransport, @unchecked Sendable {
             let part = needs64
                 ? try await session.getPartialObject64(handle, offset: UInt64(offset), count: want)
                 : try await session.getPartialObject(handle, offset: UInt32(offset), count: want)
-            if part.isEmpty { break }
+            if part.isEmpty {
+                // A short data phase mid-transfer (stalled device, dropped
+                // session): a truncated file must NOT look like a successful
+                // download — it would flow into the import pipeline as a
+                // corrupt book.
+                throw TransportError.operationFailed(
+                    "Download truncated: got \(offset) of \(total) bytes"
+                )
+            }
             try fileHandle.write(contentsOf: part)
             offset += Int64(part.count)
             progress(TransferProgress(fileName: info.filename, completedBytes: offset, totalBytes: total))
+        }
+        // Belt-and-braces: the loop exits only via offset >= total, but a
+        // zero-byte part on the final chunk would otherwise return early.
+        guard offset == total else {
+            throw TransportError.operationFailed(
+                "Download incomplete: got \(offset) of \(total) bytes"
+            )
         }
     }
 

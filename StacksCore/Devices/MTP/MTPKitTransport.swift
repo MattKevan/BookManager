@@ -112,7 +112,25 @@ public actor MTPKitTransport: DeviceTransport {
             guard let (storage, dir) = try await folderInfo(folder, on: device) else {
                 throw MTPTransportError.folderNotFound(folder.path)
             }
-            try await device.upload(localURL: source, as: filename, toParent: dir.id, in: storage.id) { _ in }
+            // Snapshot same-named objects BEFORE the upload: a failed upload
+            // must remove only the partial object it created (MTP announces
+            // the object before streaming, so a failure leaves zero/partial
+            // bytes at the announced handle). MTP allows duplicate names — a
+            // retry would otherwise accumulate junk files that the device
+            // listing (and Calibre) shows as books.
+            let existing = (try? await device.listChildren(of: dir.id, in: storage.id)) ?? []
+            let preexistingIDs = Set(existing.filter { !$0.isDirectory && $0.name == filename }.map(\.id))
+            do {
+                try await device.upload(localURL: source, as: filename, toParent: dir.id, in: storage.id) { _ in }
+            } catch {
+                if let after = try? await device.listChildren(of: dir.id, in: storage.id) {
+                    for node in after where !node.isDirectory && node.name == filename
+                        && !preexistingIDs.contains(node.id) {
+                        try? await device.delete(node.id)
+                    }
+                }
+                throw error
+            }
         } catch let error as MTPTransportError {
             throw error
         } catch {
@@ -139,12 +157,13 @@ public actor MTPKitTransport: DeviceTransport {
         guard let device else { throw MTPTransportError.notConnected }
         do {
             let name = (path as NSString).lastPathComponent
-            // MTP has no overwrite-by-name (objects are id-keyed), so replace:
-            // delete the existing root file (on whatever storage holds it),
-            // then upload fresh at that storage's root.
+            // MTP has no overwrite-by-name (objects are id-keyed), so replace
+            // by uploading the new object alongside the old one FIRST, then
+            // deleting the old: the previous object survives a failed upload
+            // (a delete-then-upload failure would leave no cache at all).
             if let (storage, existing) = try await rootFileInfo(name, on: device) {
-                try await device.delete(existing.id)
                 try await device.upload(localURL: source, as: name, toParent: nil, in: storage.id) { _ in }
+                try await device.delete(existing.id)
                 return
             }
             guard let storage = try? await device.storages().first else {
