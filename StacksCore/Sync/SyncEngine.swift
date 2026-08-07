@@ -88,8 +88,8 @@ public actor SyncEngine {
             // `<clock>-<SHA256(content)>.amchange`). Quarantine those. A valid
             // change waiting on a not-yet-synced dependency stays in the store
             // and applies on a later ingest — quarantining it would lose the edit.
-            for url in pending where Self.hasCorruptDigest(url) {
-                report.quarantined.append(try quarantine(url))
+            for url in pending where ChangeStore.hasCorruptDigest(url) {
+                report.quarantined.append(try await store.quarantine(url))
             }
 
             // Upsert the merged state only when something applied; a book with
@@ -137,14 +137,42 @@ public actor SyncEngine {
             try FileManager.default.createDirectory(
                 at: destination.deletingLastPathComponent(), withIntermediateDirectories: true
             )
-            if !FileManager.default.fileExists(atPath: destination.path) {
-                try FileManager.default.moveItem(at: url, to: destination)
+            if FileManager.default.fileExists(atPath: destination.path) {
+                // A destination with this exact clock+digest name must hold this
+                // content. A partial file can land here when a cross-volume
+                // moveItem (copy-then-delete) crashed between the copy and the
+                // delete — treating it as "already drained" and dropping the
+                // outbox copy would let ingest quarantine the partial and lose
+                // the edit forever. Keep the outbox copy; the next pass retries
+                // after ingest quarantines the partial.
+                guard Self.contentsMatch(url, destination) else { continue }
+                try state.outbox.remove(url)
             } else {
+                // Copy to a temp sibling and rename so the digest-named path only
+                // ever holds complete content: on a different volume, moveItem is
+                // copy-then-delete and a crash can leave a partial file AT the
+                // digest-named path, which the exists-branch above can then not
+                // distinguish from a real drain.
+                let temp = destination
+                    .deletingLastPathComponent()
+                    .appending(path: ".tmp-\(destination.lastPathComponent)")
+                try? FileManager.default.removeItem(at: temp)
+                try FileManager.default.copyItem(at: url, to: temp)
+                try FileManager.default.moveItem(at: temp, to: destination)
                 try state.outbox.remove(url)
             }
             moved += 1
         }
         return moved
+    }
+
+    /// True when two files hold identical bytes.
+    private static func contentsMatch(_ a: URL, _ b: URL) -> Bool {
+        guard let dataA = try? Data(contentsOf: a),
+              let dataB = try? Data(contentsOf: b) else {
+            return false
+        }
+        return dataA == dataB
     }
 
     /// Clears the applied-fingerprint record and re-ingests everything (the
@@ -155,30 +183,6 @@ public actor SyncEngine {
     }
 
     // MARK: - Helpers
-
-    /// Moves a corrupt change file out of the change store into quarantine.
-    private func quarantine(_ url: URL) throws -> URL {
-        let dir = layout.quarantineRoot
-            .appending(path: Date().timeIntervalSince1970.description, directoryHint: .isDirectory)
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let destination = dir.appending(path: "\(UUID().uuidString)-\(url.lastPathComponent)")
-        try FileManager.default.moveItem(at: url, to: destination)
-        return destination
-    }
-
-    /// True when a change file's name digest (which the change store derives
-    /// from the file's content) does not match the content — i.e. the file was
-    /// never written by the change store.
-    private static func hasCorruptDigest(_ url: URL) -> Bool {
-        guard let data = try? Data(contentsOf: url) else { return false }
-        let expected = sha256Hex(data)
-        let name = url.lastPathComponent
-        guard name.hasSuffix(".amchange") else { return false }
-        let base = name.dropLast(".amchange".count)
-        guard let dash = base.lastIndex(of: "-") else { return false }
-        let digest = base[dash...].dropFirst()
-        return digest != expected
-    }
 
     private static func fingerprint(_ change: Data) -> String {
         String(sha256Hex(change).prefix(32))

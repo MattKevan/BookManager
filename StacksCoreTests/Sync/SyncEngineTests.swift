@@ -97,6 +97,46 @@ struct SyncEngineTests {
     }
 
     @Test
+    func drainKeepsOutboxCopyWhenDestinationIsPartial() async throws {
+        let h = try Harness()
+        let deviceID = h.deviceID
+        let bookID = UUID()
+        let document = try AutomergeBookDocument.new(bookID: bookID, deviceID: deviceID)
+        var clock = HybridLogicalClock(nodeID: deviceID)
+        let change = try document.setTitle("Offline Title", clock: clock.tick())
+        _ = try h.state.outbox.stage(change: change, bookID: bookID, deviceID: deviceID, clock: clock)
+
+        // A crash between the copy and the delete of a cross-volume moveItem
+        // leaves a PARTIAL file at the digest-named destination. Draining must
+        // not treat that as "already delivered" — dropping the outbox copy
+        // would let ingest quarantine the partial and lose the edit forever.
+        let source = try #require(try h.state.outbox.pendingFiles().first)
+        let base = h.state.outbox.outboxRoot.resolvingSymlinksInPath().pathComponents
+        let parts = source.resolvingSymlinksInPath().pathComponents
+        let relative = parts[base.count...].joined(separator: "/")
+        let destination = h.layout.bookChangesRoot.appending(path: relative)
+        try FileManager.default.createDirectory(
+            at: destination.deletingLastPathComponent(), withIntermediateDirectories: true
+        )
+        try Data("partial".utf8).write(to: destination, options: .atomic)
+
+        let engine = try h.engine()
+        let moved = try await engine.drainOutbox()
+        #expect(moved == 0)
+        #expect(try h.state.outbox.pendingCount() == 1)
+
+        // Once the partial is quarantined by a later ingest (file gone), the
+        // outbox copy drains normally and the edit survives.
+        try FileManager.default.removeItem(at: destination)
+        let second = try await engine.drainOutbox()
+        #expect(second == 1)
+        #expect(try h.state.outbox.pendingCount() == 0)
+        let report = try await engine.ingest()
+        #expect(report.appliedChangeCount == 1)
+        #expect(try await h.catalog.allBooks().first?.title == "Offline Title")
+    }
+
+    @Test
     func fullRescanReingestsEverything() async throws {
         let h = try Harness()
         let deviceID = UUID()

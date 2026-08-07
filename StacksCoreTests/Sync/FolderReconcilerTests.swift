@@ -34,11 +34,15 @@ struct FolderReconcilerTests {
         /// repository owns a separate index). A format file is essential —
         /// hash-based folder discovery requires it.
         func createBook(title: String) async throws -> IndexedBook {
+            try await createBook(title: title, content: "test epub content \(UUID().uuidString)")
+        }
+
+        func createBook(title: String, content: String) async throws -> IndexedBook {
             let tempDir = FileManager.default.temporaryDirectory
                 .appending(path: UUID().uuidString, directoryHint: .isDirectory)
             try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
             let fileURL = tempDir.appending(path: "book.epub")
-            try Data("test epub content \(UUID().uuidString)".utf8).write(to: fileURL)
+            try Data(content.utf8).write(to: fileURL)
             let staged = try await repository.stageFile(from: fileURL)
             let book = try await repository.createBook(
                 metadata: NewBookMetadata(title: title, authors: ["Alice"]),
@@ -304,5 +308,65 @@ struct FolderReconcilerTests {
             atPath: h.layout.trashRoot
                 .appending(path: bookID.uuidString, directoryHint: .isDirectory).path
         ))
+    }
+
+    @Test
+    func duplicateContentBooksNeverAdoptEachOthersFolders() async throws {
+        let h = try await Harness()
+        // Two books with identical title, authors AND file content: branch-3
+        // discovery must not adopt one book's canonical folder for the other —
+        // that would rename it back and forth every pass (one book always
+        // "missing", two Macs fighting each other).
+        let content = "identical bytes"
+        let bookA = try await h.createBook(title: "Duplicate", content: content)
+        let bookB = try await h.createBook(title: "Duplicate", content: content)
+        let folderB = h.folderURL(bookB.relativePath)
+        #expect(FileManager.default.fileExists(atPath: folderB.path))
+
+        // Book A's folder goes missing (e.g. manual move that lost the id
+        // marker) — the only way A can be found is content hashing.
+        try FileManager.default.removeItem(at: h.folderURL(bookA.relativePath))
+
+        let report = try await h.reconciler().reconcile()
+
+        #expect(report.missingFolders.contains(bookA.id))
+        #expect(report.renamed.isEmpty)
+        #expect(report.conflictCopies.isEmpty)
+        // B's folder is untouched and still holds B's content.
+        #expect(FileManager.default.fileExists(atPath: folderB.path))
+
+        // Stable across passes: no oscillation, B never goes missing either.
+        let second = try await h.reconciler().reconcile()
+        #expect(second.renamed.isEmpty)
+        #expect(second.missingFolders.contains(bookA.id))
+        #expect(!second.missingFolders.contains(bookB.id))
+        #expect(FileManager.default.fileExists(atPath: folderB.path))
+    }
+
+    @Test
+    func sameSizeContentDriftIsDetectedNotMaskedBySizeCheck() async throws {
+        let h = try await Harness()
+        let book = try await h.createBook(title: "Drift")
+        let folderURL = h.folderURL(book.relativePath)
+        let format = try #require(book.formats.first)
+        let fileURL = folderURL.appending(path: format.filename)
+
+        // Replace the file with SAME-SIZE different bytes. The size
+        // short-circuit must not accept it: the mtime-aware cache re-hashes
+        // and the mismatch is surfaced (the folder is left in place, never
+        // deleted or adopted).
+        let original = try Data(contentsOf: fileURL)
+        var modified = Data(original)
+        modified[0] ^= 0xFF
+        try modified.write(to: fileURL, options: .atomic)
+
+        let report = try await h.reconciler().reconcile()
+
+        #expect(report.missingFolders.contains(book.id))
+        #expect(report.conflictCopies.isEmpty)
+        #expect(FileManager.default.fileExists(atPath: fileURL.path))
+        // A second pass with unchanged content reports the same, no churn.
+        let second = try await h.reconciler().reconcile()
+        #expect(second.missingFolders.contains(book.id))
     }
 }

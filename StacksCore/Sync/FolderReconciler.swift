@@ -27,6 +27,11 @@ public actor FolderReconciler {
     private let folder: BookFolder
     private let deviceID: UUID
 
+    /// Per-pass content-hash cache keyed by (path, size, mtime): reconcile
+    /// re-hashes only files that changed since they were last hashed this
+    /// pass. Cleared at the top of `reconcile()`.
+    private var hashCache: [String: (size: Int64, mtime: Date?, hash: String)] = [:]
+
     public init(layout: LibraryLayout, catalog: LocalCatalog, deviceID: UUID) {
         self.layout = layout
         self.catalog = catalog
@@ -41,11 +46,18 @@ public actor FolderReconciler {
         // O(dirs) scans — O(N × dirs) → O(N + dirs).
         let index = await buildFolderIndex()
         let books = try await catalog.allBooks()
+        // Every book's short-id prefix, including deleted books' (their
+        // folders exist until trashed and must never be adopted by another
+        // book's content-hash discovery).
+        let deleted = try await catalog.deletedBooks()
+        let bookPrefixes = Set((books + deleted).map {
+            String($0.id.uuidString.prefix(8)).lowercased()
+        })
+        hashCache = [:]
         for book in books {
-            await reconcilePath(book, into: &report, index: index)
+            await reconcilePath(book, into: &report, index: index, bookPrefixes: bookPrefixes)
             await reconcileTrash(book, into: &report)
         }
-        let deleted = try await catalog.deletedBooks()
         for book in deleted {
             await reconcileTrash(book, into: &report)
         }
@@ -54,7 +66,12 @@ public actor FolderReconciler {
 
     // MARK: - Path reconciliation
 
-    private func reconcilePath(_ book: IndexedBook, into report: inout ReconciliationReport, index: FolderIndex) async {
+    private func reconcilePath(
+        _ book: IndexedBook,
+        into report: inout ReconciliationReport,
+        index: FolderIndex,
+        bookPrefixes: Set<String>
+    ) async {
         // A book with no materialized folder (empty relativePath) must never
         // resolve to the library root — with empty formats `folderMatches` is
         // vacuously true and the root would be renamed or forked as if it were
@@ -96,7 +113,9 @@ public actor FolderReconciler {
             return
         }
 
-        guard let actualURL = await actualFolderURL(for: book, excluding: canonicalURL, index: index) else {
+        guard let actualURL = await actualFolderURL(
+            for: book, excluding: canonicalURL, index: index, bookPrefixes: bookPrefixes
+        ) else {
             report.missingFolders.append(book.id)
             return
         }
@@ -120,7 +139,12 @@ public actor FolderReconciler {
     /// Locates the folder that actually holds the book's files, never the
     /// canonical folder itself (it is handled separately). The per-pass
     /// `index` makes discovery a lookup, not a per-book root enumeration.
-    private func actualFolderURL(for book: IndexedBook, excluding excluded: URL, index: FolderIndex) async -> URL? {
+    private func actualFolderURL(
+        for book: IndexedBook,
+        excluding excluded: URL,
+        index: FolderIndex,
+        bookPrefixes: Set<String>
+    ) async -> URL? {
         let canonical = CanonicalPathBuilder.relativeDirectory(
             bookID: book.id, title: book.title, authors: book.authors
         )
@@ -138,19 +162,34 @@ public actor FolderReconciler {
         // 2. Short-ID index lookup (canonical folder names embed the id
         // prefix). Never discover or re-fork our own conflict copies — they
         // embed the same prefix and would be forked again on the next pass if
-        // the content-mismatch branch fires (unbounded folder growth).
+        // the content-mismatch branch fires (unbounded folder growth). A name
+        // match alone is not enough: an unrelated folder whose name happens to
+        // contain an 8-hex run equal to this book's prefix (e.g. an ISBN-ish
+        // title) must not be adopted — require the content to match, or the
+        // caller would fork that unrelated folder as an "imposter".
         let shortID = String(book.id.uuidString.prefix(8)).lowercased()
         for url in index.byPrefix[shortID] ?? [] where !isExcluded(url) {
             if url.lastPathComponent.localizedCaseInsensitiveContains(" (conflict ")
                 { continue }
-            if url.lastPathComponent.localizedCaseInsensitiveContains(shortID) {
+            if url.lastPathComponent.localizedCaseInsensitiveContains(shortID),
+               await folderMatches(book, at: url) {
                 return url
             }
         }
         // 3. Content-hash scan (a manual move loses the id marker). Books with
-        // no formats match vacuously — skip hash discovery for them.
+        // no formats match vacuously — skip hash discovery for them. Never
+        // adopt a folder that embeds ANY other book's short-id prefix: two
+        // books with identical titles/authors/content cross-match, and each
+        // would rename the other's canonical folder into place every pass
+        // (the folders oscillate and one book is always "missing").
         guard !book.formats.isEmpty else { return nil }
+        let otherPrefixes = bookPrefixes.subtracting([shortID])
         for url in index.all where !isExcluded(url) {
+            let path = url.resolvingSymlinksInPath().path
+            if let embedded = index.prefixesByPath[path],
+               !embedded.isDisjoint(with: otherPrefixes) {
+                continue
+            }
             if await folderMatches(book, at: url) {
                 return url
             }
@@ -198,12 +237,29 @@ public actor FolderReconciler {
     }
 
     /// Whether every format file the catalog expects exists at `url` with the
-    /// expected content hash.
+    /// expected content hash. Cheap-first: a size mismatch rejects without
+    /// reading bytes, and unchanged files (same size + mtime as the last hash
+    /// this pass) reuse the cached hash — the steady-state pass does stat
+    /// calls, not full-file reads and SHA-256s.
     private func folderMatches(_ book: IndexedBook, at url: URL) async -> Bool {
         for format in book.formats {
             let fileURL = url.appending(path: format.filename)
+            guard let values = try? fileURL.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey]),
+                  let size = values.fileSize else {
+                return false
+            }
+            if Int64(size) != format.size { return false }
+            let mtime = values.contentModificationDate
+            let key = fileURL.resolvingSymlinksInPath().path
+            if let cached = hashCache[key],
+               cached.size == Int64(size), cached.mtime == mtime {
+                if cached.hash != format.contentHash { return false }
+                continue
+            }
             guard let data = try? Data(contentsOf: fileURL) else { return false }
-            if BookFolder.contentHash(data) != format.contentHash { return false }
+            let hash = BookFolder.contentHash(data)
+            hashCache[key] = (Int64(size), mtime, hash)
+            if hash != format.contentHash { return false }
         }
         return true
     }
@@ -269,6 +325,10 @@ public actor FolderReconciler {
     private struct FolderIndex {
         let all: [URL]
         let byPrefix: [String: [URL]]
+        /// The prefixes each folder NAME embeds, keyed by symlink-resolved
+        /// path — lets content-hash discovery skip folders that belong to
+        /// other books without re-scanning every folder name per book.
+        let prefixesByPath: [String: Set<String>]
     }
 
     /// Enumerates the library root ONCE (`.skipsHiddenFiles` keeps the
@@ -278,6 +338,7 @@ public actor FolderReconciler {
         let manager = FileManager.default
         var all: [URL] = []
         var byPrefix: [String: [URL]] = [:]
+        var prefixesByPath: [String: Set<String>] = [:]
         let enumerator = manager.enumerator(
             at: layout.root,
             includingPropertiesForKeys: [.isDirectoryKey],
@@ -290,11 +351,13 @@ public actor FolderReconciler {
                 continue
             }
             all.append(url)
-            for prefix in Self.hexPrefixes(in: url.lastPathComponent) {
+            let prefixes = Self.hexPrefixes(in: url.lastPathComponent)
+            prefixesByPath[url.resolvingSymlinksInPath().path] = prefixes
+            for prefix in prefixes {
                 byPrefix[prefix, default: []].append(url)
             }
         }
-        return FolderIndex(all: all, byPrefix: byPrefix)
+        return FolderIndex(all: all, byPrefix: byPrefix, prefixesByPath: prefixesByPath)
     }
 
     /// Every lowercased 8-char window of every maximal hex-character run in a
