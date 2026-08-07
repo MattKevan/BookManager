@@ -148,6 +148,9 @@ struct ContentView: View {
                 })
             }
         }
+        .sheet(item: credentialPromptBinding) { library in
+            CredentialPromptView(library: library, session: session)
+        }
         .sheet(isPresented: $showCalibreImport) {
             CalibreImportView(session: session)
         }
@@ -670,6 +673,62 @@ extension ContentView {
             get: { session.metadataEditQueue != nil },
             set: { if !$0 { session.metadataEditQueue = nil } }
         )
+    }
+
+    /// Item-based binding for the credential prompt sheet (`DiscoveredLibrary`
+    /// is Identifiable); nil dismisses it.
+    private var credentialPromptBinding: Binding<DiscoveredLibrary?> {
+        Binding(
+            get: { session.credentialPrompt },
+            set: { session.credentialPrompt = $0 }
+        )
+    }
+}
+
+/// Username/password sheet shown when a discovered library demands basic
+/// auth. Credentials go to the Keychain (per library) so reconnects are
+/// prompt-free.
+private struct CredentialPromptView: View {
+    let library: DiscoveredLibrary
+    @Bindable var session: LibrarySession
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var username = ""
+    @State private var password = ""
+    @State private var connecting = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(library.name)
+                .font(.headline)
+            Text("This library requires a username and password.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            TextField("Username", text: $username)
+                .textFieldStyle(.roundedBorder)
+            SecureField("Password", text: $password)
+                .textFieldStyle(.roundedBorder)
+            HStack {
+                Spacer()
+                Button("Cancel") {
+                    dismiss()
+                }
+                .keyboardShortcut(.cancelAction)
+                Button("Connect") {
+                    connecting = true
+                    let credential = RemoteLibrary.Credential(username: username, password: password)
+                    RemoteCredentials.save(username: username, password: password, for: library.id)
+                    Task {
+                        await session.connect(to: library, credential: credential)
+                        dismiss()
+                    }
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(username.isEmpty || connecting)
+            }
+        }
+        .padding(20)
+        .frame(width: 360)
     }
 }
 

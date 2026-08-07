@@ -119,12 +119,19 @@ final class LibrarySession {
         set { _remoteBrowser = newValue }
     }
     private var _remoteBrowser: RemoteLibraryBrowser?
+    /// The library awaiting credentials: non-nil while the credential prompt
+    /// sheet is presented (ContentView binds `.sheet(item:)` to it).
+    var credentialPrompt: DiscoveredLibrary? {
+        get { _credentialPrompt }
+        set { _credentialPrompt = newValue }
+    }
+    private var _credentialPrompt: DiscoveredLibrary?
 
     /// The current browser surface: the remote when connected, else the
     /// active library. Grid/table/facet views are generic over it.
     var browser: LibraryBrowser? { remoteBrowser ?? activeLibrary }
 
-    // Hub state: the home library, open peers, and the browser-context
+    // The open library (single-library model) and the browser-context
     // selection. Stored here (not in the `+Connection` extension) because
     // Swift extensions cannot hold stored properties.
     var home: LibraryConnection? {
@@ -140,10 +147,8 @@ final class LibrarySession {
         }
     }
     private var _home: LibraryConnection?
-    var peers: [LibraryConnection] = []
-
-    /// Libraries from the persisted open set that failed to reopen (offline
-    /// NAS, missing volume, unresolvable bookmark). Populated by
+    /// The library from the persisted open set that failed to reopen
+    /// (offline NAS, missing volume, unresolvable bookmark). Populated by
     /// `reopenLibraries`; Retry/Remove act on them directly.
     var offlinePeers: [OfflineLibrary] = []
 
@@ -453,14 +458,13 @@ final class LibrarySession {
     var missingFiles: [(book: IndexedBook, filename: String)] { connection?.missingFiles ?? [] }
     var facetNavigation: FacetNavigation { connection?.facetNavigation ?? FacetNavigation() }
     var selection: Set<UUID> {
-        get { connection?.selection ?? [] }
-        set { connection?.selection = newValue }
+        get { browser?.selection ?? [] }
+        set { browser?.selection = newValue }
     }
-    var selectionAnchor: UUID? { connection?.selectionAnchor }
-    var selectionBooks: [IndexedBook] { connection?.selectionBooks ?? [] }
+    var selectionBooks: [IndexedBook] { browser?.selectionBooks ?? [] }
     var searchText: String {
-        get { connection?.searchText ?? "" }
-        set { connection?.searchText = newValue }
+        get { browser?.searchText ?? "" }
+        set { browser?.searchText = newValue }
     }
     // Status shims for the pre-network UI. The single-writer model removes
     // shared-FS availability/sync state; the network slice re-adds live
@@ -476,8 +480,8 @@ final class LibrarySession {
         set { connection?.isMarqueeSelecting = newValue }
     }
     var metadataEditQueue: [IndexedBook]? {
-        get { connection?.metadataEditQueue }
-        set { connection?.metadataEditQueue = newValue }
+        get { browser?.metadataEditQueue }
+        set { browser?.metadataEditQueue = newValue }
     }
     var libraryRoot: URL? { repository?.root }
 

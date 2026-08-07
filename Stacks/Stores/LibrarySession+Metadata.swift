@@ -8,6 +8,13 @@ extension LibrarySession {
     // MARK: - Editing
 
     func saveEdit(_ edit: BookEdit, coverData: Data?, for id: UUID) async {
+        // The editor sheet runs for the current browser context: a connected
+        // remote library edits by pushing commands to the server (covers are
+        // staged first), the home library edits its journal directly.
+        if let remote = remoteBrowser {
+            await saveRemoteEdit(edit, coverData: coverData, for: id, remote: remote)
+            return
+        }
         guard let repository else { return }
         do {
             let updated = try await repository.updateBook(id: id, edit: edit)
@@ -31,6 +38,33 @@ extension LibrarySession {
             lastError = error.localizedDescription
         }
         await refreshAll()
+    }
+
+    /// Remote edit path: the update (+ staged cover) become journal commands
+    /// pushed to the server — the single writer. An unreachable server queues
+    /// the command durably (the Shared row badge shows the backlog) and the
+    /// edit lands on the next reconnect.
+    private func saveRemoteEdit(_ edit: BookEdit, coverData: Data?, for id: UUID, remote: RemoteLibraryBrowser) async {
+        do {
+            if let coverData {
+                let stagedName = "cover-\(UUID().uuidString).jpg"
+                let cover = JournalCommand.StagedCover(
+                    filename: stagedName,
+                    contentHash: BookFolder.contentHash(coverData),
+                    stagedName: stagedName
+                )
+                _ = try await remote.remote.push(
+                    ClientCommand(id: UUID(), op: .setCover(.init(bookID: id, cover: cover))),
+                    stagedFiles: [stagedName: coverData]
+                )
+            }
+            _ = try await remote.remote.push(
+                ClientCommand(id: UUID(), op: .updateBook(.init(bookID: id, edit: edit)))
+            )
+            await remote.refreshBooks()
+        } catch {
+            lastError = "Couldn't save edit on '\(remote.name)': \(error.localizedDescription)"
+        }
     }
 
     // MARK: - Metadata enrichment
