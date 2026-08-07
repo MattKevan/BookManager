@@ -131,6 +131,55 @@ struct ProtocolTests {
     }
 
     @Test
+    func identityEndpointExposesLibraryAndIsAuthGated() async throws {
+        let port = try freePort()
+        try await startServer(port: port)
+
+        // Anonymous server: identity returns the library id + display name.
+        let identity = try await send(port, method: "GET", path: "/api/identity")
+        #expect(identity.status == 200)
+        let decoded = try ProtocolTests.isoDecoder.decode(LibraryIdentity.self, from: identity.data)
+        #expect(decoded.version == 2)
+        #expect(!decoded.id.uuidString.isEmpty)
+
+        // The identity endpoint rides the same auth gate as everything else.
+        // Start a second server with basic auth on a fresh port.
+        let authedPort = try freePort()
+        let root = FileManager.default.temporaryDirectory
+            .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let libraryPath = root.appending(path: "library", directoryHint: .isDirectory).path
+        _ = try await LibraryRepository.create(
+            at: URL(fileURLWithPath: libraryPath),
+            indexesDirectory: root.appending(path: "indexes", directoryHint: .isDirectory),
+            deviceID: UUID()
+        )
+        let server = try await LibraryServer(configuration: ServerConfiguration(
+            port: authedPort,
+            libraryPath: libraryPath,
+            indexesDirectory: root.appending(path: "server-indexes", directoryHint: .isDirectory),
+            username: "alice",
+            password: "secret"
+        ))
+        let app = try await server.makeApplication()
+        Task { try await app.run() }
+        for _ in 0..<50 {
+            if await portResponds(authedPort) { break }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+
+        let anonymous = try await send(authedPort, method: "GET", path: "/api/identity")
+        #expect(anonymous.status == 401)
+        let withCredentials = try await send(
+            authedPort, method: "GET", path: "/api/identity",
+            headers: ["Authorization": "Basic \(Data("alice:secret".utf8).base64EncodedString())"]
+        )
+        #expect(withCredentials.status == 200)
+        let decodedAuthed = try ProtocolTests.isoDecoder.decode(LibraryIdentity.self, from: withCredentials.data)
+        #expect(decodedAuthed.name == libraryPath.split(separator: "/").last.map(String.init))
+    }
+
+    @Test
     func deleteOfUnknownBookIsNoOp() async throws {
         let port = try freePort()
         try await startServer(port: port)

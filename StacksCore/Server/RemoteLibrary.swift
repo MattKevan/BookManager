@@ -65,6 +65,17 @@ public actor RemoteLibrary {
     /// Pulls every command after the cursor and replays it into the browsable
     /// state. Throws `RemoteError.unreachable` on network failure,
     /// `RemoteError.serverError` on an HTTP error (e.g. 401).
+    /// Fetches the server's identity (library id + display name). Used by
+    /// manual host:port connections to validate the server and adopt its
+    /// real name; 401 surfaces as `RemoteError.serverError(401)` like every
+    /// other gated endpoint.
+    public func fetchIdentity() async throws -> LibraryIdentity {
+        var components = URLComponents(url: baseURL.appending(path: "api/identity"), resolvingAgainstBaseURL: false)!
+        let (data, status) = try await request(method: "GET", components: components)
+        guard status == 200 else { throw RemoteError.serverError(status) }
+        return try JSONDecoder.bookManager.decode(LibraryIdentity.self, from: data)
+    }
+
     public func pull() async throws {
         var components = URLComponents(url: baseURL.appending(path: "api/sync"), resolvingAgainstBaseURL: false)!
         components.queryItems = [URLQueryItem(name: "after", value: "\(cursor)")]

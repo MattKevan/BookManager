@@ -61,8 +61,17 @@ public actor LibraryServer {
             username: configuration.username, password: configuration.password
         ))
         let repository = self.repository
+        let displayName = self.displayName
 
         // MARK: - Sync protocol
+
+        router.get("api/identity") { _, _ -> LibraryIdentity in
+            LibraryIdentity(
+                id: repository.manifest.id,
+                name: displayName,
+                version: repository.manifest.formatVersion
+            )
+        }
 
         router.get("api/sync") { request, _ -> SyncPullResponse in
             let after = request.uri.queryParameters.get("after").flatMap(Int64.init) ?? 0

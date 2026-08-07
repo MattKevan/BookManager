@@ -14,6 +14,22 @@ public struct ClientCommand: Sendable, Codable, Equatable {
     }
 }
 
+/// `GET /api/identity` — server + library identity, used by manual
+/// host:port connections (no Bonjour TXT to carry the id/name) to validate
+/// the server and adopt its real display name.
+public struct LibraryIdentity: Sendable, Codable, Equatable, ResponseEncodable {
+    public let id: UUID
+    public let name: String
+    /// The library file format version (journal layout).
+    public let version: Int
+
+    public init(id: UUID, name: String, version: Int) {
+        self.id = id
+        self.name = name
+        self.version = version
+    }
+}
+
 /// `GET /api/sync?after=<seq>` — the pull. `seq` is the client's next cursor.
 public struct SyncPullResponse: Sendable, Codable, Equatable, ResponseEncodable {
     public let seq: Int64
