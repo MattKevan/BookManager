@@ -41,14 +41,15 @@ public enum CommandReplay {
             }
             state[payload.bookID] = replacingCover(current, coverHash: payload.cover?.contentHash)
         case .deleteBook(let payload):
-            guard let current = state[payload.bookID] else {
-                throw ReplayError.unknownBook(payload.bookID)
+            // Idempotent end-state op: deleting a book that is already gone
+            // (a stale client racing another client's delete) is a no-op.
+            if let current = state[payload.bookID] {
+                state[payload.bookID] = withDeleted(current, isDeleted: true)
             }
-            state[payload.bookID] = withDeleted(current, isDeleted: true)
         case .restoreBook(let payload):
-            guard let current = state[payload.bookID] else {
-                throw ReplayError.unknownBook(payload.bookID)
-            }
+            // Idempotent end-state op: restoring a book that is not in the
+            // catalog is a no-op.
+            guard let current = state[payload.bookID] else { break }
             let resolved = resolved(from: current, isDeleted: false)
             let path = CanonicalPathBuilder.relativeDirectory(
                 bookID: payload.bookID, title: resolved.title, authors: resolved.authors

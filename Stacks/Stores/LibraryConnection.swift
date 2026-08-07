@@ -17,7 +17,10 @@ enum BrowserViewMode: String, CaseIterable, Identifiable {
 @Observable
 final class LibraryConnection {
     let id: UUID                  // manifest.id
-    let repository: LibraryRepository
+    /// Protocol witness: the browser surface sees the repository as optional
+    /// (remote browsers have none); internal code uses `coreRepository`.
+    var repository: LibraryRepository? { coreRepository }
+    let coreRepository: LibraryRepository
 
     // Rebuild state
     var rebuildProgress: Double?
@@ -73,7 +76,7 @@ final class LibraryConnection {
     var onError: ((String) -> Void)?
     var onSelectionChange: (() -> Void)?
 
-    var name: String { repository.root.lastPathComponent }
+    var name: String { coreRepository.root.lastPathComponent }
     /// The journal's current sequence number (diagnostics; refreshed by
     /// `reloadDiagnostics`).
     var journalSeq: Int64 = 0
@@ -89,8 +92,8 @@ final class LibraryConnection {
         let repository = try await LibraryRepository.open(
             at: url, indexesDirectory: indexesDirectory, deviceID: deviceID
         )
-        self.id = repository.manifest.id
-        self.repository = repository
+        self.coreRepository = repository
+        self.id = coreRepository.manifest.id
         self.deviceID = deviceID
         self.indexesDirectory = indexesDirectory
         await refreshAll()
@@ -114,7 +117,7 @@ final class LibraryConnection {
             cancelFlag.requested = false
         }
         do {
-            _ = try await repository.rebuildCatalog(
+            _ = try await coreRepository.rebuildCatalog(
                 progress: { [weak self] value in
                     Task { @MainActor in
                         self?.rebuildProgress = value
@@ -135,8 +138,8 @@ final class LibraryConnection {
     }
 
     func reloadDiagnostics() async {
-        missingFiles = (try? await repository.missingFormatFiles()) ?? []
-        journalSeq = await repository.journalSeq()
+        missingFiles = (try? await coreRepository.missingFormatFiles()) ?? []
+        journalSeq = await coreRepository.journalSeq()
         await refreshDeleted()
     }
 
@@ -151,15 +154,15 @@ final class LibraryConnection {
     func refreshBooks() async {
         do {
             if let facet = facetNavigation.activeFacet {
-                books = try await repository.books(facetType: facet.type, value: facet.value)
+                books = try await coreRepository.books(facetType: facet.type, value: facet.value)
             } else if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                books = try await repository.books()
+                books = try await coreRepository.books()
             } else {
                 // A malformed FTS5 query (unclosed quote, stray operator) must not
                 // take down the loaded browser: on a search error, show no results
                 // while keeping the library state intact.
                 do {
-                    books = try await repository.search(searchText)
+                    books = try await coreRepository.search(searchText)
                 } catch {
                     books = []
                 }
@@ -170,14 +173,14 @@ final class LibraryConnection {
     }
 
     func refreshFacets() async {
-        authors = (try? await repository.facetCounts(.author)) ?? []
-        series = (try? await repository.facetCounts(.series)) ?? []
-        tags = (try? await repository.facetCounts(.tag)) ?? []
-        formats = (try? await repository.facetCounts(.format)) ?? []
+        authors = (try? await coreRepository.facetCounts(.author)) ?? []
+        series = (try? await coreRepository.facetCounts(.series)) ?? []
+        tags = (try? await coreRepository.facetCounts(.tag)) ?? []
+        formats = (try? await coreRepository.facetCounts(.format)) ?? []
     }
 
     func refreshDeleted() async {
-        deletedBooks = (try? await repository.deletedBooks()) ?? []
+        deletedBooks = (try? await coreRepository.deletedBooks()) ?? []
     }
 
     // MARK: - Facets and search
@@ -237,7 +240,7 @@ final class LibraryConnection {
     func delete(ids: Set<UUID>) async {
         for id in ids {
             do {
-                try await repository.deleteBook(id: id)
+                try await coreRepository.deleteBook(id: id)
             } catch {
                 onError?(error.localizedDescription)
             }
@@ -248,7 +251,7 @@ final class LibraryConnection {
 
     func restore(id: UUID) async {
         do {
-            _ = try await repository.restoreBook(id: id)
+            _ = try await coreRepository.restoreBook(id: id)
         } catch {
             onError?(error.localizedDescription)
         }
@@ -259,7 +262,7 @@ final class LibraryConnection {
 
     func open(id: UUID) async {
         do {
-            guard let url = try await repository.formatFileURL(id: id) else { return }
+            guard let url = try await coreRepository.formatFileURL(id: id) else { return }
             NSWorkspace.shared.open(url)
         } catch {
             onError?(error.localizedDescription)
@@ -268,7 +271,7 @@ final class LibraryConnection {
 
     func reveal(id: UUID) async {
         do {
-            guard let url = try await repository.bookFolderURL(id: id) else { return }
+            guard let url = try await coreRepository.bookFolderURL(id: id) else { return }
             NSWorkspace.shared.activateFileViewerSelecting([url])
         } catch {
             onError?(error.localizedDescription)
@@ -280,7 +283,7 @@ final class LibraryConnection {
     /// from the layout (pure path math, mirrors `BookFolder.formatFileURL`) so
     /// the synchronous drag handler needs no actor hop.
     func formatFileURL(for book: IndexedBook) -> URL? {
-        let root = LibraryLayout(root: repository.root).root
+        let root = LibraryLayout(root: coreRepository.root).root
         for format in book.formats {
             let url = root
                 .appending(path: book.relativePath, directoryHint: .isDirectory)

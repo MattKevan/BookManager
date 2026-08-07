@@ -27,8 +27,69 @@ final class AppSettings {
         }
     }
 
+    // MARK: - Sharing pane
+
+    static let shareLibraryOverNetworkKey = "shareLibraryOverNetwork"
+    static let shareLibraryOverNetworkDefault = false
+    static let advertiseWithBonjourKey = "advertiseWithBonjour"
+    static let advertiseWithBonjourDefault = true
+    static let requireSharePasswordKey = "requireSharePassword"
+    static let requireSharePasswordDefault = false
+    static let shareUsernameKey = "shareUsername"
+
+    private var _shareLibraryOverNetwork: Bool
+    private var _advertiseWithBonjour: Bool
+    private var _requireSharePassword: Bool
+    private var _shareUsername: String
+
+    /// Share the open library over the LAN (the Settings → Sharing toggle).
+    /// The server lifecycle is owned by `LibrarySession.sharing`; this is the
+    /// persisted preference + the pane's source of truth.
+    var shareLibraryOverNetwork: Bool {
+        get { _shareLibraryOverNetwork }
+        set {
+            _shareLibraryOverNetwork = newValue
+            UserDefaults.standard.set(newValue, forKey: Self.shareLibraryOverNetworkKey)
+        }
+    }
+
+    /// Advertise the shared library over Bonjour so other Stacks clients can
+    /// discover it (the Shared sidebar section browses `_bookmanager._tcp`).
+    var advertiseWithBonjour: Bool {
+        get { _advertiseWithBonjour }
+        set {
+            _advertiseWithBonjour = newValue
+            UserDefaults.standard.set(newValue, forKey: Self.advertiseWithBonjourKey)
+        }
+    }
+
+    /// Gate the shared library behind basic auth. The password lives in the
+    /// Keychain (`ShareCredentials`); the username is a plain preference.
+    var requireSharePassword: Bool {
+        get { _requireSharePassword }
+        set {
+            _requireSharePassword = newValue
+            UserDefaults.standard.set(newValue, forKey: Self.requireSharePasswordKey)
+        }
+    }
+
+    var shareUsername: String {
+        get { _shareUsername }
+        set {
+            _shareUsername = newValue
+            UserDefaults.standard.set(newValue, forKey: Self.shareUsernameKey)
+        }
+    }
+
     init(defaults: UserDefaults = .standard) {
         _automaticallyFetchMissingMetadata = defaults.object(forKey: Self.automaticallyFetchMissingMetadataKey) as? Bool
             ?? Self.automaticallyFetchMissingMetadataDefault
+        _shareLibraryOverNetwork = defaults.object(forKey: Self.shareLibraryOverNetworkKey) as? Bool
+            ?? Self.shareLibraryOverNetworkDefault
+        _advertiseWithBonjour = defaults.object(forKey: Self.advertiseWithBonjourKey) as? Bool
+            ?? Self.advertiseWithBonjourDefault
+        _requireSharePassword = defaults.object(forKey: Self.requireSharePasswordKey) as? Bool
+            ?? Self.requireSharePasswordDefault
+        _shareUsername = defaults.string(forKey: Self.shareUsernameKey) ?? ""
     }
 }

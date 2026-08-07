@@ -24,6 +24,7 @@
 		12DFF558A294EA13FBFA1E7A /* BookEdit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 543637514FD79EF864FC90A3 /* BookEdit.swift */; };
 		13026651A9AA68300F174F71 /* LibraryOpenPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D3FC5E7650303734EBED4B8 /* LibraryOpenPolicyTests.swift */; };
 		14BD71038AC6A7132DCB65B1 /* LibraryOpenPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73A4363817AC353D4EA20649 /* LibraryOpenPolicy.swift */; };
+		1529FB8AEBC5E8329C2349F7 /* LibrarySession+Network.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEBFB6AFB483D4BE2C6D444A /* LibrarySession+Network.swift */; };
 		1537E8E213DFC00704C9EDFF /* CalibreRawPresenterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA2C9AE23A48CDED03146CEB /* CalibreRawPresenterTests.swift */; };
 		157E365686C8F8023DE603C4 /* PerformanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61B373B3A4E86D0BCA5BE9DA /* PerformanceTests.swift */; };
 		159D7B9BBFBEDBD7CC7CAE80 /* fixture.mobi in Resources */ = {isa = PBXBuildFile; fileRef = 47E662E0590799F9F80EBCB8 /* fixture.mobi */; };
@@ -73,6 +74,7 @@
 		5234B5ABF40B742281AE36D6 /* USBDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34819080406D6238BD0AA3C2 /* USBDiagnostics.swift */; };
 		5295A81F0920E9283A42036F /* CalibreReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 347AC9BF6FBB7C82B2C7009C /* CalibreReader.swift */; };
 		52B8120347F9159E01305071 /* MTPError+Message.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04CC377C5D0D8FABAEE1A3C3 /* MTPError+Message.swift */; };
+		55F2E385E56D723B13FC69BB /* RemoteLibraryBrowser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E51E2A628B83450BADA8DEB /* RemoteLibraryBrowser.swift */; };
 		561BBF5488E6C99A603FC44F /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = 771BB6FF07E38E3845F30096 /* ZIPFoundation */; };
 		5785C82EBF0B8765841D63A6 /* OPDSFeedTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFFC603DB26AA704CCFE1908 /* OPDSFeedTests.swift */; };
 		59E79393194F7EFF36145964 /* MTPKitTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02A436267E10E681BA9F1AB0 /* MTPKitTransport.swift */; };
@@ -108,6 +110,7 @@
 		82B4A2D5E23497480191A023 /* DeviceRegistryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDA106DE06A398EB845BD84F /* DeviceRegistryTests.swift */; };
 		87E43F58FE8ABB53B21A45F5 /* DeviceBookScannerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E8F2DC8EB3E98E7052EB386 /* DeviceBookScannerTests.swift */; };
 		88CBDE605725BC2376656FFE /* JournalRebuildTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9400C60BA09EACA6C41BD5B3 /* JournalRebuildTests.swift */; };
+		8A7688865E855EE063B20CF7 /* LibraryDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4FDD0C4EA55BDC2D609E02D /* LibraryDiscovery.swift */; };
 		8D3528A1D704E9987AAACF29 /* DeviceSendService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CC2BCC19365E631DFAFFA9B /* DeviceSendService.swift */; };
 		8EA188D31F732C91673B6AE8 /* ServerTestHarness.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E8EDBB699D14BD690F366A2 /* ServerTestHarness.swift */; };
 		8FB22FFFCE6A92FA5F0634E4 /* DeviceRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FD6A4305F8A3E9484774124 /* DeviceRegistry.swift */; };
@@ -125,6 +128,7 @@
 		A0B18E0377549D486249FB44 /* Hummingbird in Frameworks */ = {isa = PBXBuildFile; productRef = 625C2DACD8CBC02AB3D7B0F9 /* Hummingbird */; };
 		A1C7F766F716220FF9C6EBE7 /* ImportReportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C52572FAF899CE1E384265A3 /* ImportReportView.swift */; };
 		A5D0F2AF677D574E1D3DD908 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B1E90BAB5BAA49DC96FA752 /* SettingsView.swift */; };
+		A6DD6DBE647CFD7A6AE409C8 /* SharingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0CE03355AD2E48BB6B8645B /* SharingService.swift */; };
 		A7C4E5FABE41F56FAD856E74 /* LibrarySession+Connection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3D38E4BEF4193E29EF6E9CC /* LibrarySession+Connection.swift */; };
 		A8A900EB823492001E51268E /* DeviceTransportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D41F91710ACA9A8E410E0F8 /* DeviceTransportTests.swift */; };
 		A91AFC276E2EFC0BB1C8E11C /* LibraryRepositoryError+LocalizedError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 875D8B5F4CB9E902D7F4839F /* LibraryRepositoryError+LocalizedError.swift */; };
@@ -160,10 +164,12 @@
 		D56873328B9194AA7A1EA4AC /* USBDevice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 440737F7CDCA961DA25EEABC /* USBDevice.swift */; };
 		D58C95C5FDEA931DD771211D /* SendReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = CED1EDD0422910ABDBDF9AF2 /* SendReport.swift */; };
 		D5CB70B08A17A9AD6563E9E4 /* ByteOrder.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0C7C5EBF97444E4F8C8CF7F /* ByteOrder.swift */; };
+		D6DEC50A6C061473E503B752 /* ServiceLifecycle in Frameworks */ = {isa = PBXBuildFile; productRef = 913FE02EFB2C838A5C1C940F /* ServiceLifecycle */; };
 		DB13C320B555D9D40EE6567F /* LibraryPeersSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48967B183B8AAA7D2440DFF2 /* LibraryPeersSection.swift */; };
 		DB2732BC2323F4A4225EC550 /* CommandReplay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 083D31678C6B3B1D8C9C2C5C /* CommandReplay.swift */; };
 		DD651CBAF25BC1BB67B38F49 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = A25253B4ED199A7DDE51CDB3 /* GRDB */; };
 		DDA293BDF492DADA5FE5BDD3 /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FB6E76A05DE68ABB59765F2 /* SidebarView.swift */; };
+		DDCA815527D0C956ADCD1A19 /* ShareCredentials.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000449951D6408DFC187A /* ShareCredentials.swift */; };
 		E22E10E7F6C555FA29AFFA5E /* MobiReaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 001BEDDC9411BF530EB26F34 /* MobiReaderTests.swift */; };
 		E3348AEB95568838278B8376 /* OfflineQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40B81336DCEED2451CAEA9CC /* OfflineQueue.swift */; };
 		E3AD4781CD70CF63E8BD9992 /* LibraryConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB12664D17D3B0B039ED84E6 /* LibraryConnection.swift */; };
@@ -328,6 +334,7 @@
 		5CE3B6938E038739B6052B72 /* MetadataReviewSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataReviewSheet.swift; sourceTree = "<group>"; };
 		5D26DAC0CD891B3706A948EC /* LibraryBrowser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryBrowser.swift; sourceTree = "<group>"; };
 		5E0F599668F92A662E7A15F1 /* ScaffoldTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScaffoldTests.swift; sourceTree = "<group>"; };
+		5E51E2A628B83450BADA8DEB /* RemoteLibraryBrowser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteLibraryBrowser.swift; sourceTree = "<group>"; };
 		5E8EDBB699D14BD690F366A2 /* ServerTestHarness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerTestHarness.swift; sourceTree = "<group>"; };
 		60C28C7C03671EF56E4D547D /* BookValues.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookValues.swift; sourceTree = "<group>"; };
 		618EB6F73511304A648E8A0D /* EnrichmentPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnrichmentPolicyTests.swift; sourceTree = "<group>"; };
@@ -380,8 +387,10 @@
 		AC13B3DF39A5461BB0E58053 /* BonjourTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BonjourTests.swift; sourceTree = "<group>"; };
 		AC556921C2B3CF1D1764C01F /* LibrarySessionEnrichmentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibrarySessionEnrichmentTests.swift; sourceTree = "<group>"; };
 		AF095A91359CD62AFFBB0DC6 /* MTPCodes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MTPCodes.swift; sourceTree = "<group>"; };
+		B0CE03355AD2E48BB6B8645B /* SharingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharingService.swift; sourceTree = "<group>"; };
 		B251DDEB52542D7C71D517AF /* ResolvedBook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResolvedBook.swift; sourceTree = "<group>"; };
 		B2F18D3F03F0446D22DDE330 /* CalibreLibraryScannerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalibreLibraryScannerTests.swift; sourceTree = "<group>"; };
+		B4FDD0C4EA55BDC2D609E02D /* LibraryDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryDiscovery.swift; sourceTree = "<group>"; };
 		BBFB5B297CD4E41A45701D76 /* JournalCommand.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JournalCommand.swift; sourceTree = "<group>"; };
 		BC283B2D9EBE4AA7CDFFD57A /* DeviceTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceTransport.swift; sourceTree = "<group>"; };
 		BC795DD74EBD35B16B5B0140 /* CalibreLibraryScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalibreLibraryScanner.swift; sourceTree = "<group>"; };
@@ -396,6 +405,7 @@
 		C86BEFE895851DA48B0C5888 /* OpenLibraryStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenLibraryStoreTests.swift; sourceTree = "<group>"; };
 		CA2C9AE23A48CDED03146CEB /* CalibreRawPresenterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalibreRawPresenterTests.swift; sourceTree = "<group>"; };
 		CB1EE100E37BB7A09580117C /* IndexedBook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IndexedBook.swift; sourceTree = "<group>"; };
+		CC0000449951D6408DFC187A /* ShareCredentials.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareCredentials.swift; sourceTree = "<group>"; };
 		CC98AF7C936C0BB9F9E91A96 /* JournalTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JournalTests.swift; sourceTree = "<group>"; };
 		CED1EDD0422910ABDBDF9AF2 /* SendReport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendReport.swift; sourceTree = "<group>"; };
 		D0C7C5EBF97444E4F8C8CF7F /* ByteOrder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ByteOrder.swift; sourceTree = "<group>"; };
@@ -430,6 +440,7 @@
 		FA9CD8CC38617A77ED6C3701 /* ProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtocolTests.swift; sourceTree = "<group>"; };
 		FAC8498A2AE9D79E2A678D92 /* FacetType+Display.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FacetType+Display.swift"; sourceTree = "<group>"; };
 		FE9E26E965A01A82E62AC26C /* LibraryRepositoryImporting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryRepositoryImporting.swift; sourceTree = "<group>"; };
+		FEBFB6AFB483D4BE2C6D444A /* LibrarySession+Network.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LibrarySession+Network.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -462,6 +473,7 @@
 				561BBF5488E6C99A603FC44F /* ZIPFoundation in Frameworks */,
 				79143780962B4DF51323F38D /* libmobi in Frameworks */,
 				A0B18E0377549D486249FB44 /* Hummingbird in Frameworks */,
+				D6DEC50A6C061473E503B752 /* ServiceLifecycle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -654,10 +666,14 @@
 			children = (
 				15167DA711CC417585EE880E /* DeviceManager.swift */,
 				AB12664D17D3B0B039ED84E6 /* LibraryConnection.swift */,
+				B4FDD0C4EA55BDC2D609E02D /* LibraryDiscovery.swift */,
 				9AD2E9C6568941324159DD47 /* LibrarySession.swift */,
 				A3D38E4BEF4193E29EF6E9CC /* LibrarySession+Connection.swift */,
 				067D894995AC00A492706E77 /* LibrarySession+Import.swift */,
 				37DCA962B4188AB04F8EE3BB /* LibrarySession+Metadata.swift */,
+				FEBFB6AFB483D4BE2C6D444A /* LibrarySession+Network.swift */,
+				CC0000449951D6408DFC187A /* ShareCredentials.swift */,
+				B0CE03355AD2E48BB6B8645B /* SharingService.swift */,
 				3621DD4CAD671014FFD2EA99 /* ThumbnailCache.swift */,
 			);
 			path = Stores;
@@ -730,6 +746,7 @@
 				628559C270F70A870D577884 /* MetadataMergeReviewSheet.swift */,
 				5CE3B6938E038739B6052B72 /* MetadataReviewSheet.swift */,
 				530AC97F976A04860A70DD84 /* PeerLibraryView.swift */,
+				5E51E2A628B83450BADA8DEB /* RemoteLibraryBrowser.swift */,
 				1A78CD2D3F865648FAC55250 /* SendReportView.swift */,
 				9B1E90BAB5BAA49DC96FA752 /* SettingsView.swift */,
 				8FB6E76A05DE68ABB59765F2 /* SidebarView.swift */,
@@ -1071,6 +1088,7 @@
 				771BB6FF07E38E3845F30096 /* ZIPFoundation */,
 				093ECCAB6EBA903675AC7709 /* libmobi */,
 				625C2DACD8CBC02AB3D7B0F9 /* Hummingbird */,
+				913FE02EFB2C838A5C1C940F /* ServiceLifecycle */,
 			);
 			productName = StacksCore;
 			productReference = 7FF7C13FC4FD4830CC11BC46 /* StacksCore.framework */;
@@ -1130,6 +1148,7 @@
 				6017229B7959BB165366306A /* XCRemoteSwiftPackageReference "ZIPFoundation" */,
 				D0550968A143B28A5C7493BA /* XCRemoteSwiftPackageReference "libmobi-swift" */,
 				5F59FF6D4230A252D0C84876 /* XCRemoteSwiftPackageReference "swift-argument-parser" */,
+				1A07AAA86A7C892C8565B9EC /* XCRemoteSwiftPackageReference "swift-service-lifecycle" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D248533E1D38A095D45C0792 /* Products */;
@@ -1194,18 +1213,23 @@
 				A1C7F766F716220FF9C6EBE7 /* ImportReportView.swift in Sources */,
 				30FCD4463F1CC7070F6BD109 /* LibraryBrowser.swift in Sources */,
 				E3AD4781CD70CF63E8BD9992 /* LibraryConnection.swift in Sources */,
+				8A7688865E855EE063B20CF7 /* LibraryDiscovery.swift in Sources */,
 				DB13C320B555D9D40EE6567F /* LibraryPeersSection.swift in Sources */,
 				A7C4E5FABE41F56FAD856E74 /* LibrarySession+Connection.swift in Sources */,
 				5D1640540BD0B121C4FFA680 /* LibrarySession+Import.swift in Sources */,
 				AA58DF6A6311FF095DED933C /* LibrarySession+Metadata.swift in Sources */,
+				1529FB8AEBC5E8329C2349F7 /* LibrarySession+Network.swift in Sources */,
 				817C7816657DAA7CDCEEAD42 /* LibrarySession.swift in Sources */,
 				93EF9E8B2FCD413FB592ECEE /* LibraryWelcomeView.swift in Sources */,
 				CBBAAA576440D51C94CAA97C /* MetadataEditorView.swift in Sources */,
 				2A6DC2EC662FA31003C167A4 /* MetadataMergeReviewSheet.swift in Sources */,
 				42FA62A0112817A3E86D4238 /* MetadataReviewSheet.swift in Sources */,
 				7C4BB985B7F7A649A4FA91A1 /* PeerLibraryView.swift in Sources */,
+				55F2E385E56D723B13FC69BB /* RemoteLibraryBrowser.swift in Sources */,
 				3973AE0B4A994E4582B8BC51 /* SendReportView.swift in Sources */,
 				A5D0F2AF677D574E1D3DD908 /* SettingsView.swift in Sources */,
+				DDCA815527D0C956ADCD1A19 /* ShareCredentials.swift in Sources */,
+				A6DD6DBE647CFD7A6AE409C8 /* SharingService.swift in Sources */,
 				DDA293BDF492DADA5FE5BDD3 /* SidebarView.swift in Sources */,
 				B3DA53EF7162E8A329602800 /* StacksApp.swift in Sources */,
 				A057AF68D3DFA41DD2D73BE8 /* StacksSupportMigrator.swift in Sources */,
@@ -1424,6 +1448,10 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Stacks;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSAppSleepDisabled = YES;
+				INFOPLIST_KEY_NSBonjourServices = (
+					_bookmanager._tcp,
+				);
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Stacks discovers and shares book libraries on your local network.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -1544,6 +1572,10 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Stacks;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSAppSleepDisabled = YES;
+				INFOPLIST_KEY_NSBonjourServices = (
+					_bookmanager._tcp,
+				);
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Stacks discovers and shares book libraries on your local network.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -1820,6 +1852,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		1A07AAA86A7C892C8565B9EC /* XCRemoteSwiftPackageReference "swift-service-lifecycle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/swift-server/swift-service-lifecycle.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.0.0;
+			};
+		};
 		42216176C928A0C6E0F0293B /* XCRemoteSwiftPackageReference "hummingbird" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/hummingbird-project/hummingbird.git";
@@ -1887,6 +1927,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 6017229B7959BB165366306A /* XCRemoteSwiftPackageReference "ZIPFoundation" */;
 			productName = ZIPFoundation;
+		};
+		913FE02EFB2C838A5C1C940F /* ServiceLifecycle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 1A07AAA86A7C892C8565B9EC /* XCRemoteSwiftPackageReference "swift-service-lifecycle" */;
+			productName = ServiceLifecycle;
 		};
 		A25253B4ED199A7DDE51CDB3 /* GRDB */ = {
 			isa = XCSwiftPackageProductDependency;

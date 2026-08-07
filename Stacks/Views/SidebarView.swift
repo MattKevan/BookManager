@@ -90,8 +90,80 @@ struct SidebarView: View {
                     }
                 }
             }
+            SharedLibrariesSection(session: session)
         }
         .listStyle(.sidebar)
+    }
+
+    /// LAN libraries advertised over Bonjour, Finder-style: click to connect
+    /// (the server is the single writer; edits happen server-side), the
+    /// connected one shows an eject.
+    private struct SharedLibrariesSection: View {
+        @Bindable var session: LibrarySession
+
+        var body: some View {
+            let libraries = session.discovery.libraries.sorted {
+                $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+            }
+            Section("Shared") {
+                if libraries.isEmpty {
+                    Text(session.discovery.browseError == nil
+                        ? "Browsing for libraries on this network…"
+                        : "Local Network access is off")
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(libraries) { library in
+                    HStack(spacing: 6) {
+                        Label(library.name, systemImage: "network")
+                        Spacer()
+                        if let browser = session.remoteBrowser, browser.id == library.id {
+                            PendingBadge(browser: browser)
+                            Button {
+                                session.disconnectRemote()
+                            } label: {
+                                Image(systemName: "eject.fill")
+                            }
+                            .buttonStyle(.borderless)
+                            .help("Disconnect from \(library.name)")
+                        } else {
+                            Button {
+                                Task { await session.connect(to: library) }
+                            } label: {
+                                Image(systemName: "arrow.down.circle")
+                            }
+                            .buttonStyle(.borderless)
+                            .help("Connect to \(library.name)")
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                if let error = session.discovery.browseError {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    /// The offline-queue badge on the connected Shared row: how many edits are
+    /// queued until the server is reachable again.
+    private struct PendingBadge: View {
+        let browser: RemoteLibraryBrowser
+        @State private var count = 0
+
+        var body: some View {
+            Group {
+                if count > 0 {
+                    Text("\(count) pending")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .task {
+                count = await browser.pendingCount()
+            }
+        }
     }
 
     /// Finder-style drag: file URLs dropped on a device row are sent to that

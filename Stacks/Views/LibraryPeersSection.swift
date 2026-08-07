@@ -53,7 +53,7 @@ struct LibraryPeersSection: View {
                     .contextMenu {
                         Button("Make Home Library") { session.changeHome(to: peer.id) }
                         Button("Show in Finder") {
-                            NSWorkspace.shared.activateFileViewerSelecting([peer.repository.root])
+                            NSWorkspace.shared.activateFileViewerSelecting([peer.coreRepository.root])
                         }
                         Button("Close") { Task { await session.closePeer(peer) } }
                     }

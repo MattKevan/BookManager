@@ -22,6 +22,9 @@ packages:
   Hummingbird:
     url: https://github.com/hummingbird-project/hummingbird.git
     exactVersion: 2.26.0
+  swift-service-lifecycle:
+    url: https://github.com/swift-server/swift-service-lifecycle.git
+    from: 2.0.0
   swift-argument-parser:
     url: https://github.com/apple/swift-argument-parser.git
     exactVersion: 1.8.2
@@ -48,6 +51,8 @@ targets:
       - package: libmobi-swift
         product: libmobi
       - package: Hummingbird
+      - package: swift-service-lifecycle
+        product: ServiceLifecycle
 
   Stacks:
     type: application
@@ -63,6 +68,13 @@ targets:
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: N7J3BYZ94H
         INFOPLIST_KEY_CFBundleDisplayName: Stacks
+        # Local Network privacy (macOS 15+): browsing/advertising Bonjour
+        # services triggers the system prompt — declare the usage string and
+        # the services we touch.
+        INFOPLIST_KEY_NSLocalNetworkUsageDescription: >-
+          Stacks discovers and shares book libraries on your local network.
+        INFOPLIST_KEY_NSBonjourServices:
+          - _bookmanager._tcp
         # App Nap suspends idle apps; for an app holding a USB/MTP session this
         # can let the host idle-suspend the device link (Kindle drops ~30s
         # after the last transfer). Opt out so the held session stays live.

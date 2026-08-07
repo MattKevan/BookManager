@@ -19,6 +19,7 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift.git", exact: "7.11.1"),
         .package(url: "https://github.com/hummingbird-project/hummingbird.git", exact: "2.26.0"),
+        .package(url: "https://github.com/swift-server/swift-service-lifecycle.git", from: "2.0.0"),
         .package(url: "https://github.com/apple/swift-crypto.git", exact: "4.5.1"),
         .package(url: "https://github.com/apple/swift-argument-parser.git", exact: "1.8.2"),
     ],
@@ -28,6 +29,7 @@ let package = Package(
             dependencies: [
                 .product(name: "GRDB", package: "GRDB.swift"),
                 .product(name: "Hummingbird", package: "hummingbird"),
+                .product(name: "ServiceLifecycle", package: "swift-service-lifecycle"),
                 .product(name: "Crypto", package: "swift-crypto"),
             ],
             path: "StacksCore",
@@ -56,6 +58,7 @@ let package = Package(
                 "StacksCore",
                 .product(name: "GRDB", package: "GRDB.swift"),
                 .product(name: "Hummingbird", package: "hummingbird"),
+                .product(name: "ServiceLifecycle", package: "swift-service-lifecycle"),
             ],
             path: "StacksCoreTests",
             // Mirrors the core target's excludes: tests referencing excluded

@@ -11,13 +11,13 @@ private struct CoverTileFrameKey: PreferenceKey {
     }
 }
 
-struct CoverGridView<Browser: LibraryBrowser>: View {
-    let browser: Browser
+struct CoverGridView: View {
+    let browser: any LibraryBrowser
     /// Home-only chrome: the Edit Metadata context-menu item is available only
     /// for the home library (peers are browse + transfer in this slice).
     let isHome: Bool
 
-    init(browser: Browser, isHome: Bool = true) {
+    init(browser: any LibraryBrowser, isHome: Bool = true) {
         self.browser = browser
         self.isHome = isHome
     }
@@ -217,12 +217,12 @@ struct CoverGridView<Browser: LibraryBrowser>: View {
     }
 }
 
-private struct CoverTile<Browser: LibraryBrowser>: View {
+private struct CoverTile: View {
     let book: IndexedBook
-    let browser: Browser
+    let browser: any LibraryBrowser
     let isHome: Bool
 
-    init(book: IndexedBook, browser: Browser, isHome: Bool = true) {
+    init(book: IndexedBook, browser: any LibraryBrowser, isHome: Bool = true) {
         self.book = book
         self.browser = browser
         self.isHome = isHome
@@ -298,7 +298,7 @@ private struct CoverTile<Browser: LibraryBrowser>: View {
         // changes coverHash but keeps book.id, so a plain `.task` would never
         // re-run and the tile would show the old cover until scrolled away.
         .task(id: book.coverHash) {
-            image = await ThumbnailCache.shared.thumbnail(for: book, repository: browser.repository)
+            image = await browser.coverImage(for: book)
         }
     }
 

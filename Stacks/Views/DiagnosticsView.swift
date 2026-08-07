@@ -18,7 +18,7 @@ struct DiagnosticsView: View {
     var body: some View {
         List {
             Section("Library") {
-                LabeledContent("Library", value: connection?.repository.root.lastPathComponent ?? "—")
+                LabeledContent("Library", value: connection?.coreRepository.root.lastPathComponent ?? "—")
                 LabeledContent("Books", value: "\(connection?.books.count ?? 0)")
                 if connection?.isRebuilding == true {
                     ProgressView(value: connection?.rebuildProgress ?? 0)

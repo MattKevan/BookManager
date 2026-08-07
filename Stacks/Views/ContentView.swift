@@ -207,28 +207,28 @@ struct ContentView: View {
         }
         // Delete confirmation: all delete paths (menu, Delete key, context
         // menu) route through `requestDelete`, which sets `pendingDelete` on
-        // the ACTIVE library (home or peer — peers trash into their own
-        // trash); the destructive action here runs the actual `delete(ids:)`.
+        // the current browser (home library or a connected remote); the
+        // destructive action here runs the actual `delete(ids:)`.
         .alert(
-            (session.activeLibrary?.pendingDelete).map { "Move \($0.count) book\($0.count == 1 ? "" : "s") to Trash?" } ?? "Move to Trash?",
+            (session.browser?.pendingDelete).map { "Move \($0.count) book\($0.count == 1 ? "" : "s") to Trash?" } ?? "Move to Trash?",
             isPresented: Binding(
-                get: { session.activeLibrary?.pendingDelete != nil },
-                set: { if !$0 { session.activeLibrary?.pendingDelete = nil } }
+                get: { session.browser?.pendingDelete != nil },
+                set: { if !$0 { session.browser?.pendingDelete = nil } }
             )
         ) {
             Button("Move to Trash", role: .destructive) {
-                if let ids = session.activeLibrary?.pendingDelete {
-                    session.activeLibrary?.pendingDelete = nil
-                    if let library = session.activeLibrary {
-                        Task { await library.delete(ids: ids) }
+                if let ids = session.browser?.pendingDelete {
+                    session.browser?.pendingDelete = nil
+                    if let browser = session.browser {
+                        Task { await browser.delete(ids: ids) }
                     }
                 }
             }
             Button("Cancel", role: .cancel) {
-                session.activeLibrary?.pendingDelete = nil
+                session.browser?.pendingDelete = nil
             }
         } message: {
-            Text("The selected book\((session.activeLibrary?.pendingDelete?.count ?? 1) == 1 ? "" : "s") stays in the library Trash and can be restored later.")
+            Text("The selected book\((session.browser?.pendingDelete?.count ?? 1) == 1 ? "" : "s") stays in the library Trash and can be restored later.")
         }
     }
 
@@ -345,7 +345,7 @@ extension ContentView {
     /// device view is table-only), so it is hidden in device mode.
     private var viewPickerToolbarItem: some ToolbarContent {
         ToolbarItem(id: "view-picker") {
-            if session.selectedDeviceID == nil && session.activeLibrary != nil {
+            if session.selectedDeviceID == nil && session.browser != nil {
                 Picker("View", selection: viewModeBinding) {
                     Image(systemName: "list.bullet")
                         .accessibilityLabel("Table")
@@ -365,7 +365,7 @@ extension ContentView {
     /// (home in device mode, the peer when a peer is the browser context).
     private var searchToolbarItem: some ToolbarContent {
         ToolbarItem(id: "search") {
-            if session.activeLibrary != nil {
+            if session.browser != nil {
                 ToolbarSearchField(
                     text: librarySearchBinding,
                     prompt: "Search books",
@@ -397,7 +397,7 @@ extension ContentView {
     /// sidebar's does not propagate to the window on macOS).
     private var sidebarColumn: some View {
         SidebarView(session: session)
-            .navigationTitle(session.activeLibrary?.name ?? "Stacks")
+            .navigationTitle(session.browser?.name ?? "Stacks")
             .navigationSplitViewColumnWidth(220)
     }
 
@@ -408,35 +408,23 @@ extension ContentView {
         if session.selectedDeviceID != nil {
             return session.devices.selectedDevice?.name ?? "Device"
         }
-        guard let library = session.activeLibrary else { return "Stacks" }
-        if let category = library.facetNavigation.category {
+        guard let browser = session.browser else { return "Stacks" }
+        if let category = browser.facetNavigation.category {
             return "\(library.name) — \(category.displayName)"
         }
         return library.name
     }
 
-    /// The trailing column: the device books table, the active library's
-    /// browser, or a no-library placeholder.
+    /// The trailing column: the device books table, the current browser (home
+    /// library or a connected remote), or a no-library placeholder.
     private var detailColumn: some View {
         Group {
             if session.selectedDeviceID != nil {
                 DeviceBooksView(session: session) {
                     session.presentImportReport()
                 }
-            } else if let library = session.activeLibrary {
-                // The facet "middle column" as a fixed-width pane inside the
-                // detail column, present only while a category is active so
-                // All Books stays a true 2-column layout. Fixed (not
-                // draggable): live resize reflow flickered — SwiftUI's
-                // LazyVGrid cannot animate a continuous reflow.
-                HStack(spacing: 0) {
-                    if library.facetNavigation.category != nil {
-                        FacetListView(browser: library)
-                            .frame(width: 240)
-                        Divider()
-                    }
-                    libraryBrowser(for: library)
-                }
+            } else if let browser = session.browser {
+                browserPane(browser)
             } else {
                 ContentUnavailableView {
                     Label("No Library Open", systemImage: "books.vertical")
@@ -466,6 +454,8 @@ extension ContentView {
             ToolbarSpacer(.fixed)
             if isHomeContext {
                 libraryActionItems
+            } else if session.remoteBrowser != nil {
+                remoteActionItems
             } else if session.activeLibrary != nil {
                 peerActionItems
             }
@@ -518,11 +508,11 @@ extension ContentView {
     /// shows the browser, so the active library is always present there. Task 5
     /// routes the sidebar selection between home and peers; for now the active
     /// library is home (or the most recently opened peer).
-    private var library: LibraryConnection {
-        guard let library = session.activeLibrary else {
+    private var library: any LibraryBrowser {
+        guard let browser = session.browser else {
             preconditionFailure("Browser shown without an open library")
         }
-        return library
+        return browser
     }
 
     /// Binds the grid/list picker to the active connection's view mode.
@@ -535,11 +525,30 @@ extension ContentView {
 
     /// The browser content for a library. Home keeps the drag-drop import
     /// handler (dropped files land in home); a peer gets the PeerLibraryView
+    /// The facet "middle column" as a fixed-width pane inside the detail
+    /// column, present only while a category is active so All Books stays a
+    /// true 2-column layout. Fixed (not draggable): live resize reflow
+    /// flickered — SwiftUI's LazyVGrid cannot animate a continuous reflow.
+    private func browserPane(_ browser: any LibraryBrowser) -> some View {
+        HStack(spacing: 0) {
+            if browser.facetNavigation.category != nil {
+                FacetListView(browser: browser)
+                    .frame(width: 240)
+                Divider()
+            }
+            libraryBrowser(for: browser)
+        }
+    }
+
     /// wrapper, whose context menu adds Copy to Home Library (the copy itself
     /// is wired in Task 6).
     @ViewBuilder
-    private func libraryBrowser(for library: LibraryConnection) -> some View {
-        if library === session.home {
+    private func libraryBrowser(for library: any LibraryBrowser) -> some View {
+        if let connection = library as? LibraryConnection, connection !== session.home {
+            PeerLibraryView(peer: connection) {
+                Task { await session.copySelectionFromPeerToHome(connection) }
+            }
+        } else {
             Group {
                 switch library.viewMode {
                 case .table:
@@ -549,11 +558,8 @@ extension ContentView {
                 }
             }
             .onDrop(of: [.fileURL], isTargeted: nil) { providers in
-                handleDrop(providers)
-            }
-        } else {
-            PeerLibraryView(peer: library) {
-                Task { await session.copySelectionFromPeerToHome(library) }
+                guard library is LibraryConnection else { return false }
+                return handleDrop(providers)
             }
         }
     }
@@ -563,7 +569,28 @@ extension ContentView {
     /// mode and counts as home context; peer mode does not — the home-only
     /// toolbar cluster and inspector apply only to home.
     private var isHomeContext: Bool {
-        session.activeLibrary === session.home
+        session.activeLibrary === session.home && session.remoteBrowser == nil
+    }
+
+    /// Remote-context toolbar cluster: Refresh (re-sync) and Disconnect.
+    @ToolbarContentBuilder
+    private var remoteActionItems: some ToolbarContent {
+        ToolbarItem(id: "refresh-remote") {
+            Button {
+                Task { await session.remoteBrowser?.refreshBooks() }
+            } label: {
+                Label("Refresh", systemImage: "arrow.clockwise")
+            }
+            .help("Re-sync with the remote library")
+        }
+        ToolbarItem(id: "close-remote") {
+            Button {
+                session.disconnectRemote()
+            } label: {
+                Label("Disconnect", systemImage: "xmark")
+            }
+            .help("Disconnect from the remote library")
+        }
     }
 
     /// Peer-context toolbar cluster, replacing Add/Open/Edit + the inspector

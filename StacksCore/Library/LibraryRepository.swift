@@ -281,6 +281,22 @@ public actor LibraryRepository: LibraryRepositoryImporting {
     /// the assigned seq, or nil when the id was a duplicate.
     @discardableResult
     public func ingest(_ command: JournalCommand) async throws -> Int64? {
+        // State-validation BEFORE the append: a command that cannot apply must
+        // never enter the journal — it would be re-served to every client on
+        // every pull. delete/restore are idempotent end-state ops (missing
+        // books pass), so only the strict updates are checked here.
+        switch command.op {
+        case .updateBook(let payload):
+            guard try await catalog.book(id: payload.bookID) != nil else {
+                throw LibraryRepositoryError.bookNotFound(payload.bookID)
+            }
+        case .setCover(let payload):
+            guard try await catalog.book(id: payload.bookID) != nil else {
+                throw LibraryRepositoryError.bookNotFound(payload.bookID)
+            }
+        case .addBook, .deleteBook, .restoreBook:
+            break
+        }
         guard let appended = try await journal.append(op: command.op, id: command.id) else {
             return nil  // duplicate id — already applied
         }
@@ -423,7 +439,12 @@ public actor LibraryRepository: LibraryRepositoryImporting {
         case .deleteBook(let payload):
             try await applyDeleteBook(id: payload.bookID, materializeFolders: materializeFolders)
         case .restoreBook(let payload):
-            _ = try await applyRestoreBook(id: payload.bookID, materializeFolders: materializeFolders)
+            // Idempotent end-state op: restoring a book that is not in the
+            // catalog is a successful no-op (stale client racing another
+            // client's delete).
+            if try await catalog.book(id: payload.bookID) != nil {
+                _ = try await applyRestoreBook(id: payload.bookID, materializeFolders: materializeFolders)
+            }
         }
     }
 
@@ -546,9 +567,9 @@ public actor LibraryRepository: LibraryRepositoryImporting {
     }
 
     private func applyDeleteBook(id: UUID, materializeFolders: Bool) async throws {
-        guard let current = try await catalog.book(id: id) else {
-            throw LibraryRepositoryError.bookNotFound(id)
-        }
+        // Idempotent end-state op: deleting a book that is already gone is a
+        // no-op (a stale client racing another client's delete must succeed).
+        guard let current = try await catalog.book(id: id) else { return }
         if materializeFolders {
             try await folder.trash(bookID: id, relativePath: current.relativePath)
         }

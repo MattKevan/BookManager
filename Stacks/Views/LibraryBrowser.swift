@@ -1,18 +1,19 @@
+import AppKit
 import Foundation
 import StacksCore
 
-/// The browser-facing surface of an open library. `LibraryConnection` (home and
-/// peers) conforms; grid/table/facet views are generic over it.
+/// The browser-facing surface of an open library OR a connected remote
+/// library. `LibraryConnection` (home) and `RemoteLibraryBrowser` conform;
+/// grid/table/facet views are generic over it.
 ///
-/// `repository` is part of the surface because the cover tile needs it for
-/// thumbnails (`ThumbnailCache.thumbnail(for:repository:)` resolves cover.jpg
-/// and format files against the library root). Every conformer is a full
-/// connection, so the dependency is structural, not incidental.
+/// `repository` is nil for remote libraries — their covers come from the
+/// server via `coverImage(for:)` (the default implementation routes through
+/// the thumbnail cache for local libraries).
 @MainActor
 protocol LibraryBrowser: AnyObject {
     var id: UUID { get }
     var name: String { get }
-    var repository: LibraryRepository { get }
+    var repository: LibraryRepository? { get }
     var books: [IndexedBook] { get }
     var selection: Set<UUID> { get set }
     var selectionBooks: [IndexedBook] { get }
@@ -26,15 +27,30 @@ protocol LibraryBrowser: AnyObject {
     var metadataEditQueue: [IndexedBook]? { get set }
     var searchText: String { get set }
     var viewMode: BrowserViewMode { get set }
+    /// Book ids awaiting delete confirmation (the grid's confirmation alert).
+    var pendingDelete: Set<UUID>? { get set }
     func open(id: UUID) async
     func reveal(id: UUID) async
     func formatFileURL(for book: IndexedBook) -> URL?
     func requestDelete(ids: Set<UUID>)
+    func delete(ids: Set<UUID>) async
+    func restore(id: UUID) async
     func clearGridSelection()
     func selectCategory(_ type: FacetType?)
     func selectValue(_ value: String?)
     func selectInGrid(_ book: IndexedBook)
     func refreshBooks() async
+    /// The cover image for a book — the thumbnail cache for local libraries,
+    /// a server fetch for remotes.
+    func coverImage(for book: IndexedBook) async -> NSImage?
+}
+
+extension LibraryBrowser {
+    /// Default: the local thumbnail pipeline (covers + format files on disk).
+    func coverImage(for book: IndexedBook) async -> NSImage? {
+        guard let repository else { return nil }
+        return await ThumbnailCache.shared.thumbnail(for: book, repository: repository)
+    }
 }
 
 extension LibraryConnection: LibraryBrowser {}

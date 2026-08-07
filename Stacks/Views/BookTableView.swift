@@ -2,13 +2,13 @@ import StacksCore
 import Foundation
 import SwiftUI
 
-struct BookTableView<Browser: LibraryBrowser>: View {
-    let browser: Browser
+struct BookTableView: View {
+    let browser: any LibraryBrowser
     /// Home-only chrome: the Edit Metadata context-menu item is available only
     /// for the home library (peers are browse + transfer in this slice).
     let isHome: Bool
 
-    init(browser: Browser, isHome: Bool = true) {
+    init(browser: any LibraryBrowser, isHome: Bool = true) {
         self.browser = browser
         self.isHome = isHome
     }

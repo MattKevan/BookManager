@@ -1,23 +1,46 @@
 import Foundation
 import Hummingbird
 import NIOCore
+import Logging
+import ServiceLifecycle
 
 /// The shared library server: the journal engine exposed over HTTP. One
 /// instance per library; the owning process (macOS app or the headless CLI)
 /// is the single writer — clients push commands and pull records, the server
 /// serializes appends and never merges.
+/// Errors thrown during server construction.
+public enum ServerConfigurationError: Error, Equatable {
+    /// The standalone init needs an indexes directory; the embedded init
+    /// (existing repository) does not take one.
+    case missingIndexesDirectory
+}
+
 public actor LibraryServer {
     private let repository: LibraryRepository
     private let configuration: ServerConfiguration
 
+    /// The standalone path: the server opens the library itself (headless
+    /// CLI, tests). Indexes must be server-owned.
     public init(configuration: ServerConfiguration) async throws {
         self.configuration = configuration
+        guard let indexesDirectory = configuration.indexesDirectory else {
+            throw ServerConfigurationError.missingIndexesDirectory
+        }
         let root = URL(fileURLWithPath: configuration.libraryPath)
         repository = try await LibraryRepository.open(
             at: root,
-            indexesDirectory: configuration.indexesDirectory,
+            indexesDirectory: indexesDirectory,
             deviceID: UUID()
         )
+    }
+
+    /// The embedded path (macOS app's Sharing pane): serves the repository
+    /// the app already has open. One repository, one journal, one writer —
+    /// the app's local edits flow into the served sync stream automatically
+    /// and clients' pushed commands serialize through the same journal.
+    public init(repository: LibraryRepository, configuration: ServerConfiguration) async {
+        self.repository = repository
+        self.configuration = configuration
     }
 
     /// Builds the Hummingbird application (testable in-process via
@@ -202,6 +225,8 @@ public actor LibraryServer {
     }
 
     private var advertiser: BonjourAdvertiser?
+    private var serviceGroup: ServiceGroup?
+    private var runTask: Task<Void, Never>?
 
     /// Runs the server until shutdown — the CLI's `serve` path. Advertises
     /// over Bonjour first when configured.
@@ -216,6 +241,33 @@ public actor LibraryServer {
         let app = try makeApplication()
         try await app.runService()
         advertiser?.stop()
+    }
+
+    /// Non-blocking start for in-process embedding (the macOS app's Sharing
+    /// pane). Owns the service group so `stop()` can trigger graceful
+    /// shutdown; advertises over Bonjour when configured.
+    public func start() async throws {
+        let app = try makeApplication()
+        if configuration.advertiseBonjour {
+            let advertiser = BonjourAdvertiser(
+                displayName: displayName, libraryID: libraryID, port: configuration.port
+            )
+            advertiser.start()
+            self.advertiser = advertiser
+        }
+        let group = ServiceGroup(services: [app], logger: Logger(label: "Stacks.LibraryServer"))
+        serviceGroup = group
+        runTask = Task { try? await group.run() }
+    }
+
+    /// Gracefully shuts the embedded server down.
+    public func stop() async {
+        await serviceGroup?.triggerGracefulShutdown()
+        runTask?.cancel()
+        advertiser?.stop()
+        advertiser = nil
+        serviceGroup = nil
+        runTask = nil
     }
 
     /// The opened library's manifest id (Bonjour TXT, diagnostics).

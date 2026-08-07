@@ -4,8 +4,8 @@ import SwiftUI
 /// The middle column of the 3-column browser: the value list for the active
 /// facet category (authors, series, tags, or formats), with counts and a
 /// filter field. Shown only while a facet category is active in the sidebar.
-struct FacetListView<Browser: LibraryBrowser>: View {
-    let browser: Browser
+struct FacetListView: View {
+    let browser: any LibraryBrowser
     @State private var filterText = ""
 
     /// The full value list for the active category.

@@ -112,12 +112,32 @@ final class LibrarySession {
     /// active library.
     var connection: LibraryConnection? { home }
 
+    /// The connected remote library (Plan 4): when non-nil, the browser
+    /// context shows it instead of the home library. One remote at a time.
+    var remoteBrowser: RemoteLibraryBrowser? {
+        get { _remoteBrowser }
+        set { _remoteBrowser = newValue }
+    }
+    private var _remoteBrowser: RemoteLibraryBrowser?
+
+    /// The current browser surface: the remote when connected, else the
+    /// active library. Grid/table/facet views are generic over it.
+    var browser: LibraryBrowser? { remoteBrowser ?? activeLibrary }
+
     // Hub state: the home library, open peers, and the browser-context
     // selection. Stored here (not in the `+Connection` extension) because
     // Swift extensions cannot hold stored properties.
     var home: LibraryConnection? {
         get { _home }
-        set { _home = newValue }
+        set {
+            // Sharing binds to the home library's repository; switching or
+            // closing home must tear the server down (the new library would
+            // otherwise be served under the old journal).
+            if newValue?.id != _home?.id, sharing.isSharing {
+                Task { await sharing.stop() }
+            }
+            _home = newValue
+        }
     }
     private var _home: LibraryConnection?
     var peers: [LibraryConnection] = []
@@ -180,7 +200,16 @@ final class LibrarySession {
         self.deviceID = deviceID
         self.bookmarks = bookmarks
         recentLibraries = Self.resolveRecents(bookmarks)
+        discovery.start()
     }
+
+    /// Bonjour browser for the Shared sidebar section. Runs for the app's
+    /// lifetime; `stop()` is a no-op at deinit (the process owns the socket).
+    let discovery = LibraryDiscovery()
+
+    /// The in-process library server + Bonjour advertising (Settings →
+    /// Sharing). Lifecycle follows the home library and the share toggle.
+    let sharing = SharingService()
 
     /// Create New Library: NSSavePanel lets the user choose WHERE the library
     /// lives and NAME its folder. The open-panel flow this replaces could only

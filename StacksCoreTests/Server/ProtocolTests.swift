@@ -131,6 +131,75 @@ struct ProtocolTests {
     }
 
     @Test
+    func deleteOfUnknownBookIsNoOp() async throws {
+        let port = try freePort()
+        try await startServer(port: port)
+
+        // A stale client racing another client's delete pushes a delete for a
+        // book the server no longer knows. End-state semantics: no-op SUCCESS.
+        let push = SyncPushRequest(commands: [
+            ClientCommand(id: UUID(), op: .deleteBook(.init(bookID: UUID()))),
+            ClientCommand(id: UUID(), op: .restoreBook(.init(bookID: UUID()))),
+        ])
+        let pushed = try await send(port, method: "POST", path: "/api/commands",
+                                    body: try ProtocolTests.isoEncoder.encode(push))
+        #expect(pushed.status == 200)
+        let pushResult = try ProtocolTests.isoDecoder.decode(SyncPushResponse.self, from: pushed.data)
+        #expect(pushResult.errors.isEmpty)
+        #expect(pushResult.applied.count == 2)
+
+        // Both commands are recorded (they define the sync cursor for other
+        // clients) and replay cleanly on every pull.
+        let pull = try await send(port, method: "GET", path: "/api/sync?after=0")
+        let result = try ProtocolTests.isoDecoder.decode(SyncPullResponse.self, from: pull.data)
+        #expect(result.commands.count == 2)
+
+        // The server survives: a real add still applies afterwards.
+        let addID = UUID()
+        let add = SyncPushRequest(commands: [
+            ClientCommand(id: addID, op: .addBook(.init(
+                bookID: UUID(), title: "After", authors: [], series: nil, seriesIndex: nil,
+                tags: [], rating: nil, publisher: nil, publicationDate: nil, addedDate: .now,
+                languages: [], identifiers: [:], comments: nil, formats: [], cover: nil
+            ))),
+        ])
+        let pushedAdd = try await send(port, method: "POST", path: "/api/commands",
+                                       body: try ProtocolTests.isoEncoder.encode(add))
+        let addResult = try ProtocolTests.isoDecoder.decode(SyncPushResponse.self, from: pushedAdd.data)
+        #expect(addResult.errors.isEmpty)
+        #expect(addResult.applied == [3])
+    }
+
+    @Test
+    func updateOfUnknownBookIsRejected() async throws {
+        let port = try freePort()
+        try await startServer(port: port)
+
+        // A command that cannot apply must never enter the journal — it would
+        // be re-served to every client on every pull, wedging their replays.
+        let push = SyncPushRequest(commands: [
+            ClientCommand(id: UUID(), op: .updateBook(.init(
+                bookID: UUID(), edit: .init(title: "Ghost")
+            ))),
+            ClientCommand(id: UUID(), op: .setCover(.init(
+                bookID: UUID(), cover: nil
+            ))),
+        ])
+        let pushed = try await send(port, method: "POST", path: "/api/commands",
+                                    body: try ProtocolTests.isoEncoder.encode(push))
+        #expect(pushed.status == 200)
+        let pushResult = try ProtocolTests.isoDecoder.decode(SyncPushResponse.self, from: pushed.data)
+        #expect(pushResult.applied.isEmpty)
+        #expect(pushResult.errors.count == 2)
+
+        // Nothing was recorded: the journal stays empty and the server remains
+        // fully replayable.
+        let pull = try await send(port, method: "GET", path: "/api/sync?after=0")
+        let result = try ProtocolTests.isoDecoder.decode(SyncPullResponse.self, from: pull.data)
+        #expect(result.commands.isEmpty)
+    }
+
+    @Test
     func duplicateCommandIdAppliesOnce() async throws {
         let port = try freePort()
         try await startServer(port: port)

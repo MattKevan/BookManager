@@ -81,7 +81,7 @@ extension LibrarySession {
     /// browser drop handler use the explicit `into:` variant instead.
     func importFiles(urls: [URL]) async {
         guard let target = activeLibrary else { return }
-        let repository = target.repository
+        let repository = target.coreRepository
         let service = ImportService(layout: .init(root: repository.root))
         do {
             importReport = try await service.importFiles(urls, into: repository)
@@ -123,9 +123,9 @@ extension LibrarySession {
             if let url = source.formatFileURL(for: book) { urls.append(url) }
         }
         guard !urls.isEmpty else { return }
-        let service = ImportService(layout: .init(root: target.repository.root))
+        let service = ImportService(layout: .init(root: target.coreRepository.root))
         do {
-            importReport = try await service.importFiles(urls, into: target.repository)
+            importReport = try await service.importFiles(urls, into: target.coreRepository)
         } catch {
             importReport = ImportReport(items: [
                 ImportItem(sourceURL: urls.first ?? URL(fileURLWithPath: "/"), kind: .epub,
@@ -156,9 +156,9 @@ extension LibrarySession {
     /// at the target's repository.
     func importFiles(into target: LibraryConnection, urls: [URL]) async {
         guard !urls.isEmpty else { return }
-        let service = ImportService(layout: .init(root: target.repository.root))
+        let service = ImportService(layout: .init(root: target.coreRepository.root))
         do {
-            importReport = try await service.importFiles(urls, into: target.repository)
+            importReport = try await service.importFiles(urls, into: target.coreRepository)
         } catch {
             importReport = ImportReport(items: [
                 ImportItem(sourceURL: urls.first ?? URL(fileURLWithPath: "/"), kind: .epub,
@@ -353,7 +353,7 @@ extension LibrarySession {
             sourcePath: sourcePath,
             libraryID: summary.libraryID,
             selection: Array(calibreSelectedIDs),
-            layout: .init(root: target.repository.root)
+            layout: .init(root: target.coreRepository.root)
         )
         calibreImportReport = nil
         calibreImportProgress = nil
@@ -373,7 +373,7 @@ extension LibrarySession {
             calibreImportTask = nil
             return
         }
-        let repository = target.repository
+        let repository = target.coreRepository
         calibreImportInProgress = true
         calibreImportProgress = 0
         lastCalibreLiveRefresh = nil

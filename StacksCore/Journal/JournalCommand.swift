@@ -70,16 +70,65 @@ public struct JournalCommand: Sendable, Codable, Equatable {
         public let contentHash: String
         public let size: Int64
         public let stagedName: String
+
+        public init(kind: String, filename: String, contentHash: String, size: Int64, stagedName: String) {
+            self.kind = kind
+            self.filename = filename
+            self.contentHash = contentHash
+            self.size = size
+            self.stagedName = stagedName
+        }
     }
 
     public struct StagedCover: Sendable, Codable, Equatable {
         public let filename: String
         public let contentHash: String
         public let stagedName: String
+
+        public init(filename: String, contentHash: String, stagedName: String) {
+            self.filename = filename
+            self.contentHash = contentHash
+            self.stagedName = stagedName
+        }
     }
 
     public struct AddBook: Sendable, Codable, Equatable {
         public let bookID: UUID
+
+        public init(
+            bookID: UUID,
+            title: String,
+            authors: [String],
+            series: String?,
+            seriesIndex: Double?,
+            tags: [String],
+            rating: Int?,
+            publisher: String?,
+            publicationDate: Date?,
+            addedDate: Date?,
+            languages: [String],
+            identifiers: [String: String],
+            comments: String?,
+            formats: [StagedFormat],
+            cover: StagedCover?
+        ) {
+            self.bookID = bookID
+            self.title = title
+            self.authors = authors
+            self.series = series
+            self.seriesIndex = seriesIndex
+            self.tags = tags
+            self.rating = rating
+            self.publisher = publisher
+            self.publicationDate = publicationDate
+            self.addedDate = addedDate
+            self.languages = languages
+            self.identifiers = identifiers
+            self.comments = comments
+            self.formats = formats
+            self.cover = cover
+        }
+
         public let title: String
         public let authors: [String]
         public let series: String?
@@ -99,18 +148,36 @@ public struct JournalCommand: Sendable, Codable, Equatable {
     public struct UpdateBook: Sendable, Codable, Equatable {
         public let bookID: UUID
         public let edit: BookEdit
+
+        public init(bookID: UUID, edit: BookEdit) {
+            self.bookID = bookID
+            self.edit = edit
+        }
     }
 
     public struct SetCover: Sendable, Codable, Equatable {
         public let bookID: UUID
         public let cover: StagedCover?
+
+        public init(bookID: UUID, cover: StagedCover?) {
+            self.bookID = bookID
+            self.cover = cover
+        }
     }
 
     public struct DeleteBook: Sendable, Codable, Equatable {
         public let bookID: UUID
+
+        public init(bookID: UUID) {
+            self.bookID = bookID
+        }
     }
 
     public struct RestoreBook: Sendable, Codable, Equatable {
         public let bookID: UUID
+
+        public init(bookID: UUID) {
+            self.bookID = bookID
+        }
     }
 }
