@@ -104,7 +104,13 @@ public actor LocalCatalog {
     }
 
     public func search(_ query: String) throws -> [IndexedBook] {
-        guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        // FTS5's MATCH syntax rejects unbalanced quotes and bare operators
+        // (unclosed `"`, stray `-`/`*`, bare `OR`) with a syntax error that
+        // the caller surfaces as an empty search. Quote every token so user
+        // input is treated as literal text; tokens that collapse to nothing
+        // are dropped. A query of only dropped tokens behaves like no search.
+        let sanitized = Self.ftsQuery(from: query)
+        guard !sanitized.isEmpty else {
             return try allBooks()
         }
         return try database.read { db in
@@ -116,9 +122,20 @@ public actor LocalCatalog {
                     WHERE bookSearch MATCH ? AND book.isDeleted = 0
                     ORDER BY book.title COLLATE NOCASE
                     """,
-                arguments: [query]
+                arguments: [sanitized]
             )
         }
+    }
+
+    /// Wraps every whitespace-separated token of a user search in double
+    /// quotes (with embedded quotes stripped) so FTS5 treats it as literal
+    /// text instead of query syntax.
+    private static func ftsQuery(from raw: String) -> String {
+        raw.split(whereSeparator: \.isWhitespace).compactMap { token in
+            let escaped = token.replacingOccurrences(of: "\"", with: "")
+            guard !escaped.isEmpty else { return nil }
+            return "\"\(escaped)\""
+        }.joined(separator: " ")
     }
 
     public func books(facetType: FacetType, value: String) throws -> [IndexedBook] {
@@ -138,11 +155,17 @@ public actor LocalCatalog {
 
     public func facetCounts(_ type: FacetType) throws -> [(value: String, count: Int)] {
         try database.read { db in
+            // Deleted books keep their facet rows until the book row is gone
+            // (deleteBook/restoreBook upsert without touching facets) — the
+            // counts must join on the live book, or every deleted book's
+            // authors/tags/series would inflate the sidebar counts forever.
             let rows = try Row.fetchAll(
                 db,
                 sql: """
-                    SELECT value, COUNT(*) AS count FROM bookFacet
-                    WHERE type = ? GROUP BY value ORDER BY value COLLATE NOCASE
+                    SELECT bf.value, COUNT(*) AS count FROM bookFacet bf
+                    JOIN book b ON b.id = bf.bookID
+                    WHERE bf.type = ? AND b.isDeleted = 0
+                    GROUP BY bf.value ORDER BY bf.value COLLATE NOCASE
                     """,
                 arguments: [type.rawValue]
             )

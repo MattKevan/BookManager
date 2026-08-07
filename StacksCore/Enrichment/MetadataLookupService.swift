@@ -65,6 +65,10 @@ public enum MetadataScoring {
 public actor MetadataLookupService {
     private let registry: MetadataRegistry
     private var cache: [String: MetadataLookupResult]
+    /// LRU order of cache keys (most-recently-used last). Bounds the cache so
+    /// a long session's distinct queries can't pin candidates forever.
+    private var cacheOrder: [String] = []
+    private static let cacheLimit = 100
 
     public init(registry: MetadataRegistry, cache: [String: MetadataLookupResult] = [:]) {
         self.registry = registry
@@ -74,7 +78,14 @@ public actor MetadataLookupService {
     public func lookup(_ query: MetadataLookupQuery) async throws -> MetadataLookupResult {
         try Task.checkCancellation()
         let key = Self.cacheKey(for: query)
-        if let cached = cache[key] { return cached }
+        if let cached = cache[key] {
+            // LRU touch.
+            if let position = cacheOrder.firstIndex(of: key) {
+                cacheOrder.remove(at: position)
+                cacheOrder.append(key)
+            }
+            return cached
+        }
 
         var candidates: [MetadataCandidate] = []
         var firstError: Error?
@@ -102,6 +113,11 @@ public actor MetadataLookupService {
             autoApply: MetadataScoring.autoApply(from: ranked, for: query)
         )
         cache[key] = result
+        cacheOrder.append(key)
+        if cacheOrder.count > Self.cacheLimit {
+            let evicted = cacheOrder.removeFirst()
+            cache.removeValue(forKey: evicted)
+        }
         return result
     }
 

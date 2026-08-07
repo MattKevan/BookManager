@@ -25,13 +25,18 @@ struct BookInspectorView: View {
                 ContentUnavailableView("No Selection", systemImage: "sidebar.trailing")
             }
         }
-        .task(id: book?.id) {
-            if let book {
-                coverImage = await ThumbnailCache.shared.thumbnail(for: book, repository: session.repository)
-                guard !Task.isCancelled else { return }
-            } else {
+        // Keyed on the cover hash so a metadata edit that replaces the cover
+        // restarts the load (book.id is stable across edits). The state
+        // assignment happens AFTER the cancellation guard: a cancelled task
+        // must never overwrite a newer selection's cover.
+        .task(id: book?.coverHash) {
+            guard let book else {
                 coverImage = nil
+                return
             }
+            let image = await ThumbnailCache.shared.thumbnail(for: book, repository: session.repository)
+            guard !Task.isCancelled else { return }
+            coverImage = image
         }
         .frame(minWidth: 280, idealWidth: 320)
     }

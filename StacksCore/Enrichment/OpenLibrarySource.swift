@@ -55,10 +55,14 @@ public struct OpenLibrarySource: MetadataSourceProviding {
             let cover: URL?
             let idSuffix: String
             if let coverID = doc.cover_i {
-                idSuffix = "\(coverID)"
+                // Multiple editions of a work share cover_i — the doc index
+                // keeps candidate ids unique so the review sheet's ForEach rows
+                // stay distinct (a duplicate id would let Apply target the
+                // wrong row).
+                idSuffix = "\(coverID)-\(index)"
                 cover = URL(string: "https://covers.openlibrary.org/b/id/\(coverID)-M.jpg")
             } else if let isbn = doc.isbn?.first {
-                idSuffix = isbn
+                idSuffix = "\(isbn)-\(index)"
                 cover = URL(string: "https://covers.openlibrary.org/b/isbn/\(isbn)-M.jpg")
             } else {
                 // Same-title docs have no cover_i/isbn handle — the index keeps

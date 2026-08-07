@@ -294,7 +294,10 @@ private struct CoverTile<Browser: LibraryBrowser>: View {
         .accessibilityAction {
             Task { await browser.open(id: book.id) }
         }
-        .task {
+        // Keyed on the cover hash: a metadata edit that replaces the cover
+        // changes coverHash but keeps book.id, so a plain `.task` would never
+        // re-run and the tile would show the old cover until scrolled away.
+        .task(id: book.coverHash) {
             image = await ThumbnailCache.shared.thumbnail(for: book, repository: browser.repository)
         }
     }

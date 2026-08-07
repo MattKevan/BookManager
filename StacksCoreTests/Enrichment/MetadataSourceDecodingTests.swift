@@ -32,7 +32,7 @@ struct MetadataSourceDecodingTests {
         #expect(first.authors == ["David Epstein"])
         #expect(first.publisher == "Riverhead Books")
         #expect(first.isbn == "9780735221291")
-        #expect(first.id == "openlibrary-123456")
+        #expect(first.id == "openlibrary-123456-0")
         #expect(first.coverURL?.absoluteString == "https://covers.openlibrary.org/b/id/123456-M.jpg")
         #expect(Calendar(identifier: .gregorian).component(.year, from: try #require(first.publicationDate)) == 2019)
 
