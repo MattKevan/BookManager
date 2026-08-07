@@ -370,7 +370,7 @@ public actor LibraryRepository: LibraryRepositoryImporting {
         if let snapshot {
             for book in snapshot.books {
                 state[book.bookID] = try IndexedBookFactory.make(
-                    resolved: resolved(from: book),
+                    resolved: CommandReplay.resolved(from: book),
                     bookID: book.bookID,
                     path: book.relativePath,
                     modifiedMilliseconds: 0
@@ -385,7 +385,7 @@ public actor LibraryRepository: LibraryRepositoryImporting {
                 throw LibraryRepositoryError.rebuildCancelled
             }
             do {
-                try applyToState(command, state: &state)
+                try CommandReplay.apply(command, to: &state)
                 report.booksBuilt = state.count
             } catch {
                 report.commandsSkipped += 1
@@ -398,65 +398,6 @@ public actor LibraryRepository: LibraryRepositoryImporting {
         }
         progress(1)
         return report
-    }
-
-    /// Applies one command as a pure state transformation (rebuild path).
-    /// Deterministic given `state`; the folder side effects belong to the
-    /// live apply path only.
-    private func applyToState(
-        _ command: JournalCommand,
-        state: inout [UUID: IndexedBook]
-    ) throws {
-        switch command.op {
-        case .addBook(let payload):
-            let path = CanonicalPathBuilder.relativeDirectory(
-                bookID: payload.bookID, title: payload.title, authors: payload.authors
-            )
-            state[payload.bookID] = try IndexedBookFactory.make(
-                resolved: resolved(from: payload),
-                bookID: payload.bookID,
-                path: path,
-                modifiedMilliseconds: tsMilliseconds(payload.addedDate ?? .now)
-            )
-        case .updateBook(let payload):
-            guard let current = state[payload.bookID] else {
-                throw LibraryRepositoryError.bookNotFound(payload.bookID)
-            }
-            let resolved = resolved(byApplying: payload.edit, to: current)
-            let path = CanonicalPathBuilder.relativeDirectory(
-                bookID: payload.bookID, title: resolved.title, authors: resolved.authors
-            )
-            state[payload.bookID] = try IndexedBookFactory.make(
-                resolved: resolved,
-                bookID: payload.bookID,
-                path: path,
-                modifiedMilliseconds: Int64(Date().timeIntervalSince1970 * 1_000)
-            )
-        case .setCover(let payload):
-            guard let current = state[payload.bookID] else {
-                throw LibraryRepositoryError.bookNotFound(payload.bookID)
-            }
-            state[payload.bookID] = replacingCover(current, coverHash: payload.cover?.contentHash)
-        case .deleteBook(let payload):
-            guard let current = state[payload.bookID] else {
-                throw LibraryRepositoryError.bookNotFound(payload.bookID)
-            }
-            state[payload.bookID] = withDeleted(current, isDeleted: true)
-        case .restoreBook(let payload):
-            guard let current = state[payload.bookID] else {
-                throw LibraryRepositoryError.bookNotFound(payload.bookID)
-            }
-            let resolved = resolved(from: current, isDeleted: false)
-            let path = CanonicalPathBuilder.relativeDirectory(
-                bookID: payload.bookID, title: resolved.title, authors: resolved.authors
-            )
-            state[payload.bookID] = try IndexedBookFactory.make(
-                resolved: resolved,
-                bookID: payload.bookID,
-                path: path,
-                modifiedMilliseconds: current.modifiedMilliseconds
-            )
-        }
     }
 
     // MARK: - Journal apply
@@ -511,7 +452,7 @@ public actor LibraryRepository: LibraryRepositoryImporting {
                 coverData = try? Data(contentsOf: url)
             }
         }
-        let resolved = resolved(from: payload)
+        let resolved = CommandReplay.resolved(from: payload)
         let path = CanonicalPathBuilder.relativeDirectory(
             bookID: payload.bookID, title: payload.title, authors: payload.authors
         )
@@ -527,7 +468,7 @@ public actor LibraryRepository: LibraryRepositoryImporting {
             resolved: resolved,
             bookID: payload.bookID,
             path: path,
-            modifiedMilliseconds: tsMilliseconds(payload.addedDate ?? .now)
+            modifiedMilliseconds: CommandReplay.tsMilliseconds(payload.addedDate ?? .now)
         )
         try await catalog.upsert(indexed)
         return indexed
@@ -541,7 +482,7 @@ public actor LibraryRepository: LibraryRepositoryImporting {
         guard let current = try await catalog.book(id: id) else {
             throw LibraryRepositoryError.bookNotFound(id)
         }
-        let resolved = resolved(byApplying: edit, to: current)
+        let resolved = CommandReplay.resolved(byApplying: edit, to: current)
         let newPath = CanonicalPathBuilder.relativeDirectory(
             bookID: id, title: resolved.title, authors: resolved.authors
         )
@@ -599,7 +540,7 @@ public actor LibraryRepository: LibraryRepositoryImporting {
                 try? FileManager.default.removeItem(at: coverURL)
             }
         }
-        let updated = replacingCover(current, coverHash: cover?.contentHash)
+        let updated = CommandReplay.replacingCover(current, coverHash: cover?.contentHash)
         try await catalog.upsert(updated)
         return updated
     }
@@ -611,7 +552,7 @@ public actor LibraryRepository: LibraryRepositoryImporting {
         if materializeFolders {
             try await folder.trash(bookID: id, relativePath: current.relativePath)
         }
-        let deleted = withDeleted(current, isDeleted: true)
+        let deleted = CommandReplay.withDeleted(current, isDeleted: true)
         try await catalog.upsert(deleted)
     }
 
@@ -619,7 +560,7 @@ public actor LibraryRepository: LibraryRepositoryImporting {
         guard let current = try await catalog.book(id: id) else {
             throw LibraryRepositoryError.bookNotFound(id)
         }
-        let resolved = resolved(from: current, isDeleted: false)
+        let resolved = CommandReplay.resolved(from: current, isDeleted: false)
         let path = CanonicalPathBuilder.relativeDirectory(
             bookID: id, title: resolved.title, authors: resolved.authors
         )
@@ -652,154 +593,6 @@ public actor LibraryRepository: LibraryRepositoryImporting {
             books: books.map { JournalSnapshot.Book(book: $0) }
         )
         try await journal.writeSnapshot(snapshot)
-    }
-
-    // MARK: - Mapping helpers
-
-    /// Applies an edit's fields over the current catalog row — the same
-    /// semantics as the old Automerge apply: nil/`.keep` untouched, `.set`
-    /// assigns, `.clear` empties.
-    private func resolved(byApplying edit: BookEdit, to book: IndexedBook) -> ResolvedBook {
-        ResolvedBook(
-            id: book.id,
-            title: edit.title ?? book.title,
-            authors: edit.authors ?? book.authors,
-            series: edit.series.apply(to: book.series),
-            seriesIndex: edit.seriesIndex.apply(to: book.seriesIndex),
-            tags: edit.tags ?? book.tags,
-            rating: edit.rating.apply(to: book.rating),
-            publisher: edit.publisher.apply(to: book.publisher),
-            publicationDate: edit.publicationDate.apply(to: book.publicationDate),
-            addedDate: book.addedDate,
-            languages: edit.languages ?? book.languages,
-            identifiers: edit.identifiers ?? book.identifiers,
-            comments: edit.comments.apply(to: book.comments),
-            formats: book.formats.map {
-                BookFormatValue(kind: $0.kind, filename: $0.filename, contentHash: $0.contentHash, size: $0.size)
-            },
-            cover: book.coverHash.map { CoverValue(filename: "cover.jpg", contentHash: $0) },
-            rawMetadata: book.rawMetadata,
-            isDeleted: book.isDeleted
-        )
-    }
-
-    private func resolved(from book: IndexedBook) -> ResolvedBook {
-        resolved(from: book, isDeleted: book.isDeleted)
-    }
-
-    private func resolved(from book: IndexedBook, isDeleted: Bool) -> ResolvedBook {
-        ResolvedBook(
-            id: book.id,
-            title: book.title,
-            authors: book.authors,
-            series: book.series,
-            seriesIndex: book.seriesIndex,
-            tags: book.tags,
-            rating: book.rating,
-            publisher: book.publisher,
-            publicationDate: book.publicationDate,
-            addedDate: book.addedDate,
-            languages: book.languages,
-            identifiers: book.identifiers,
-            comments: book.comments,
-            formats: book.formats.map {
-                BookFormatValue(kind: $0.kind, filename: $0.filename, contentHash: $0.contentHash, size: $0.size)
-            },
-            cover: book.coverHash.map { CoverValue(filename: "cover.jpg", contentHash: $0) },
-            rawMetadata: book.rawMetadata,
-            isDeleted: isDeleted
-        )
-    }
-
-    private func resolved(from payload: JournalCommand.AddBook) -> ResolvedBook {
-        ResolvedBook(
-            id: payload.bookID,
-            title: payload.title,
-            authors: payload.authors,
-            series: payload.series,
-            seriesIndex: payload.seriesIndex,
-            tags: payload.tags,
-            rating: payload.rating,
-            publisher: payload.publisher,
-            publicationDate: payload.publicationDate,
-            addedDate: payload.addedDate,
-            languages: payload.languages,
-            identifiers: payload.identifiers,
-            comments: payload.comments,
-            formats: payload.formats.map {
-                BookFormatValue(kind: $0.kind, filename: $0.filename, contentHash: $0.contentHash, size: $0.size)
-            },
-            cover: payload.cover.map { CoverValue(filename: $0.filename, contentHash: $0.contentHash) },
-            rawMetadata: nil,
-            isDeleted: false
-        )
-    }
-
-    private func resolved(from snapshotBook: JournalSnapshot.Book) -> ResolvedBook {
-        ResolvedBook(
-            id: snapshotBook.bookID,
-            title: snapshotBook.title,
-            authors: snapshotBook.authors,
-            series: snapshotBook.series,
-            seriesIndex: snapshotBook.seriesIndex,
-            tags: snapshotBook.tags,
-            rating: snapshotBook.rating,
-            publisher: snapshotBook.publisher,
-            publicationDate: snapshotBook.publicationDate,
-            addedDate: snapshotBook.addedDate,
-            languages: snapshotBook.languages,
-            identifiers: snapshotBook.identifiers,
-            comments: snapshotBook.comments,
-            formats: snapshotBook.formats.map {
-                BookFormatValue(kind: $0.kind, filename: $0.filename, contentHash: $0.contentHash, size: $0.size)
-            },
-            cover: snapshotBook.cover.map { CoverValue(filename: $0.filename, contentHash: $0.contentHash) },
-            rawMetadata: nil,
-            isDeleted: snapshotBook.isDeleted
-        )
-    }
-
-    private func replacingCover(_ book: IndexedBook, coverHash: String?) -> IndexedBook {
-        IndexedBook(
-            id: book.id, title: book.title, authors: book.authors,
-            series: book.series, seriesIndex: book.seriesIndex, tags: book.tags,
-            rating: book.rating, publisher: book.publisher,
-            publicationMilliseconds: book.publicationMilliseconds,
-            addedMilliseconds: book.addedMilliseconds,
-            languages: book.languages, identifiers: book.identifiers, comments: book.comments,
-            rawMetadata: book.rawMetadata, formats: book.formats,
-            coverHash: coverHash, relativePath: book.relativePath,
-            modifiedMilliseconds: book.modifiedMilliseconds, isDeleted: book.isDeleted
-        )
-    }
-
-    private func withDeleted(_ book: IndexedBook, isDeleted: Bool) -> IndexedBook {
-        IndexedBook(
-            id: book.id, title: book.title, authors: book.authors,
-            series: book.series, seriesIndex: book.seriesIndex, tags: book.tags,
-            rating: book.rating, publisher: book.publisher,
-            publicationMilliseconds: book.publicationMilliseconds,
-            addedMilliseconds: book.addedMilliseconds,
-            languages: book.languages, identifiers: book.identifiers, comments: book.comments,
-            rawMetadata: book.rawMetadata, formats: book.formats,
-            coverHash: book.coverHash, relativePath: book.relativePath,
-            modifiedMilliseconds: book.modifiedMilliseconds, isDeleted: isDeleted
-        )
-    }
-
-    private func tsMilliseconds(_ date: Date) -> Int64 {
-        Int64(date.timeIntervalSince1970 * 1_000)
-    }
-}
-
-extension FieldEdit {
-    /// Applies the keep/set/clear instruction over a current value.
-    func apply(to current: T?) -> T? {
-        switch self {
-        case .keep: return current
-        case .set(let value): return value
-        case .clear: return nil
-        }
     }
 }
 
