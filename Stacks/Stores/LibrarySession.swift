@@ -92,7 +92,6 @@ final class LibrarySession {
     /// because the scan runs while the window is still interactive (only the
     /// wizard that follows is modal), so the user could switch libraries
     /// mid-scan.
-    var calibreImportTargetID: UUID?
     /// The in-flight Calibre import (started by the wizard's Import button).
     /// Held so `cancelCalibreImport` can actually stop the import instead of
     /// just dismissing the wizard while books keep being written.
@@ -268,61 +267,44 @@ final class LibrarySession {
         }
     }
 
-    /// Reopens the persisted open set at launch: the home library first (as
-    /// home), then each peer, in the saved order. Libraries whose bookmark
-    /// cannot be resolved or whose folder is unreachable become offline rows
-    /// (Retry available when a path is recoverable). The welcome screen
-    /// appears when nothing is persisted or every entry failed. No-op when a
-    /// library is already loaded (the window reappeared mid-session).
+    /// Reopens the persisted library at launch: the saved home entry becomes
+    /// the home library (extra order entries written by pre-single-library
+    /// builds are ignored — one library per instance). A library whose
+    /// bookmark cannot be resolved or whose folder is unreachable becomes an
+    /// offline row (Retry available when a path is recoverable). The welcome
+    /// screen appears when nothing is persisted or the reopen failed. No-op
+    /// when a library is already loaded (the window reappeared mid-session).
     func reopenLibraries() async {
         guard home == nil else { return }
         let order = openStore.order()
-        guard !order.isEmpty else {
+        guard let homeID = order.first else {
             state = .welcome
             return
         }
-        // Previously-opened libraries exist: show the loading spinner, never
-        // the welcome screen, while they reopen (openRequested flips to
-        // `.loaded` as soon as the first library is ready; the all-failed
-        // path below falls back to `.welcome`).
+        // A previously-opened library exists: show the loading spinner, never
+        // the welcome screen, while it reopens (openRequested flips to
+        // `.loaded` when ready; the failure paths below fall back).
         state = .loading
-        // The persisted order's FIRST entry is the home library
-        // (`persistOpenOrder` always writes home first). Deriving home from
-        // the order — not from `openStore.home()`, which can be stale or
-        // missing in stores written by earlier builds — guarantees the
-        // default library reopens as home and never lands in the Libraries
-        // (peers) section on relaunch.
-        let homeID = order.first
-        for libraryID in order {
-            guard let resolved = try? openStore.resolve(libraryID) else {
-                // Unresolvable bookmark (missing/corrupt data): no URL to
-                // retry — a name-only offline row lets the user Remove it.
-                offlinePeers.append(OfflineLibrary(
-                    id: libraryID,
-                    name: openStore.names()[libraryID] ?? "Library",
-                    url: nil,
-                    isHome: libraryID == homeID
-                ))
-                continue
-            }
-            await openRequested(
-                at: resolved.url,
-                intent: (libraryID == homeID) ? .home : .peer,
-                fallbackToWelcome: libraryID == homeID
-            )
-            if !isConnected(libraryID) {
-                offlinePeers.append(OfflineLibrary(
-                    id: libraryID,
-                    name: openStore.names()[libraryID] ?? resolved.url.lastPathComponent,
-                    url: resolved.url,
-                    isHome: libraryID == homeID
-                ))
-            }
+        guard let resolved = try? openStore.resolve(homeID) else {
+            // Unresolvable bookmark (missing/corrupt data): no URL to retry —
+            // a name-only offline row lets the user Remove it.
+            offlinePeers.append(OfflineLibrary(
+                id: homeID,
+                name: openStore.names()[homeID] ?? "Library",
+                url: nil,
+                isHome: true
+            ))
+            state = .welcome
+            return
         }
-        // A failed home with surviving peers: promote the first peer so the
-        // session is loaded (the failed home stays as an offline row).
-        if home == nil, !peers.isEmpty {
-            await promoteNextPeerToHome()
+        await openRequested(at: resolved.url, fallbackToWelcome: true)
+        if !isConnected(homeID) {
+            offlinePeers.append(OfflineLibrary(
+                id: homeID,
+                name: openStore.names()[homeID] ?? resolved.url.lastPathComponent,
+                url: resolved.url,
+                isHome: true
+            ))
         }
         // Heal a stale/missing home() designation so the store agrees with
         // the order (order.first is authoritative).
@@ -337,7 +319,7 @@ final class LibrarySession {
     /// the role). The offline row is dropped when the library is connected.
     func retryOffline(_ offline: OfflineLibrary) async {
         guard let url = offline.url else { return }
-        await openRequested(at: url, intent: offline.isHome ? .home : .peer)
+        await openRequested(at: url)
         if isConnected(offline.id) {
             offlinePeers.removeAll { $0.id == offline.id }
         }
@@ -350,20 +332,15 @@ final class LibrarySession {
         offlinePeers.removeAll { $0.id == offline.id }
     }
 
-    /// Whether `libraryID` is an open connection (home or peer).
+    /// Whether `libraryID` is the open connection.
     private func isConnected(_ libraryID: UUID) -> Bool {
-        home?.id == libraryID || peers.contains { $0.id == libraryID }
+        home?.id == libraryID
     }
 
-    /// Closes the active connection: a peer is dropped by itself; closing
-    /// home tears down the session's transient state, promotes the next peer
-    /// (or returns to the welcome screen when none remain).
+    /// Closes the library: tears down the connection and the session's
+    /// transient state, returning to the welcome screen.
     func closeLibrary() async {
         let closedHomeID = home?.id
-        if let active = activeLibrary, active !== home {
-            await closePeer(active)
-            return
-        }
         home?.stop()
         home = nil
         if let closedHomeID { openStore.remove(closedHomeID) }
@@ -387,25 +364,21 @@ final class LibrarySession {
         calibreImportReport = nil
         calibreImportInProgress = false
         calibreSourcePath = nil
-        calibreImportTargetID = nil
         pickerAction = nil
         isPickerPresented = false
         recentLibraries = Self.resolveRecents(bookmarks)
-        await promoteNextPeerToHome()
-        // Record the promoted home (or none) so the store stays accurate for
-        // the next launch; the order re-follows the live set.
-        openStore.setHome(home?.id)
+        openStore.setHome(nil)
         persistOpenOrder()
     }
 
     // MARK: - Activation
 
     private func activate(url: URL, create: Bool, fallbackToWelcome: Bool = false) async {
-        // The hub owns opening: create writes the library skeleton first, then
-        // both paths route through `openRequested` — the first library becomes
-        // home, every later open becomes a peer (never switches home). The
-        // loading state only applies when nothing is open yet — creating while
-        // a library is open must not blank the main content.
+        // Opening owns everything: create writes the library skeleton first,
+        // then both paths route through `openRequested` — one library per
+        // instance, so opening replaces the current home. The loading state
+        // only applies when nothing is open yet — creating while a library is
+        // open must not blank the main content.
         if home == nil { state = .loading }
         do {
             if create {
@@ -413,15 +386,8 @@ final class LibrarySession {
                     at: url, indexesDirectory: try Self.indexDirectory(), deviceID: deviceID
                 )
             }
-        // Create opens as home only when nothing is open yet; with an existing
-        // home it adds a peer (never switches home) — creating must not demote
-        // the active library. Plain open follows the same rule. A folder
-        // already open as a peer role-swaps via makeHomeExisting only on the
-        // explicit Change Home path.
-        let intent = LibraryOpenPolicy.createIntent(homeExists: home != nil)
         await openRequested(
             at: url,
-            intent: intent,
             fallbackToWelcome: fallbackToWelcome
         )
         } catch {

@@ -68,7 +68,7 @@ private struct AppCommands: Commands {
                 }
                 ForEach(session.recentLibraries) { entry in
                     Button(entry.name) {
-                        Task { await session.openLibraryAsPeer(at: entry.url) }
+                        Task { await session.openRequested(at: entry.url) }
                     }
                 }
             }
@@ -110,25 +110,14 @@ private struct AppCommands: Commands {
                 }
             }
             .disabled(session.selection.isEmpty || session.isLibraryUnavailable || session.selectedDeviceID != nil || !isHomeContext)
-            if !session.peers.isEmpty {
-                Divider()
-                Menu("Copy to Library…") {
-                    ForEach(session.peers) { peer in
-                        Button(peer.name) {
-                            Task { await session.copyHomeSelection(to: peer) }
-                        }
-                    }
-                }
-                .disabled(session.selection.isEmpty || session.isLibraryUnavailable || session.selectedDeviceID != nil || !isHomeContext)
-            }
         }
         // Edit menu: deletion of the ACTIVE library's selection (Cmd+Delete;
         // the bare Delete/Backspace key is handled in the grid/table views).
         // Peers trash into their own trash; device mode stays disabled.
         CommandGroup(after: .pasteboard) {
             Button("Delete") {
-                if let library = session.activeLibrary {
-                    library.requestDelete(ids: library.selection)
+                if let browser = session.browser {
+                    browser.requestDelete(ids: browser.selection)
                 }
             }
             .keyboardShortcut(.delete, modifiers: .command)

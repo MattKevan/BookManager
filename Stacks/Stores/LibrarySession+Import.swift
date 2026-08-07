@@ -61,7 +61,6 @@ extension LibrarySession {
         calibreActivity = nil
         lastCalibreLiveRefresh = nil
         calibreSourcePath = nil
-        calibreImportTargetID = nil
     }
 
     func stopCalibreAccess() {
@@ -77,8 +76,7 @@ extension LibrarySession {
 
     /// File > Import Books and the toolbar Add Books button land in the
     /// library that is currently active — home in device mode, since device
-    /// selection clears the browser context. Peer drag-drop and the library
-    /// browser drop handler use the explicit `into:` variant instead.
+    /// selection clears the browser context.
     func importFiles(urls: [URL]) async {
         guard let target = activeLibrary else { return }
         let repository = target.coreRepository
@@ -93,9 +91,7 @@ extension LibrarySession {
         await target.refreshAll()
         // Enrich freshly imported books that are missing authors/tags, when
         // the preference is on. Runs off the import's critical path so the
-        // report feedback is not delayed by network lookups. The enrichment
-        // chain is home-scoped, so it only runs for home imports (peer
-        // enrichment is not wired yet).
+        // report feedback is not delayed by network lookups.
         if target === home, AppSettings.automaticallyFetchMissingMetadata() {
             let importedIDs = (importReport?.imported ?? []).compactMap { item -> UUID? in
                 if case let .imported(id) = item.status { return id }
@@ -105,68 +101,6 @@ extension LibrarySession {
                 Task { await self.enrichBooksMissingMetadata(importedIDs) }
             }
         }
-    }
-
-    // MARK: - Library transfers (copy to home / copy to library / drag-drop)
-
-    /// Resolves the selected books' first stored format file and imports them
-    /// into the target library through the standard pipeline (staged,
-    /// content-hash dedup, report). Transfers are copies between two different
-    /// libraries — never a merge.
-    private func importBooks(
-        _ books: [IndexedBook],
-        from source: LibraryConnection,
-        into target: LibraryConnection
-    ) async {
-        var urls: [URL] = []
-        for book in books {
-            if let url = source.formatFileURL(for: book) { urls.append(url) }
-        }
-        guard !urls.isEmpty else { return }
-        let service = ImportService(layout: .init(root: target.coreRepository.root))
-        do {
-            importReport = try await service.importFiles(urls, into: target.coreRepository)
-        } catch {
-            importReport = ImportReport(items: [
-                ImportItem(sourceURL: urls.first ?? URL(fileURLWithPath: "/"), kind: .epub,
-                           status: .failed(error.localizedDescription))
-            ])
-        }
-        await target.refreshBooks()
-    }
-
-    /// Peer context: copy the peer's selection into home (download direction).
-    func copySelectionFromPeerToHome(_ peer: LibraryConnection) async {
-        guard let home else { return }
-        await importBooks(peer.selectionBooks, from: peer, into: home)
-        presentImportReport()
-    }
-
-    /// Home context: copy the home selection into the chosen peer (upload
-    /// direction — writes book files + CRDT changes into the peer's folder,
-    /// which any other instance connected to it ingests on its next sync).
-    func copyHomeSelection(to peer: LibraryConnection) async {
-        guard let home else { return }
-        await importBooks(home.selectionBooks, from: home, into: peer)
-        presentImportReport()
-    }
-
-    /// Raw-file import into a specific library (drag-drop onto a peer row, or
-    /// the library browser drop handler). Same pipeline as Add Books, targeted
-    /// at the target's repository.
-    func importFiles(into target: LibraryConnection, urls: [URL]) async {
-        guard !urls.isEmpty else { return }
-        let service = ImportService(layout: .init(root: target.coreRepository.root))
-        do {
-            importReport = try await service.importFiles(urls, into: target.coreRepository)
-        } catch {
-            importReport = ImportReport(items: [
-                ImportItem(sourceURL: urls.first ?? URL(fileURLWithPath: "/"), kind: .epub,
-                           status: .failed(error.localizedDescription))
-            ])
-        }
-        await target.refreshBooks()
-        presentImportReport()
     }
 
     /// Posts a system notification for the completed import; falls back to the
@@ -254,13 +188,9 @@ extension LibrarySession {
 
     // MARK: - Calibre import
 
-    /// The connection the Calibre import writes into: the library captured
-    /// when the source was chosen, or the active library when the capture is
-    /// missing (e.g. nothing was open when the wizard started).
-    private var calibreImportTarget: LibraryConnection? {
-        guard let id = calibreImportTargetID else { return activeLibrary }
-        return ([home] + peers).compactMap { $0 }.first { $0.id == id }
-    }
+    /// The connection the Calibre import writes into: the home library (the
+    /// only library an instance holds).
+    private var calibreImportTarget: LibraryConnection? { home }
 
     /// Display name for the wizard's Destination row (nil when nothing is
     /// open, so the row hides).
@@ -269,12 +199,6 @@ extension LibrarySession {
     }
 
     func selectCalibreLibrary(at url: URL) async {
-        // Capture the landing library NOW: the scan below runs while the
-        // window stays interactive (the wizard that follows is modal), so the
-        // import should land in the library that was active when the user
-        // chose the source — not whatever happens to be active when Import is
-        // clicked.
-        calibreImportTargetID = activeLibrary?.id
         // The folder comes from SwiftUI's fileImporter and is security-scoped:
         // the sandbox denies every read of the source (including the
         // metadata.db snapshot copy inside CalibreReader.open) until the scope
@@ -315,8 +239,7 @@ extension LibrarySession {
             calibreSummary = nil
             calibreBooks = []
             calibreSourcePath = nil
-            calibreImportTargetID = nil
-            calibreActivity = nil
+                calibreActivity = nil
             calibreReader = nil
             return
         }

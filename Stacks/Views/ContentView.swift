@@ -102,7 +102,7 @@ struct ContentView: View {
                 guard case let .success(urls) = result else { return }
                 switch purpose {
                 case .open:
-                    Task { await session.openLibraryAsPeer(at: urls[0]) }
+                    Task { await session.openRequested(at: urls[0]) }
                 case .addBooks:
                     Task {
                         await session.importFiles(urls: urls)
@@ -114,7 +114,7 @@ struct ContentView: View {
                         showCalibreImport = session.calibreSummary != nil
                     }
                 case .changeHome:
-                    Task { await session.openLibraryAsHome(at: urls[0]) }
+                    Task { await session.openRequested(at: urls[0]) }
                 case nil:
                     break
                 }
@@ -327,21 +327,6 @@ extension ContentView {
                 .disabled(session.isLibraryUnavailable || session.selection.isEmpty)
             }
         }
-        ToolbarItem(id: "copy-to-library") {
-            if session.selectedDeviceID == nil, !session.peers.isEmpty {
-                Menu {
-                    ForEach(session.peers) { peer in
-                        Button(peer.name) {
-                            Task { await session.copyHomeSelection(to: peer) }
-                        }
-                    }
-                } label: {
-                    Label("Copy to Library…", systemImage: "arrow.up.doc")
-                }
-                .disabled(session.selection.isEmpty)
-                .help("Copy the selected books into another open library")
-            }
-        }
     }
 
     /// The Table/Grid view picker. Only affects the library browser (the
@@ -459,8 +444,6 @@ extension ContentView {
                 libraryActionItems
             } else if session.remoteBrowser != nil {
                 remoteActionItems
-            } else if session.activeLibrary != nil {
-                peerActionItems
             }
             ToolbarSpacer(.fixed)
             viewPickerToolbarItem
@@ -543,27 +526,22 @@ extension ContentView {
         }
     }
 
-    /// wrapper, whose context menu adds Copy to Home Library (the copy itself
-    /// is wired in Task 6).
+    /// The grid/table browser for the current library context. The onDrop
+    /// import is home-only (remote libraries import via the server, not by
+    /// writing files into a shared folder).
     @ViewBuilder
     private func libraryBrowser(for library: any LibraryBrowser) -> some View {
-        if let connection = library as? LibraryConnection, connection !== session.home {
-            PeerLibraryView(peer: connection) {
-                Task { await session.copySelectionFromPeerToHome(connection) }
+        Group {
+            switch library.viewMode {
+            case .table:
+                BookTableView(browser: library)
+            case .grid:
+                CoverGridView(browser: library)
             }
-        } else {
-            Group {
-                switch library.viewMode {
-                case .table:
-                    BookTableView(browser: library)
-                case .grid:
-                    CoverGridView(browser: library)
-                }
-            }
-            .onDrop(of: [.fileURL], isTargeted: nil) { providers in
-                guard library is LibraryConnection else { return false }
-                return handleDrop(providers)
-            }
+        }
+        .onDrop(of: [.fileURL], isTargeted: nil) { providers in
+            guard library is LibraryConnection else { return false }
+            return handleDrop(providers)
         }
     }
 
@@ -596,44 +574,6 @@ extension ContentView {
         }
     }
 
-    /// Peer-context toolbar cluster, replacing Add/Open/Edit + the inspector
-    /// while a peer library is the browser context: Refresh, Copy to Home
-    /// Library (Task 6 wires the real transfer), and Close.
-    @ToolbarContentBuilder
-    private var peerActionItems: some ToolbarContent {
-        ToolbarItem(id: "refresh-peer") {
-            Button {
-                if let peer = session.activeLibrary {
-                    Task { await peer.refreshBooks() }
-                }
-            } label: {
-                Label("Refresh", systemImage: "arrow.clockwise")
-            }
-            .help("Reload this library's books")
-        }
-        ToolbarItem(id: "copy-to-home") {
-            Button {
-                if let peer = session.activeLibrary, session.home != nil {
-                    Task { await session.copySelectionFromPeerToHome(peer) }
-                }
-            } label: {
-                Label("Copy to Home Library", systemImage: "arrow.down.doc")
-            }
-            .disabled(session.activeLibrary?.selection.isEmpty ?? true || session.home == nil)
-            .help("Copy the selected books into your home library")
-        }
-        ToolbarItem(id: "close-peer") {
-            Button {
-                if let peer = session.activeLibrary {
-                    Task { await session.closePeer(peer) }
-                }
-            } label: {
-                Label("Close", systemImage: "xmark")
-            }
-            .help("Close this library")
-        }
-    }
-
     /// Binds the toolbar search field to the active library's search text.
     private var librarySearchBinding: Binding<String> {
         Binding(
@@ -651,8 +591,7 @@ extension ContentView {
                 }
             }
             guard !urls.isEmpty else { return }
-            guard let target = session.activeLibrary else { return }
-            await session.importFiles(into: target, urls: urls)
+            await session.importFiles(urls: urls)
         }
         return true
     }
