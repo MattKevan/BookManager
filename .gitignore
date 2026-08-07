@@ -12,3 +12,4 @@ xcuserdata/
 docs/
 # LLVM coverage artifacts from test runs
 *.profraw
+/Package.resolved

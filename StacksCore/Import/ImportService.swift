@@ -1,15 +1,5 @@
 import Foundation
 
-public protocol LibraryRepositoryImporting: Sendable {
-    func bookIDs(byFormatHash contentHash: String) async throws -> [UUID]
-    func allBooksForDuplicateCheck() async throws -> [IndexedBook]
-    func createBook(
-        metadata: NewBookMetadata,
-        staged: [BookFolder.StagedFile],
-        cover: Data?
-    ) async throws -> IndexedBook
-}
-
 public struct ImportItem: Sendable {
     public enum Status: Sendable {
         case imported(UUID)

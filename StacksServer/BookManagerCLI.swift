@@ -12,12 +12,24 @@ struct BookManagerCLI: AsyncParsableCommand {
     )
 }
 
-/// The server's disposable index directory. macOS default: Application
-/// Support; the Linux port (Plan 3) adds an explicit flag or a sibling-dir
-/// default.
-func serverIndexesDirectory() throws -> URL {
-    URL.applicationSupportDirectory
-        .appending(path: "StacksServer", directoryHint: .isDirectory)
+/// The server's disposable index directory. macOS: Application Support.
+/// Linux (Plan 3): a sibling `.stacks-server-indexes` directory next to the
+/// library (Application Support may be unavailable or unwritable).
+func serverIndexesDirectory(libraryPath: String? = nil) throws -> URL {
+    if let support = try? FileManager.default.url(
+        for: .applicationSupportDirectory,
+        in: .userDomainMask,
+        appropriateFor: nil,
+        create: true
+    ) {
+        return support.appending(path: "StacksServer", directoryHint: .isDirectory)
+    }
+    if let libraryPath {
+        return URL(fileURLWithPath: libraryPath)
+            .deletingLastPathComponent()
+            .appending(path: ".stacks-server-indexes", directoryHint: .isDirectory)
+    }
+    return URL(fileURLWithPath: ".stacks-server-indexes")
 }
 
 struct Create: AsyncParsableCommand {
@@ -71,7 +83,7 @@ struct Serve: AsyncParsableCommand {
         if let indexes {
             indexesDirectory = URL(fileURLWithPath: indexes)
         } else {
-            indexesDirectory = try serverIndexesDirectory()
+            indexesDirectory = try serverIndexesDirectory(libraryPath: path)
         }
         let configuration = ServerConfiguration(
             port: port,

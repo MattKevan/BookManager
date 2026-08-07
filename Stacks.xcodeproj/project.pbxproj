@@ -31,6 +31,7 @@
 		19E1AC79CB0A92D363ECE810 /* StacksCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 7FF7C13FC4FD4830CC11BC46 /* StacksCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		1AFBA6DB1E26440157F18276 /* DeviceProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3534AB0D9D88B5FAFD2B9524 /* DeviceProfile.swift */; };
 		1C4916DDC8222D29FE95CCF1 /* DeviceImportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50354CF07122CF0F77600E51 /* DeviceImportService.swift */; };
+		1C67A62C64FEA7C79EFFA271 /* LibraryRepositoryImporting.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE9E26E965A01A82E62AC26C /* LibraryRepositoryImporting.swift */; };
 		1F164189173DF8B9BF3F96F7 /* MetadataHTTPClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23A9CA19BA364607DD55B0EC /* MetadataHTTPClientTests.swift */; };
 		21024F170759A5F3044EF208 /* DeviceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15167DA711CC417585EE880E /* DeviceManager.swift */; };
 		24B0567E52FCADE4470E758E /* MetadataExtractorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38B798C7F223E61160EE614A /* MetadataExtractorTests.swift */; };
@@ -418,6 +419,7 @@
 		FA800E7A71493059556AEB16 /* MobiSmokeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobiSmokeTests.swift; sourceTree = "<group>"; };
 		FA9CD8CC38617A77ED6C3701 /* ProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtocolTests.swift; sourceTree = "<group>"; };
 		FAC8498A2AE9D79E2A678D92 /* FacetType+Display.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FacetType+Display.swift"; sourceTree = "<group>"; };
+		FE9E26E965A01A82E62AC26C /* LibraryRepositoryImporting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryRepositoryImporting.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -755,6 +757,7 @@
 				F216B0E99565A9E169EECE23 /* LibraryManifest.swift */,
 				2622648FFE7852B093C25DA9 /* LibraryRepository.swift */,
 				875D8B5F4CB9E902D7F4839F /* LibraryRepositoryError+LocalizedError.swift */,
+				FE9E26E965A01A82E62AC26C /* LibraryRepositoryImporting.swift */,
 				977D2B06EA0436435AA4270C /* OpfGenerator.swift */,
 				B251DDEB52542D7C71D517AF /* ResolvedBook.swift */,
 			);
@@ -1303,6 +1306,7 @@
 				14BD71038AC6A7132DCB65B1 /* LibraryOpenPolicy.swift in Sources */,
 				E6BE475C5880D57B4E44C0FC /* LibraryRepository.swift in Sources */,
 				A91AFC276E2EFC0BB1C8E11C /* LibraryRepositoryError+LocalizedError.swift in Sources */,
+				1C67A62C64FEA7C79EFFA271 /* LibraryRepositoryImporting.swift in Sources */,
 				7DF2D07E2831A191B4F2491D /* LibraryServer.swift in Sources */,
 				829E3CEFC3E2EA7344A47AD3 /* LocalCatalog.swift in Sources */,
 				76E3D288CE9F057AC7E31E61 /* LocalDeviceCache.swift in Sources */,

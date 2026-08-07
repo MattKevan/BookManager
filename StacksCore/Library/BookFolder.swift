@@ -1,4 +1,10 @@
+// SHA-256: CryptoKit on Apple platforms, swift-crypto's Crypto module on
+// Linux (the package manifest provides it; same API).
+#if canImport(CryptoKit)
 import CryptoKit
+#else
+import Crypto
+#endif
 import Foundation
 
 /// Owns the physical book folders inside a library: staging, materialization,
