@@ -22,6 +22,43 @@ public struct JournalCommand: Sendable, Codable, Equatable {
         case setCover(SetCover)
         case deleteBook(DeleteBook)
         case restoreBook(RestoreBook)
+
+        // Custom Codable: the synthesized form wraps the payload in an `_0`
+        // key ("addBook": {"_0": {...}}) — clean single-key encoding is the
+        // documented wire format for both the journal and the sync API.
+        private enum Key: String, CodingKey {
+            case addBook, updateBook, setCover, deleteBook, restoreBook
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: Key.self)
+            if let value = try container.decodeIfPresent(AddBook.self, forKey: .addBook) {
+                self = .addBook(value)
+            } else if let value = try container.decodeIfPresent(UpdateBook.self, forKey: .updateBook) {
+                self = .updateBook(value)
+            } else if let value = try container.decodeIfPresent(SetCover.self, forKey: .setCover) {
+                self = .setCover(value)
+            } else if let value = try container.decodeIfPresent(DeleteBook.self, forKey: .deleteBook) {
+                self = .deleteBook(value)
+            } else if let value = try container.decodeIfPresent(RestoreBook.self, forKey: .restoreBook) {
+                self = .restoreBook(value)
+            } else {
+                throw DecodingError.dataCorrupted(
+                    DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Unknown command op")
+                )
+            }
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: Key.self)
+            switch self {
+            case .addBook(let value): try container.encode(value, forKey: .addBook)
+            case .updateBook(let value): try container.encode(value, forKey: .updateBook)
+            case .setCover(let value): try container.encode(value, forKey: .setCover)
+            case .deleteBook(let value): try container.encode(value, forKey: .deleteBook)
+            case .restoreBook(let value): try container.encode(value, forKey: .restoreBook)
+            }
+        }
     }
 
     /// One format file staged for an `addBook`. `stagedName` references

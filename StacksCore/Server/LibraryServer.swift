@@ -125,13 +125,97 @@ public actor LibraryServer {
             return response
         }
 
+        // MARK: - OPDS (third-party readers)
+
+        router.get("opds") { request, _ -> String in
+            OPDSFeed.root(baseURL: "http://\(request.head.authority ?? "localhost")")
+        }
+
+        router.get("opds/books") { request, _ -> String in
+            let page = max(1, request.uri.queryParameters.get("page").flatMap(Int.init) ?? 1)
+            let books = try await repository.books()
+            return OPDSFeed.booksFeed(
+                title: "All Books", books: books,
+                baseURL: "http://\(request.head.authority ?? "localhost")",
+                page: page, pageHref: "/opds/books"
+            )
+        }
+
+        router.get("opds/newest") { request, _ -> String in
+            let page = max(1, request.uri.queryParameters.get("page").flatMap(Int.init) ?? 1)
+            let books = try await repository.books()
+                .sorted { ($0.addedMilliseconds ?? 0) > ($1.addedMilliseconds ?? 0) }
+            return OPDSFeed.booksFeed(
+                title: "Newest", books: books,
+                baseURL: "http://\(request.head.authority ?? "localhost")",
+                page: page, pageHref: "/opds/newest"
+            )
+        }
+
+        router.get("opds/search") { request, _ -> String in
+            guard let query = request.uri.queryParameters.get("q"), !query.isEmpty else {
+                throw HTTPError(.badRequest)
+            }
+            let page = max(1, request.uri.queryParameters.get("page").flatMap(Int.init) ?? 1)
+            let books = try await repository.search(query)
+            return OPDSFeed.booksFeed(
+                title: "Search: \(query)", books: books,
+                baseURL: "http://\(request.head.authority ?? "localhost")",
+                page: page, pageHref: "/opds/search"
+            )
+        }
+
+        for (route, facetType, title) in [
+            (RouterPath("opds/authors/:value"), FacetType.author, "Authors"),
+            (RouterPath("opds/series/:value"), FacetType.series, "Series"),
+            (RouterPath("opds/tags/:value"), FacetType.tag, "Tags"),
+            (RouterPath("opds/formats/:value"), FacetType.format, "Formats"),
+        ] {
+            router.get(route) { request, context -> String in
+                guard let raw = context.parameters.get("value"),
+                      let value = raw.removingPercentEncoding else {
+                    throw HTTPError(.badRequest)
+                }
+                let page = max(1, request.uri.queryParameters.get("page").flatMap(Int.init) ?? 1)
+                let books = try await repository.books(facetType: facetType, value: value)
+                return OPDSFeed.booksFeed(
+                    title: "\(title): \(value)", books: books,
+                    baseURL: "http://\(request.head.authority ?? "localhost")",
+                    page: page, pageHref: "\(route)"
+                )
+            }
+        }
+
+        router.get("opds/books/:id") { request, context -> String in
+            guard let id = context.parameters.get("id").flatMap(UUID.init(uuidString:)),
+                  let book = try await repository.book(id: id) else {
+                throw HTTPError(.notFound)
+            }
+            return OPDSFeed.booksFeed(
+                title: book.title, books: [book],
+                baseURL: "http://\(request.head.authority ?? "localhost")",
+                pageHref: "/opds/books/\(book.id.uuidString)"
+            )
+        }
+
         return Application(router: router, configuration: .init(address: .hostname("0.0.0.0", port: configuration.port)))
     }
 
-    /// Runs the server until shutdown — the CLI's `serve` path.
+    private var advertiser: BonjourAdvertiser?
+
+    /// Runs the server until shutdown — the CLI's `serve` path. Advertises
+    /// over Bonjour first when configured.
     public func run() async throws {
+        if configuration.advertiseBonjour {
+            let advertiser = BonjourAdvertiser(
+                displayName: displayName, libraryID: libraryID, port: configuration.port
+            )
+            advertiser.start()
+            self.advertiser = advertiser
+        }
         let app = try makeApplication()
         try await app.runService()
+        advertiser?.stop()
     }
 
     /// The opened library's manifest id (Bonjour TXT, diagnostics).

@@ -103,6 +103,20 @@ targets:
     dependencies:
       - target: Stacks
 
+  StacksServer:
+    type: tool
+    platform: macOS
+    sources:
+      - StacksServer
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mattkevan.StacksServer
+        GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - target: StacksCore
+      - package: swift-argument-parser
+        product: ArgumentParser
+
   StacksUITests:
     type: bundle.ui-testing
     platform: macOS
@@ -120,6 +134,7 @@ schemes:
       targets:
         Stacks: all
         StacksCore: all
+        StacksServer: all
         StacksCoreTests: [test]
         StacksUITests: [test]
     run:
