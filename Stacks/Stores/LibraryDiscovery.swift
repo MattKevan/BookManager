@@ -2,7 +2,7 @@ import Foundation
 import Network
 import Observation
 
-/// One library discovered on the LAN via Bonjour (`_bookmanager._tcp`).
+/// One library discovered on the LAN via Bonjour (`_stacks._tcp`).
 public struct DiscoveredLibrary: Identifiable, Equatable, Sendable {
     /// The library's manifest id from the TXT record.
     public let id: UUID
@@ -15,7 +15,7 @@ public struct DiscoveredLibrary: Identifiable, Equatable, Sendable {
     }
 }
 
-/// Browses for `_bookmanager._tcp` services on the LAN and resolves them to
+/// Browses for `_stacks._tcp` services on the LAN and resolves them to
 /// `DiscoveredLibrary` values. Drives the sidebar's Shared section.
 @MainActor
 @Observable
@@ -34,7 +34,7 @@ public final class LibraryDiscovery {
         guard browser == nil else { return }
         let parameters = NWParameters()
         parameters.includePeerToPeer = true
-        let browser = NWBrowser(for: .bonjour(type: "_bookmanager._tcp", domain: nil), using: parameters)
+        let browser = NWBrowser(for: .bonjour(type: "_stacks._tcp", domain: nil), using: parameters)
         browser.stateUpdateHandler = { [weak self] state in
             Task { @MainActor in
                 switch state {
@@ -124,7 +124,7 @@ public final class LibraryDiscovery {
         connection.start(queue: .main)
     }
 
-    /// The `_bookmanager._tcp` TXT record shape: name, library id, protocol
+    /// The `_stacks._tcp` TXT record shape: name, library id, protocol
     /// version, OPDS path, API path.
     private struct TXTPayload: Decodable {
         let name: String?

@@ -1,4 +1,8 @@
+#if canImport(CryptoKit)
 import CryptoKit
+#else
+import Crypto
+#endif
 import Foundation
 
 /// Resumable import progress for one Calibre source library.
@@ -387,7 +391,7 @@ public actor CalibreImportService {
     /// Both halves are already punctuation-stripped and lowercased by
     /// `ImportService.normalized`; the separator cannot collide with either.
     private static func duplicateKey(title: String, firstAuthor: String) -> String {
-        "\(ImportService.normalized(title))|\(ImportService.normalized(firstAuthor))"
+        "\(TextNormalization.normalized(title))|\(TextNormalization.normalized(firstAuthor))"
     }
 
     /// SHA-256 of the canonical source path, first 32 hex chars.

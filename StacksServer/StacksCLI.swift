@@ -2,13 +2,13 @@ import ArgumentParser
 import Foundation
 import StacksCore
 
-/// The headless library server CLI — `bookmanager create|serve|status`.
+/// The headless library server CLI — `stacks create|serve|status|import-calibre`.
 @main
-struct BookManagerCLI: AsyncParsableCommand {
+struct StacksCLI: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "bookmanager",
+        commandName: "stacks",
         abstract: "Create, serve, and inspect Stacks libraries.",
-        subcommands: [Create.self, Serve.self, Status.self]
+        subcommands: [Create.self, ImportCalibre.self, Serve.self, Status.self]
     )
 }
 
@@ -49,6 +49,97 @@ struct Create: AsyncParsableCommand {
         print("Created library at \(root.path)")
         print("Library ID: \(repository.manifest.id)")
         print("Format version: \(repository.manifest.formatVersion)")
+    }
+}
+
+struct ImportCalibre: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "import-calibre",
+        abstract: "Create a Stacks library from an existing Calibre library."
+    )
+
+    @Argument(help: "Path to the Calibre library (folder containing metadata.db)")
+    var calibrePath: String
+
+    @Argument(help: "Path for the new Stacks library")
+    var targetPath: String
+
+    @Option(name: .long, help: "Indexes directory (default: next to the target)")
+    var indexes: String?
+
+    @Option(name: .long, help: "Import only these Calibre book ids (repeatable)")
+    var only: [Int] = []
+
+    func run() async throws {
+        // The source is read-only: the reader snapshots metadata.db into a
+        // disposable temp copy and never opens the original.
+        let reader = try CalibreReader.open(libraryURL: URL(fileURLWithPath: calibrePath))
+        defer { try? reader.close() }
+        let books = try reader.books(includeBlobCovers: false)
+
+        let indexesDirectory: URL
+        if let indexes {
+            indexesDirectory = URL(fileURLWithPath: indexes)
+        } else {
+            indexesDirectory = try serverIndexesDirectory(libraryPath: targetPath)
+        }
+        let root = URL(fileURLWithPath: targetPath)
+        if !FileManager.default.fileExists(atPath: root.path) {
+            _ = try await LibraryRepository.create(
+                at: root, indexesDirectory: indexesDirectory, deviceID: UUID()
+            )
+        }
+        let repository = try await LibraryRepository.open(
+            at: root, indexesDirectory: indexesDirectory, deviceID: UUID()
+        )
+
+        let sourceName = URL(fileURLWithPath: calibrePath)
+            .deletingPathExtension().lastPathComponent
+        print("Importing \(books.count) books from Calibre library '\(sourceName)'")
+        print("Target: \(root.path) (library \(repository.manifest.id))")
+
+        let service = CalibreImportService(layout: LibraryLayout(root: root))
+        // The @Sendable progress closure needs mutable state outside the
+        // captured vars — a boxed counter.
+        final class Counter: @unchecked Sendable {
+            var value = 0
+        }
+        let counter = Counter()
+        var failedTitles: [String] = []
+        let report = try await service.importBooks(
+            books,
+            from: calibrePath,
+            libraryID: repository.manifest.id.uuidString,
+            selection: only.isEmpty ? nil : only,
+            into: repository,
+            progress: { update in
+                // One progress line every 25 books; failures are collected
+                // for the final summary.
+                if update.completed - counter.value >= 25 {
+                    counter.value = update.completed
+                    FileHandle.standardError.write(Data(
+                        "  [\(update.completed)/\(update.total)] \(update.currentTitle ?? "")\n".utf8
+                    ))
+                }
+            },
+            coverProvider: { calibreID in
+                try reader.coverData(for: calibreID)
+            }
+        )
+
+        for item in report.items {
+            if case .failed(let message) = item.status {
+                failedTitles.append("\(item.title) — \(message)")
+            }
+        }
+        print("Imported: \(report.imported.count)  Duplicates: \(report.duplicates.count)  "
+            + "Failed: \(report.failed.count)  Skipped: \(report.skipped.count)")
+        for title in failedTitles {
+            FileHandle.standardError.write(Data("  failed: \(title)\n".utf8))
+        }
+        if !report.failed.isEmpty {
+            Foundation.exit(1)
+        }
     }
 }
 

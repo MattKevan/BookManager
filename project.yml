@@ -74,7 +74,7 @@ targets:
         INFOPLIST_KEY_NSLocalNetworkUsageDescription: >-
           Stacks discovers and shares book libraries on your local network.
         INFOPLIST_KEY_NSBonjourServices:
-          - _bookmanager._tcp
+          - _stacks._tcp
         # App Nap suspends idle apps; for an app holding a USB/MTP session this
         # can let the host idle-suspend the device link (Kindle drops ~30s
         # after the last transfer). Opt out so the held session stays live.

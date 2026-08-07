@@ -231,19 +231,11 @@ public actor ImportService {
         return error.localizedDescription
     }
 
-    static func normalized(_ value: String) -> String {
-        value.lowercased()
-            .unicodeScalars
-            .filter { CharacterSet.alphanumerics.contains($0) }
-            .map(String.init)
-            .joined()
-    }
-
     /// The duplicate-check index key: normalized title and first author. The
     /// query requires a non-empty title; an empty author matches a book with
     /// no authors ("" == "").
     private static func duplicateKey(title: String, author: String) -> String {
-        "\(normalized(title))|\(normalized(author))"
+        "\(TextNormalization.normalized(title))|\(TextNormalization.normalized(author))"
     }
 
     /// `ExtractedMetadata` and `NewBookMetadata` are distinct types; the extractor

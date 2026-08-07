@@ -455,7 +455,7 @@ final class DeviceManager {
     /// Per-device scratch directory holding the downloaded `metadata.calibre`.
     private func cacheScratchURL(for device: ConnectedDevice) -> URL {
         FileManager.default.temporaryDirectory
-            .appending(path: "bookmanager-cache-\(device.id.uuidString)", directoryHint: .isDirectory)
+            .appending(path: "stacks-cache-\(device.id.uuidString)", directoryHint: .isDirectory)
     }
 
     /// Lazily fetches full metadata (real title/authors/DRM flag) for one book

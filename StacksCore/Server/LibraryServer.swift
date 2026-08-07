@@ -15,6 +15,16 @@ public enum ServerConfigurationError: Error, Equatable {
     case missingIndexesDirectory
 }
 
+/// The advertising surface shared by the two platform backends: macOS uses
+/// Network.framework (`BonjourAdvertiser`), Linux shells out to Avahi's
+/// `avahi-publish-service` (`AvahiAdvertiser`). Both publish the same
+/// `_stacks._tcp` service with the same TXT records, so clients see
+/// every server identically.
+protocol LibraryAdvertiser: AnyObject {
+    func start()
+    func stop()
+}
+
 public actor LibraryServer {
     private let repository: LibraryRepository
     private let configuration: ServerConfiguration
@@ -224,43 +234,29 @@ public actor LibraryServer {
         return Application(router: router, configuration: .init(address: .hostname("0.0.0.0", port: configuration.port)))
     }
 
-    #if canImport(Network)
-    private var advertiser: BonjourAdvertiser?
-    #endif
+    private var advertiser: (any LibraryAdvertiser)?
     private var serviceGroup: ServiceGroup?
     private var runTask: Task<Void, Never>?
 
     /// Runs the server until shutdown — the CLI's `serve` path. Advertises
-    /// over Bonjour first when configured (macOS only — `Network` is
-    /// unavailable on Linux, where clients reach the server by host:port).
+    /// the library first when configured (Network.framework on macOS, Avahi
+    /// on Linux).
     public func run() async throws {
-        #if canImport(Network)
         if configuration.advertiseBonjour {
-            let advertiser = BonjourAdvertiser(
-                displayName: displayName, libraryID: libraryID, port: configuration.port
-            )
-            advertiser.start()
-            self.advertiser = advertiser
+            startAdvertising()
         }
-        #endif
         let app = try makeApplication()
         try await app.runService()
-        #if canImport(Network)
         advertiser?.stop()
-        #endif
     }
 
     /// Non-blocking start for in-process embedding (the macOS app's Sharing
     /// pane). Owns the service group so `stop()` can trigger graceful
-    /// shutdown; advertises over Bonjour when configured.
+    /// shutdown; advertises the library when configured.
     public func start() async throws {
         let app = try makeApplication()
         if configuration.advertiseBonjour {
-            let advertiser = BonjourAdvertiser(
-                displayName: displayName, libraryID: libraryID, port: configuration.port
-            )
-            advertiser.start()
-            self.advertiser = advertiser
+            startAdvertising()
         }
         let group = ServiceGroup(services: [app], logger: Logger(label: "Stacks.LibraryServer"))
         serviceGroup = group
@@ -271,12 +267,26 @@ public actor LibraryServer {
     public func stop() async {
         await serviceGroup?.triggerGracefulShutdown()
         runTask?.cancel()
-        #if canImport(Network)
         advertiser?.stop()
         advertiser = nil
-        #endif
         serviceGroup = nil
         runTask = nil
+    }
+
+    /// Publishes the `_stacks._tcp` service with the platform's
+    /// advertising backend.
+    private func startAdvertising() {
+        #if canImport(Network)
+        let advertiser = BonjourAdvertiser(
+            displayName: displayName, libraryID: libraryID, port: configuration.port
+        )
+        #else
+        let advertiser = AvahiAdvertiser(
+            displayName: displayName, libraryID: libraryID, port: configuration.port
+        )
+        #endif
+        advertiser.start()
+        self.advertiser = advertiser
     }
 
     /// The opened library's manifest id (Bonjour TXT, diagnostics).

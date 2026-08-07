@@ -6,7 +6,7 @@
 // client features, Bonjour via Network.framework) are EXCLUDED — the server
 // ingests commands from clients and never runs those paths. The macOS app
 // keeps building the full core via XcodeGen; this package is the headless
-// `bookmanager` surface.
+// `stacks` surface.
 import PackageDescription
 
 let package = Package(
@@ -14,7 +14,7 @@ let package = Package(
     platforms: [.macOS(.v15)],
     products: [
         .library(name: "StacksCore", targets: ["StacksCore"]),
-        .executable(name: "bookmanager", targets: ["StacksServer"]),
+        .executable(name: "stacks", targets: ["StacksServer"]),
     ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift.git", exact: "7.11.1"),
@@ -35,7 +35,6 @@ let package = Package(
             path: "StacksCore",
             // Apple-only / client-only code the headless server never runs.
             exclude: [
-                "Calibre",
                 "MobiImport",
                 "Import",
                 "Enrichment",
@@ -68,7 +67,6 @@ let package = Package(
             // client features (Calibre/Mobi/Import/Enrichment/Devices) and
             // macOS-only surfaces (BonjourTests uses Network.framework).
             exclude: [
-                "Calibre",
                 "MobiImport",
                 "Import",
                 "Enrichment",

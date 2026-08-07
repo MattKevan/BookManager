@@ -2,7 +2,7 @@ import Foundation
 #if canImport(Network)
 import Network
 
-/// Advertises a library on the LAN via Bonjour (`_bookmanager._tcp`) with
+/// Advertises a library on the LAN via Bonjour (`_stacks._tcp`) with
 /// TXT records: display name, library id, protocol version, and the OPDS +
 /// sync API paths (mirrors Calibre's `path=/opds` TXT convention).
 ///
@@ -14,13 +14,13 @@ import Network
 /// Uses `NetService` (macOS): it announces a port WITHOUT binding a socket,
 /// so it can sit alongside the Hummingbird listener on the same port. Linux
 /// gets an Avahi seam in the port plan.
-public final class BonjourAdvertiser: @unchecked Sendable {
+public final class BonjourAdvertiser: LibraryAdvertiser, @unchecked Sendable {
     private let service: NetService
 
     public init(displayName: String, libraryID: UUID, port: Int) {
         let service = NetService(
             domain: "local.",
-            type: "_bookmanager._tcp.",
+            type: "_stacks._tcp.",
             name: displayName,
             port: Int32(port)
         )
