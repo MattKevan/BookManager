@@ -97,11 +97,17 @@ class CalibreSchemaBase: CalibreSchemaAdapting, @unchecked Sendable {
     }
 
     func userVersion(_ db: Database) throws -> Int {
-        try Int.fetchOne(db, sql: "PRAGMA user_version") ?? 0
+        // PRAGMA user_version is INTEGER, but a corrupted value must degrade
+        // to "unsupported" rather than trap in GRDB's typed fetch.
+        guard let row = try Row.fetchOne(db, sql: "PRAGMA user_version") else { return 0 }
+        return Self.int(row["user_version"]?.databaseValue) ?? 0
     }
 
     func libraryID(_ db: Database) throws -> String {
-        try String.fetchOne(db, sql: "SELECT uuid FROM library_id LIMIT 1") ?? ""
+        guard let row = try Row.fetchOne(db, sql: "SELECT uuid FROM library_id LIMIT 1") else {
+            return ""
+        }
+        return Self.valueString(row["uuid"]?.databaseValue) ?? ""
     }
 
     func bookCount(_ db: Database) throws -> Int {
@@ -127,8 +133,12 @@ class CalibreSchemaBase: CalibreSchemaAdapting, @unchecked Sendable {
                 JOIN authors a ON a.id = bal.author
                 ORDER BY bal.book, bal.id
                 """
-        ).map {
-            (book: $0["book"] as Int, name: $0["name"] as String, sort: $0["sort"] as String? ?? "")
+        ).compactMap { row in
+            guard let book = Self.int(row["book"]?.databaseValue),
+                  let name = Self.valueString(row["name"]?.databaseValue) else {
+                return nil
+            }
+            return (book: book, name: name, sort: Self.valueString(row["sort"]?.databaseValue) ?? "")
         }
     }
 
@@ -141,7 +151,13 @@ class CalibreSchemaBase: CalibreSchemaAdapting, @unchecked Sendable {
                 JOIN series s ON s.id = bsl.series
                 ORDER BY bsl.book
                 """
-        ).map { (book: $0["book"] as Int, name: $0["name"] as String) }
+        ).compactMap { row in
+            guard let book = Self.int(row["book"]?.databaseValue),
+                  let name = Self.valueString(row["name"]?.databaseValue) else {
+                return nil
+            }
+            return (book: book, name: name)
+        }
     }
 
     func fetchTags(_ db: Database) throws -> [(book: Int, name: String)] {
@@ -153,7 +169,13 @@ class CalibreSchemaBase: CalibreSchemaAdapting, @unchecked Sendable {
                 JOIN tags t ON t.id = btl.tag
                 ORDER BY btl.book, btl.id
                 """
-        ).map { (book: $0["book"] as Int, name: $0["name"] as String) }
+        ).compactMap { row in
+            guard let book = Self.int(row["book"]?.databaseValue),
+                  let name = Self.valueString(row["name"]?.databaseValue) else {
+                return nil
+            }
+            return (book: book, name: name)
+        }
     }
 
     func fetchRatings(_ db: Database) throws -> [(book: Int, rating: Int)] {
@@ -165,7 +187,13 @@ class CalibreSchemaBase: CalibreSchemaAdapting, @unchecked Sendable {
                 JOIN ratings r ON r.id = brl.rating
                 ORDER BY brl.book, brl.id
                 """
-        ).map { (book: $0["book"] as Int, rating: $0["rating"] as Int) }
+        ).compactMap { row in
+            guard let book = Self.int(row["book"]?.databaseValue),
+                  let rating = Self.int(row["rating"]?.databaseValue) else {
+                return nil
+            }
+            return (book: book, rating: rating)
+        }
     }
 
     func fetchPublishers(_ db: Database) throws -> [(book: Int, name: String)] {
@@ -177,7 +205,13 @@ class CalibreSchemaBase: CalibreSchemaAdapting, @unchecked Sendable {
                 JOIN publishers p ON p.id = bpl.publisher
                 ORDER BY bpl.book
                 """
-        ).map { (book: $0["book"] as Int, name: $0["name"] as String) }
+        ).compactMap { row in
+            guard let book = Self.int(row["book"]?.databaseValue),
+                  let name = Self.valueString(row["name"]?.databaseValue) else {
+                return nil
+            }
+            return (book: book, name: name)
+        }
     }
 
     func fetchLanguages(_ db: Database) throws -> [(book: Int, code: String)] {
@@ -187,7 +221,13 @@ class CalibreSchemaBase: CalibreSchemaAdapting, @unchecked Sendable {
             return try Row.fetchAll(
                 db,
                 sql: "SELECT book AS book, lang AS code FROM books_languages_link ORDER BY book, item_order"
-            ).map { (book: $0["book"] as Int, code: $0["code"] as String) }
+            ).compactMap { row in
+                guard let book = Self.int(row["book"]?.databaseValue),
+                      let code = Self.valueString(row["code"]?.databaseValue) else {
+                    return nil
+                }
+                return (book: book, code: code)
+            }
         }
         // v26 shape: lang_code is an INTEGER foreign key to languages.id.
         return try Row.fetchAll(
@@ -198,15 +238,26 @@ class CalibreSchemaBase: CalibreSchemaAdapting, @unchecked Sendable {
                 JOIN languages l ON l.id = bll.lang_code
                 ORDER BY bll.book, bll.item_order
                 """
-        ).map { (book: $0["book"] as Int, code: $0["code"] as String) }
+        ).compactMap { row in
+            guard let book = Self.int(row["book"]?.databaseValue),
+                  let code = Self.valueString(row["code"]?.databaseValue) else {
+                return nil
+            }
+            return (book: book, code: code)
+        }
     }
 
     func fetchIdentifiers(_ db: Database) throws -> [(book: Int, type: String, value: String)] {
         try Row.fetchAll(
             db,
             sql: "SELECT book AS book, type AS type, val AS value FROM identifiers ORDER BY book, id"
-        ).map {
-            (book: $0["book"] as Int, type: $0["type"] as String, value: $0["value"] as String)
+        ).compactMap { row in
+            guard let book = Self.int(row["book"]?.databaseValue),
+                  let type = Self.valueString(row["type"]?.databaseValue),
+                  let value = Self.valueString(row["value"]?.databaseValue) else {
+                return nil
+            }
+            return (book: book, type: type, value: value)
         }
     }
 
@@ -214,7 +265,13 @@ class CalibreSchemaBase: CalibreSchemaAdapting, @unchecked Sendable {
         try Row.fetchAll(
             db,
             sql: "SELECT book AS book, text AS text FROM comments ORDER BY book"
-        ).map { (book: $0["book"] as Int, text: $0["text"] as String) }
+        ).compactMap { row in
+            guard let book = Self.int(row["book"]?.databaseValue),
+                  let text = Self.valueString(row["text"]?.databaseValue) else {
+                return nil
+            }
+            return (book: book, text: text)
+        }
     }
 
     func fetchFormats(_ db: Database) throws -> [CalibreFormatRow] {
@@ -227,13 +284,19 @@ class CalibreSchemaBase: CalibreSchemaAdapting, @unchecked Sendable {
                            uncompressed_size AS size, path AS path
                     FROM data ORDER BY book, id
                     """
-            ).map {
-                CalibreFormatRow(
-                    book: $0["book"] as Int,
-                    format: $0["format"] as String,
-                    name: $0["name"] as String,
-                    size: $0["size"] as Int64,
-                    path: $0["path"] as String?
+            ).compactMap { row in
+                guard let book = Self.int(row["book"]?.databaseValue),
+                      let format = Self.valueString(row["format"]?.databaseValue),
+                      let name = Self.valueString(row["name"]?.databaseValue),
+                      let size = Self.int64(row["size"]?.databaseValue) else {
+                    return nil
+                }
+                return CalibreFormatRow(
+                    book: book,
+                    format: format,
+                    name: name,
+                    size: size,
+                    path: Self.valueString(row["path"]?.databaseValue)
                 )
             }
         }
@@ -243,12 +306,18 @@ class CalibreSchemaBase: CalibreSchemaAdapting, @unchecked Sendable {
                 SELECT book AS book, format AS format, name AS name, uncompressed_size AS size
                 FROM data ORDER BY book, id
                 """
-        ).map {
-            CalibreFormatRow(
-                book: $0["book"] as Int,
-                format: $0["format"] as String,
-                name: $0["name"] as String,
-                size: $0["size"] as Int64,
+        ).compactMap { row in
+            guard let book = Self.int(row["book"]?.databaseValue),
+                  let format = Self.valueString(row["format"]?.databaseValue),
+                  let name = Self.valueString(row["name"]?.databaseValue),
+                  let size = Self.int64(row["size"]?.databaseValue) else {
+                return nil
+            }
+            return CalibreFormatRow(
+                book: book,
+                format: format,
+                name: name,
+                size: size,
                 path: nil
             )
         }
@@ -264,17 +333,23 @@ class CalibreSchemaBase: CalibreSchemaAdapting, @unchecked Sendable {
                        mark_for_delete AS mark_for_delete
                 FROM custom_columns ORDER BY id
                 """
-        ).map {
-            CalibreCustomColumn(
-                id: $0["id"] as Int,
-                label: $0["label"] as String,
-                name: $0["name"] as String,
-                datatype: $0["datatype"] as String,
-                display: $0["display"] as String,
-                isMultiple: ($0["is_multiple"] as Int? ?? 0) != 0,
-                editable: ($0["editable"] as Int? ?? 0) != 0,
-                normalized: ($0["normalized"] as Int? ?? 0) != 0,
-                markForDelete: ($0["mark_for_delete"] as Int? ?? 0) != 0
+        ).compactMap { row in
+            guard let id = Self.int(row["id"]?.databaseValue),
+                  let label = Self.valueString(row["label"]?.databaseValue),
+                  let name = Self.valueString(row["name"]?.databaseValue),
+                  let datatype = Self.valueString(row["datatype"]?.databaseValue) else {
+                return nil
+            }
+            return CalibreCustomColumn(
+                id: id,
+                label: label,
+                name: name,
+                datatype: datatype,
+                display: Self.valueString(row["display"]?.databaseValue) ?? "{}",
+                isMultiple: Self.bool(row["is_multiple"]?.databaseValue) ?? false,
+                editable: Self.bool(row["editable"]?.databaseValue) ?? true,
+                normalized: Self.bool(row["normalized"]?.databaseValue) ?? false,
+                markForDelete: Self.bool(row["mark_for_delete"]?.databaseValue) ?? false
             )
         }
     }
@@ -286,11 +361,12 @@ class CalibreSchemaBase: CalibreSchemaAdapting, @unchecked Sendable {
             return try Row.fetchAll(
                 db,
                 sql: "SELECT book AS book, value AS value, extra AS extra FROM \(table) ORDER BY book, id"
-            ).map {
-                CalibreCustomValueRow(
-                    book: $0["book"] as Int,
-                    value: Self.valueString($0["value"]?.databaseValue),
-                    extra: Self.valueString($0["extra"]?.databaseValue)
+            ).compactMap { row in
+                guard let book = Self.int(row["book"]?.databaseValue) else { return nil }
+                return CalibreCustomValueRow(
+                    book: book,
+                    value: Self.valueString(row["value"]?.databaseValue),
+                    extra: Self.valueString(row["extra"]?.databaseValue)
                 )
             }
         }
@@ -299,10 +375,11 @@ class CalibreSchemaBase: CalibreSchemaAdapting, @unchecked Sendable {
         return try Row.fetchAll(
             db,
             sql: "SELECT book AS book, value AS value FROM \(table) ORDER BY book"
-        ).map {
-            CalibreCustomValueRow(
-                book: $0["book"] as Int,
-                value: Self.valueString($0["value"]?.databaseValue),
+        ).compactMap { row in
+            guard let book = Self.int(row["book"]?.databaseValue) else { return nil }
+            return CalibreCustomValueRow(
+                book: book,
+                value: Self.valueString(row["value"]?.databaseValue),
                 extra: nil
             )
         }
@@ -353,13 +430,20 @@ class CalibreSchemaBase: CalibreSchemaAdapting, @unchecked Sendable {
             SELECT book AS book, pages AS pages, algorithm AS algorithm,
                    format AS format, format_size AS format_size
             FROM books_pages_link
-            """).map {
-                CalibrePageCountRow(
-                    book: $0["book"] as Int,
-                    pages: $0["pages"] as Int,
-                    algorithm: $0["algorithm"] as Int,
-                    format: $0["format"] as String,
-                    formatSize: $0["format_size"] as Int64
+            """).compactMap { row in
+                guard let book = Self.int(row["book"]?.databaseValue),
+                      let pages = Self.int(row["pages"]?.databaseValue),
+                      let algorithm = Self.int(row["algorithm"]?.databaseValue),
+                      let format = Self.valueString(row["format"]?.databaseValue),
+                      let formatSize = Self.int64(row["format_size"]?.databaseValue) else {
+                    return nil
+                }
+                return CalibrePageCountRow(
+                    book: book,
+                    pages: pages,
+                    algorithm: algorithm,
+                    format: format,
+                    formatSize: formatSize
                 )
             }
     }
@@ -369,12 +453,19 @@ class CalibreSchemaBase: CalibreSchemaAdapting, @unchecked Sendable {
         return try Row.fetchAll(db, sql: """
             SELECT book AS book, format AS format, data AS data
             FROM conversion_options
-            """).map { (book: $0["book"] as Int, format: $0["format"] as String, data: $0["data"] as Data) }
+            """).compactMap { row in
+                guard let book = Self.int(row["book"]?.databaseValue),
+                      let format = Self.valueString(row["format"]?.databaseValue),
+                      let data = Self.data(row["data"]?.databaseValue) else {
+                    return nil
+                }
+                return (book: book, format: format, data: data)
+            }
     }
 
     func columns(in table: String, _ db: Database) throws -> Set<String> {
         let rows = try Row.fetchAll(db, sql: "PRAGMA table_info(\(table))")
-        return Set(rows.compactMap { $0["name"] as String })
+        return Set(rows.compactMap { Self.valueString($0["name"]?.databaseValue) })
     }
 
     private static func valueString(_ value: DatabaseValue?) -> String? {
@@ -393,6 +484,54 @@ class CalibreSchemaBase: CalibreSchemaAdapting, @unchecked Sendable {
         }
     }
 
+    /// Storage-class-tolerant integer read. GRDB's typed `as Int` cast traps
+    /// across storage classes (a hostile or corrupted database must degrade —
+    /// the row is skipped by the caller — never crash the whole scan).
+    static func int(_ value: DatabaseValue?) -> Int? {
+        guard let value else { return nil }
+        switch value.storage {
+        case .int64(let int): return Int(int)
+        case .double(let double): return Int(double)
+        case .string(let string): return Int(string)
+        case .blob, .null: return nil
+        }
+    }
+
+    /// Storage-class-tolerant 64-bit integer read (see `int(_:)`).
+    static func int64(_ value: DatabaseValue?) -> Int64? {
+        guard let value else { return nil }
+        switch value.storage {
+        case .int64(let int): return int
+        case .double(let double): return Int64(double)
+        case .string(let string): return Int64(string)
+        case .blob, .null: return nil
+        }
+    }
+
+    /// Storage-class-tolerant BLOB read: `conversion_options.data` is a BLOB
+    /// in real Calibre; a hostile TEXT value degrades to its UTF-8 bytes.
+    static func data(_ value: DatabaseValue?) -> Data? {
+        guard let value else { return nil }
+        switch value.storage {
+        case .blob(let data): return data
+        case .string(let string): return Data(string.utf8)
+        case .int64, .double, .null: return nil
+        }
+    }
+
+    /// Storage-class-tolerant boolean read for the custom-column flag columns
+    /// (0/1 INTEGER in real Calibre; some tools write TEXT "1"/"true").
+    static func bool(_ value: DatabaseValue?) -> Bool? {
+        guard let value else { return nil }
+        switch value.storage {
+        case .int64(let int): return int != 0
+        case .double(let double): return double != 0
+        case .string(let string):
+            return string == "1" || string.caseInsensitiveCompare("true") == .orderedSame
+        case .blob, .null: return nil
+        }
+    }
+
     /// Groups rows by `book` and encodes each group as a JSON array of
     /// dictionaries containing only the listed keys. Values are read by
     /// storage class (GRDB's typed `as` cast is strict and cannot be used
@@ -400,7 +539,9 @@ class CalibreSchemaBase: CalibreSchemaAdapting, @unchecked Sendable {
     private static func groupJSON(rows: [Row], keys: [String]) throws -> [(book: Int, payload: String)] {
         var grouped: [Int: [[String: String]]] = [:]
         for row in rows {
-            let book = row["book"] as Int
+            // A row without a decodable book id is corrupt — skip it rather
+            // than trap in a typed cast.
+            guard let book = Self.int(row["book"]?.databaseValue) else { continue }
             var dict: [String: String] = [:]
             for key in keys {
                 guard let value = row[key] else { continue }

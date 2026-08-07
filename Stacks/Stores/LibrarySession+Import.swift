@@ -341,13 +341,31 @@ extension LibrarySession {
         }
     }
 
+    /// Clears the Calibre import progress for the current source/selection and
+    /// returns the wizard to the selection step, so completed books can be
+    /// re-imported (the report's "Re-import Skipped" affordance). Books that
+    /// are still in the library re-run through the duplicate gate (no silent
+    /// re-copy); books removed since import get copied again.
+    func resetCalibreImportProgress() {
+        guard let target = calibreImportTarget, let summary = calibreSummary,
+              let sourcePath = calibreSourcePath else { return }
+        CalibreImportService.resetProgress(
+            sourcePath: sourcePath,
+            libraryID: summary.libraryID,
+            selection: Array(calibreSelectedIDs),
+            layout: .init(root: target.repository.root)
+        )
+        calibreImportReport = nil
+        calibreImportProgress = nil
+        calibreActivity = nil
+    }
+
     /// Imports the selected Calibre books into the library that was active
     /// when the source was chosen (`calibreImportTargetID`) — with multiple
     /// libraries open, the copy follows the user's context instead of always
     /// landing in home. Falls back to the active library if the captured
     /// target was closed mid-scan.
-    func importCalibre() async {
-        guard let target = calibreImportTarget, let summary = calibreSummary,
+    func importCalibre() async {        guard let target = calibreImportTarget, let summary = calibreSummary,
               let sourcePath = calibreSourcePath else {
             // Nothing to import (wizard dismissed before Import, or the
             // target library closed): release the task slot so a later run

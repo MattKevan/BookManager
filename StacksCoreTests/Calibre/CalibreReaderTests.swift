@@ -74,6 +74,36 @@ struct CalibreReaderTests {
     }
 
     @Test
+    func hostileStorageClassesDegradeInsteadOfTrap() throws {
+        // SQLite's dynamic typing lets a hostile or corrupted database store
+        // TEXT in non-PK INTEGER columns. Every typed `as Int`/`as Int64`
+        // cast used to trap there; the reader must skip the offending rows
+        // instead. (books.id is an INTEGER PRIMARY KEY rowid alias, which
+        // SQLite itself refuses to corrupt — only non-PK columns are at risk.)
+        let library = try makeLibrary()
+        let dbURL = library.appending(path: "metadata.db")
+        let queue = try DatabaseQueue(path: dbURL.path)
+        try queue.write { db in
+            try db.execute(sql: "UPDATE data SET uncompressed_size = 'not-a-number' WHERE book = 1")
+            try db.execute(sql: "UPDATE data SET book = 'corrupt-book' WHERE book = 2")
+        }
+        try queue.close()
+
+        let reader = try CalibreReader.open(libraryURL: library)
+        defer { try? reader.close() }
+        let records = try reader.books()
+
+        // All records survive; the corrupt format rows are dropped per book.
+        let book1 = try #require(records.first { $0.calibreID == 1 })
+        #expect(book1.formats.isEmpty)
+        let book2 = try #require(records.first { $0.calibreID == 2 })
+        #expect(book2.formats.isEmpty)
+        // Uncorrupted books keep their formats.
+        let book3 = try #require(records.first { $0.calibreID == 3 })
+        #expect(!book3.formats.isEmpty)
+    }
+
+    @Test
     func preservesUnsupportedValuesInRawPayload() throws {
         let library = try makeLibrary()
         let record = try book(1, from: library)

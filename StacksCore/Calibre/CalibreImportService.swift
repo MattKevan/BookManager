@@ -189,7 +189,7 @@ public actor CalibreImportService {
                     ) {
                     case .imported(let book, let likelyDuplicate):
                         progressRecord.completedBookIDs.append(record.calibreID)
-                        try writeProgress(progressRecord, sourcePath: sourcePath)
+                        try writeProgress(progressRecord)
                         item = CalibreImportItem(
                             calibreID: record.calibreID, title: record.title,
                             status: .imported(book.id), likelyDuplicateOf: likelyDuplicate
@@ -362,7 +362,7 @@ public actor CalibreImportService {
     // MARK: - Progress record
 
     private func readProgress(sourcePath: String, libraryID: String, selection: [Int]?) -> CalibreImportProgress {
-        let url = Self.progressFileURL(sourcePath: sourcePath, layout: layout)
+        let url = Self.progressFileURL(sourcePath: sourcePath, libraryID: libraryID, selection: selection, layout: layout)
         // A corrupt or partial progress file means "no progress": tolerate it.
         guard let data = try? Data(contentsOf: url),
               let progress = try? JSONDecoder().decode(CalibreImportProgress.self, from: data) else {
@@ -373,8 +373,11 @@ public actor CalibreImportService {
         return progress
     }
 
-    private func writeProgress(_ progress: CalibreImportProgress, sourcePath: String) throws {
-        let url = Self.progressFileURL(sourcePath: sourcePath, layout: layout)
+    private func writeProgress(_ progress: CalibreImportProgress) throws {
+        let url = Self.progressFileURL(
+            sourcePath: progress.sourcePath, libraryID: progress.libraryID,
+            selection: progress.selection, layout: layout
+        )
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         let data = try JSONEncoder().encode(progress)
         try data.write(to: url, options: .atomic)
@@ -393,10 +396,39 @@ public actor CalibreImportService {
         return digest.map { String(format: "%02x", $0) }.joined().prefix(32).description
     }
 
-    static func progressFileURL(sourcePath: String, layout: LibraryLayout) -> URL {
+    /// The progress-file discriminator. The same source path can be imported
+    /// with different selections (and a recreated library gets a new library
+    /// id): progress from one run must never silently skip books of another,
+    /// so the key covers all three.
+    static func progressKey(sourcePath: String, libraryID: String, selection: [Int]?) -> String {
+        let selectionKey = selection.map { $0.sorted().map(String.init).joined(separator: ":") } ?? "all"
+        return sourcePathHash("\(sourcePath)|\(libraryID)|\(selectionKey)")
+    }
+
+    static func progressFileURL(
+        sourcePath: String,
+        libraryID: String,
+        selection: [Int]?,
+        layout: LibraryLayout
+    ) -> URL {
         layout.controlRoot
             .appending(path: "calibre-imports", directoryHint: .isDirectory)
-            .appending(path: sourcePathHash(sourcePath), directoryHint: .isDirectory)
+            .appending(path: progressKey(sourcePath: sourcePath, libraryID: libraryID, selection: selection), directoryHint: .isDirectory)
             .appending(path: "progress.json")
+    }
+
+    /// Deletes the progress record for one run — the reset affordance that
+    /// lets completed books be re-imported (the report's "Re-import Skipped"
+    /// button). Deleting the now-empty key directory keeps the control root
+    /// tidy.
+    public static func resetProgress(
+        sourcePath: String,
+        libraryID: String,
+        selection: [Int]?,
+        layout: LibraryLayout
+    ) {
+        let url = progressFileURL(sourcePath: sourcePath, libraryID: libraryID, selection: selection, layout: layout)
+        try? FileManager.default.removeItem(at: url)
+        try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
     }
 }

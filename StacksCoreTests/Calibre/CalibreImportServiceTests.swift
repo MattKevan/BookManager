@@ -145,7 +145,10 @@ struct CalibreImportServiceTests {
         #expect(first.failed.map(\.calibreID) == [2])
 
         // Progress records only the completed book.
-        let progressURL = CalibreImportService.progressFileURL(sourcePath: library.path, layout: layout)
+        let progressURL = CalibreImportService.progressFileURL(
+            sourcePath: library.path, libraryID: "acceptance-fixture-uuid",
+            selection: [1, 2], layout: layout
+        )
         let progress = try JSONDecoder().decode(
             CalibreImportProgress.self, from: Data(contentsOf: progressURL)
         )
@@ -172,6 +175,82 @@ struct CalibreImportServiceTests {
     }
 
     @Test
+    func differentSelectionDoesNotSkipCompletedBooks() async throws {
+        let layout = try layout()
+        let library = try CalibreFixture.makeLibrary(named: "svc-sel-\(UUID().uuidString)")
+        let records = try records(from: library)
+
+        // Run 1: only book 1 selected — it completes and is recorded.
+        let service = CalibreImportService(layout: layout)
+        let first = try await service.importBooks(
+            records, from: library.path,
+            libraryID: "acceptance-fixture-uuid",
+            selection: [1],
+            into: CalibreMemoryRepository()
+        )
+        #expect(first.imported.map(\.calibreID) == [1])
+
+        // Run 2 with a DIFFERENT selection: book 1's progress must not make
+        // book 2 "completed" — the old key (source path only) would silently
+        // skip nothing here, but a re-run of a full selection after a partial
+        // one must re-decide the unselected books, not treat them as done.
+        let second = try await service.importBooks(
+            records, from: library.path,
+            libraryID: "acceptance-fixture-uuid",
+            selection: [2],
+            into: CalibreMemoryRepository()
+        )
+        #expect(second.skipped.isEmpty)
+        #expect(second.imported.map(\.calibreID) == [2])
+
+        // Re-running the FIRST selection still skips its completed book.
+        let third = try await service.importBooks(
+            records, from: library.path,
+            libraryID: "acceptance-fixture-uuid",
+            selection: [1],
+            into: CalibreMemoryRepository()
+        )
+        #expect(third.skipped.map(\.calibreID) == [1])
+    }
+
+    @Test
+    func resetProgressAllowsReimportOfCompletedBooks() async throws {
+        let layout = try layout()
+        let library = try CalibreFixture.makeLibrary(named: "svc-reset-\(UUID().uuidString)")
+        let records = try records(from: library)
+        let service = CalibreImportService(layout: layout)
+
+        let first = try await service.importBooks(
+            records, from: library.path,
+            libraryID: "acceptance-fixture-uuid",
+            selection: [1, 2],
+            into: CalibreMemoryRepository()
+        )
+        #expect(first.imported.map(\.calibreID) == [1, 2])
+
+        // Reset: the progress record is gone and the same selection re-imports
+        // instead of skipping.
+        CalibreImportService.resetProgress(
+            sourcePath: library.path, libraryID: "acceptance-fixture-uuid",
+            selection: [1, 2], layout: layout
+        )
+        let url = CalibreImportService.progressFileURL(
+            sourcePath: library.path, libraryID: "acceptance-fixture-uuid",
+            selection: [1, 2], layout: layout
+        )
+        #expect(!FileManager.default.fileExists(atPath: url.path))
+
+        let second = try await service.importBooks(
+            records, from: library.path,
+            libraryID: "acceptance-fixture-uuid",
+            selection: [1, 2],
+            into: CalibreMemoryRepository()
+        )
+        #expect(second.skipped.isEmpty)
+        #expect(second.imported.map(\.calibreID) == [1, 2])
+    }
+
+    @Test
     func progressFileIsWrittenUnderControlRoot() async throws {
         let layout = try layout()
         let service = CalibreImportService(layout: layout)
@@ -186,10 +265,15 @@ struct CalibreImportServiceTests {
             into: repository
         )
 
-        let url = CalibreImportService.progressFileURL(sourcePath: library.path, layout: layout)
+        let url = CalibreImportService.progressFileURL(
+            sourcePath: library.path, libraryID: "acceptance-fixture-uuid",
+            selection: [1, 2], layout: layout
+        )
         #expect(FileManager.default.fileExists(atPath: url.path))
         #expect(url.deletingLastPathComponent().lastPathComponent
-                == CalibreImportService.sourcePathHash(library.path))
+                == CalibreImportService.progressKey(
+                    sourcePath: library.path, libraryID: "acceptance-fixture-uuid", selection: [1, 2]
+                ))
         let progress = try JSONDecoder().decode(
             CalibreImportProgress.self, from: Data(contentsOf: url)
         )

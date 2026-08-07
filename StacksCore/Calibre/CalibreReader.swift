@@ -201,7 +201,7 @@ public final class CalibreReader: Sendable {
             let lookups = try makeLookups(database: database)
             let bookColumns = try schema.columns(in: "books", database)
             let dataColumns = try schema.columns(in: "data", database)
-            return try bookRows.map { row in
+            return try bookRows.compactMap { row in
                 try record(from: row, lookups: lookups, bookColumns: bookColumns, dataColumns: dataColumns)
             }
         }
@@ -307,6 +307,22 @@ public final class CalibreReader: Sendable {
             return Double(int)
         case .string(let string):
             return Double(string)
+        case .blob, .null:
+            return nil
+        }
+    }
+
+    /// Storage-class-tolerant integer read (see `double(fromDatabaseValue:)`):
+    /// a corrupted `books.id` must skip the record, not trap.
+    static func int(fromDatabaseValue value: DatabaseValue?) -> Int? {
+        guard let value else { return nil }
+        switch value.storage {
+        case .int64(let int):
+            return Int(int)
+        case .double(let double):
+            return Int(double)
+        case .string(let string):
+            return Int(string)
         case .blob, .null:
             return nil
         }
@@ -480,8 +496,10 @@ private extension CalibreReader {
         lookups: BookLookups,
         bookColumns: Set<String>,
         dataColumns: Set<String>
-    ) throws -> CalibreBookRecord {
-        let identity = rowIdentity(from: row)
+    ) throws -> CalibreBookRecord? {
+        // A books row whose id does not decode in any storage class is
+        // corrupt — skip it instead of trapping in a typed cast.
+        guard let identity = rowIdentity(from: row) else { return nil }
         var title = row["title"] as String? ?? ""
         var authors = lookups.authors[identity.id] ?? []
         let opfPath = applyOPFCrossCheck(&title, &authors, bookPath: identity.bookPath)
@@ -542,10 +560,15 @@ private extension CalibreReader {
         let lastModified: Date?
     }
 
-    private func rowIdentity(from row: Row) -> RowIdentity {
+    private func rowIdentity(from row: Row) -> RowIdentity? {
+        // The book id is the record's identity everywhere downstream — a value
+        // that decodes in no storage class cannot produce a meaningful record.
+        guard let id = Self.int(fromDatabaseValue: row["id"]?.databaseValue) else {
+            return nil
+        }
         let bookPath = row["path"] as String? ?? ""
         return RowIdentity(
-            id: row["id"] as Int,
+            id: id,
             bookPath: bookPath,
             sourcePath: bookPath.isEmpty ? nil : bookPath,
             sourceUUID: (row["uuid"] as String?).flatMap { $0.isEmpty ? nil : $0 },

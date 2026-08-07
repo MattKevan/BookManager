@@ -167,6 +167,9 @@ struct CalibreImportView: View {
                 }
             }
             if session.calibreImportReport != nil {
+                if let report = session.calibreImportReport, !report.skipped.isEmpty {
+                    Button("Re-import Skipped") { session.resetCalibreImportProgress() }
+                }
                 Button("Done") { dismiss() }
                     .buttonStyle(.borderedProminent)
             } else {
