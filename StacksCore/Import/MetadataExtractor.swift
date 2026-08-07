@@ -183,12 +183,20 @@ public enum MetadataExtractor {
 
     private static func entryData(in archive: Archive, path: String) throws -> Data? {
         guard let entry = archive[path] else { return nil }
+        // A hostile or mis-encoded archive must not buffer gigabytes: a cover
+        // or metadata entry larger than 64 MB is treated as absent (metadata
+        // degrades gracefully) instead of being extracted whole.
+        guard entry.uncompressedSize <= maxExtractableEntrySize else { return nil }
         var data = Data()
         _ = try archive.extract(entry) { chunk in
             data.append(chunk)
         }
         return data
     }
+
+    /// The largest archive entry `entryData` extracts (covers are typically a
+    /// few MB; 64 MB is generous headroom).
+    private static let maxExtractableEntrySize: Int64 = 64 << 20
 
     private static func normalizeToJPEG(_ data: Data) -> Data? {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil),

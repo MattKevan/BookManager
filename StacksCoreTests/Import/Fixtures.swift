@@ -5,7 +5,10 @@ import ZIPFoundation
 
 enum Fixtures {
     /// A minimal EPUB 2.0 archive with one book and a cover PNG.
-    static func makeEPUB(named name: String = "book.epub") throws -> URL {
+    static func makeEPUB(
+        named name: String = "book.epub",
+        extraEntries: [(name: String, data: Data)] = []
+    ) throws -> URL {
         let url = FileManager.default.temporaryDirectory.appending(path: name)
         try? FileManager.default.removeItem(at: url)
         let archive = try Archive(url: url, accessMode: .create)
@@ -62,6 +65,13 @@ enum Fixtures {
             uncompressedSize: Int64(Data("<p/>".utf8).count),
             provider: { _, _ in Data("<p/>".utf8) }
         )
+        for extra in extraEntries {
+            try archive.addEntry(
+                with: extra.name, type: .file,
+                uncompressedSize: Int64(extra.data.count),
+                provider: { _, _ in extra.data }
+            )
+        }
         return url
     }
 

@@ -69,6 +69,20 @@ public actor ImportService {
         into repository: LibraryRepositoryImporting
     ) async throws -> ImportReport {
         var items: [ImportItem] = []
+        // Build the normalized title|author → book index ONCE: the old per-file
+        // `allBooksForDuplicateCheck()` materialized the entire catalog for
+        // every file (O(files × catalog)). `createBook` upserts the catalog,
+        // so the index must grow per import — a later file in the same batch
+        // is then flagged against earlier ones. An index-build failure degrades
+        // to no likely-duplicate warnings, never a failed import.
+        var duplicateIndex: [String: UUID] = [:]
+        if let all = try? await repository.allBooksForDuplicateCheck() {
+            for book in all where !book.title.isEmpty {
+                duplicateIndex[Self.duplicateKey(
+                    title: book.title, author: book.authors.first ?? ""
+                )] = book.id
+            }
+        }
         for source in sourceURLs {
             // MOBI/AZW/AZW3 sources convert to a temp EPUB first, then flow
             // through the standard EPUB path against the temp file. The report
@@ -122,13 +136,9 @@ public actor ImportService {
 
                 var likelyDuplicate: UUID?
                 if metadata.title.isEmpty == false {
-                    let candidates = try await repository.allBooksForDuplicateCheck()
-                    let normalized = Self.normalized(metadata.title)
-                    let firstAuthor = metadata.authors.first.map(Self.normalized) ?? ""
-                    likelyDuplicate = candidates.first {
-                        Self.normalized($0.title) == normalized
-                            && ($0.authors.first.map(Self.normalized) ?? "") == firstAuthor
-                    }?.id
+                    likelyDuplicate = duplicateIndex[Self.duplicateKey(
+                        title: metadata.title, author: metadata.authors.first ?? ""
+                    )]
                 }
 
                 let book = try await repository.createBook(
@@ -136,6 +146,13 @@ public actor ImportService {
                     staged: [staged],
                     cover: cover
                 )
+                // Register this import so later files in the same batch are
+                // flagged against it.
+                if !book.title.isEmpty {
+                    duplicateIndex[Self.duplicateKey(
+                        title: book.title, author: book.authors.first ?? ""
+                    )] = book.id
+                }
                 items.append(ImportItem(
                     sourceURL: source, kind: kind,
                     status: .imported(book.id),
@@ -230,6 +247,13 @@ public actor ImportService {
             .filter { CharacterSet.alphanumerics.contains($0) }
             .map(String.init)
             .joined()
+    }
+
+    /// The duplicate-check index key: normalized title and first author. The
+    /// query requires a non-empty title; an empty author matches a book with
+    /// no authors ("" == "").
+    private static func duplicateKey(title: String, author: String) -> String {
+        "\(normalized(title))|\(normalized(author))"
     }
 
     /// `ExtractedMetadata` and `NewBookMetadata` are distinct types; the extractor

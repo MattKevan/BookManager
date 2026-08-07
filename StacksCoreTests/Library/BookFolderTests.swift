@@ -66,6 +66,51 @@ struct BookFolderTests {
     }
 
     @Test
+    func stageRejectsOversizedFilesBeforeCopying() async throws {
+        let (_, layout) = try makeLayout()
+        let folder = BookFolder(layout: layout)
+        let source = FileManager.default.temporaryDirectory
+            .appending(path: "\(UUID().uuidString).pdf")
+        // A sparse 5 GB file: the logical size trips the cap without actually
+        // allocating 5 GB (a hostile/oversized import must be refused before
+        // any staging copy, not buffered or duplicated).
+        FileManager.default.createFile(atPath: source.path, contents: nil)
+        let handle = try FileHandle(forWritingTo: source)
+        try handle.truncate(atOffset: 5 << 30)
+        try handle.close()
+        defer { try? FileManager.default.removeItem(at: source) }
+
+        await #expect(throws: BookFolderError.fileTooLarge(5 << 30)) {
+            _ = try await folder.stage(from: source)
+        }
+        // Nothing was staged.
+        let staging = layout.controlRoot.appending(path: "staging", directoryHint: .isDirectory)
+        let leftovers = (try? FileManager.default.contentsOfDirectory(at: staging, includingPropertiesForKeys: nil)) ?? []
+        #expect(leftovers.isEmpty)
+    }
+
+    @Test
+    func contentHashAndSizeMatchesDataBasedHash() async throws {
+        let (_, layout) = try makeLayout()
+        let folder = BookFolder(layout: layout)
+        let source = FileManager.default.temporaryDirectory
+            .appending(path: "\(UUID().uuidString).dat")
+        // 2.5 MB of data: spans multiple 1 MB streaming chunks.
+        let data = Data((0..<2_500_000).map { UInt8($0 % 251) })
+        try data.write(to: source)
+        defer { try? FileManager.default.removeItem(at: source) }
+
+        let (hash, size) = try BookFolder.contentHashAndSize(of: source)
+        #expect(hash == BookFolder.contentHash(data))
+        #expect(size == Int64(data.count))
+
+        // The staged values come from the same streaming path.
+        let staged = try await folder.stage(from: source)
+        #expect(staged.contentHash == BookFolder.contentHash(data))
+        #expect(staged.size == Int64(data.count))
+    }
+
+    @Test
     func materializeWritesCoverAndOpf() async throws {
         let (root, layout) = try makeLayout()
         let folder = BookFolder(layout: layout)

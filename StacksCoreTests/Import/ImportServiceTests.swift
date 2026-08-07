@@ -87,6 +87,51 @@ struct ImportServiceTests {
         let second = try await service.importFiles([epub], into: repository)
         #expect(second.duplicates.count == 1)
     }
+
+    @Test
+    func duplicateIndexIsBuiltOnceNotPerFile() async throws {
+        let layout = try layout()
+        let service = ImportService(layout: layout)
+        let repository = MemoryRepository()
+        let epub = try Fixtures.makeEPUB(named: "batch-1.epub")
+        let pdf = try Fixtures.makePDF(named: "batch-1.pdf")
+
+        let report = try await service.importFiles([epub, pdf], into: repository)
+
+        #expect(report.imported.count == 2)
+        // The whole catalog was materialized ONCE for the whole batch, not per
+        // file (the old per-file lookup was O(files × catalog)).
+        #expect(await repository.duplicateCheckCount == 1)
+    }
+
+    @Test
+    func intraRunImportsAreFlaggedAsLikelyDuplicates() async throws {
+        let layout = try layout()
+        let service = ImportService(layout: layout)
+        let repository = MemoryRepository()
+        // Same embedded title, different bytes (extra entry → different hash),
+        // so the second is NOT an exact duplicate — it must be hinted as a
+        // likely duplicate of the first, imported earlier in the SAME batch.
+        let first = try Fixtures.makeEPUB(named: "intra-1.epub")
+        let second = try Fixtures.makeEPUB(
+            named: "intra-2.epub",
+            extraEntries: [("OEBPS/extra.txt", Data("extra".utf8))]
+        )
+
+        let report = try await service.importFiles([first, second], into: repository)
+
+        #expect(report.imported.count == 2)
+        #expect(report.duplicates.isEmpty)
+        let hinted = try #require(report.imported.last)
+        guard case .imported(let id) = hinted.status else {
+            Issue.record("expected .imported status, got \(hinted.status)")
+            return
+        }
+        // The first import's id (registered into the index as it was created).
+        #expect(hinted.likelyDuplicateOf != nil)
+        #expect(hinted.likelyDuplicateOf != id)
+        #expect(await repository.duplicateCheckCount == 1)
+    }
 }
 
 /// Thin protocol eraser so the importer does not depend on the concrete repository actor.
@@ -95,6 +140,9 @@ struct ImportServiceTests {
 actor MemoryRepository: LibraryRepositoryImporting {
     private var hashes: [String: UUID] = [:]
     private var books: [IndexedBook]
+    /// How many times `allBooksForDuplicateCheck` was called — lets tests pin
+    /// the once-per-batch index build (O(N), not O(files × catalog)).
+    private(set) var duplicateCheckCount = 0
 
     init(seededBooks: [IndexedBook] = []) {
         books = seededBooks
@@ -104,7 +152,10 @@ actor MemoryRepository: LibraryRepositoryImporting {
         hashes[contentHash].map { [$0] } ?? []
     }
 
-    func allBooksForDuplicateCheck() async throws -> [IndexedBook] { books }
+    func allBooksForDuplicateCheck() async throws -> [IndexedBook] {
+        duplicateCheckCount += 1
+        return books
+    }
 
     func createBook(
         metadata: NewBookMetadata,
