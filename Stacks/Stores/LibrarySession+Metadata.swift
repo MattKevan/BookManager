@@ -132,6 +132,12 @@ extension LibrarySession {
             guard let book = books.first(where: { $0.id == id }),
                   EnrichmentPolicy.needsEnrichment(book) else { continue }
             await fetchMetadata(for: id)
+            // A candidate set is presented for the user to review: stop the
+            // sweep. The next iteration would clobber `metadataCandidates`
+            // (the user only ever sees the last book's), and a later
+            // high-confidence hit would auto-apply while the review sheet is
+            // still up. The menu action re-runs after the sheet closes.
+            if metadataReviewPresented { return }
         }
     }
 

@@ -107,8 +107,6 @@ extension LibrarySession {
                 activeSecurityURL?.stopAccessingSecurityScopedResource()
                 activeSecurityURL = url
             }
-            try bookmarks.save(url, for: connection.id)
-            recentLibraries = Self.resolveRecents(bookmarks)
             if intent == .home {
                 // Change Home with an existing home: the new connection
                 // becomes home and the old home is demoted to a peer (never
@@ -123,14 +121,28 @@ extension LibrarySession {
             } else {
                 peers.append(connection)
             }
-            try openStore.save(url, for: connection.id, name: connection.name)
-            persistOpenOrder()
             activeLibraryID = connection.id
             state = .loaded
             // The connection's init already refreshed; this post-wiring pass
             // guarantees a browse failure after open lands in `state = .failed`
             // (the init ran before the callbacks above were attached).
             await connection.refreshAll()
+
+            // Persistence is best-effort AFTER the connection is committed. A
+            // bookmark or open-store failure must not report a successfully
+            // opened library as failed, orphan the wired connection, or leave
+            // the state machine stuck in .loading — and the URL classes that
+            // fail bookmark creation (non-security-scope-capable NAS/offline
+            // volumes) are exactly the libraries the offline-peers feature
+            // exists for.
+            do {
+                try bookmarks.save(url, for: connection.id)
+                recentLibraries = Self.resolveRecents(bookmarks)
+                try openStore.save(url, for: connection.id, name: connection.name)
+                persistOpenOrder()
+            } catch {
+                lastError = "Library opened, but it could not be remembered for next launch: \(error.localizedDescription)"
+            }
         } catch {
             if accessed { url.stopAccessingSecurityScopedResource() }
             handleOpenFailure(error, fallbackToWelcome: fallbackToWelcome, url: url)
