@@ -98,6 +98,17 @@
             parallelizable = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
+               BlueprintIdentifier = "B57D6454DE7D10B8D35F2610"
+               BuildableName = "StacksTests.xctest"
+               BlueprintName = "StacksTests"
+               ReferencedContainer = "container:Stacks.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
                BlueprintIdentifier = "8DC03021322DD9FC09DE08E2"
                BuildableName = "StacksUITests.xctest"
                BlueprintName = "StacksUITests"

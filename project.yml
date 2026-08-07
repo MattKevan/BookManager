@@ -86,6 +86,19 @@ targets:
       - package: libmobi-swift
         product: libmobi
 
+  StacksTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - StacksTests
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Stacks.app/Contents/MacOS/Stacks
+        BUNDLE_LOADER: $(TEST_HOST)
+    dependencies:
+      - target: Stacks
+
   StacksUITests:
     type: bundle.ui-testing
     platform: macOS
@@ -112,6 +125,7 @@ schemes:
       gatherCoverageData: true
       targets:
         - StacksCoreTests
+        - StacksTests
         - StacksUITests
     profile:
       config: Release
