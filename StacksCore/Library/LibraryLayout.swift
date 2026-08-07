@@ -12,6 +12,11 @@ public struct LibraryLayout: Sendable {
     public var changesRoot: URL { controlRoot.appending(path: "changes", directoryHint: .isDirectory) }
     public var bookChangesRoot: URL { changesRoot.appending(path: "books", directoryHint: .isDirectory) }
     public var libraryChangesRoot: URL { changesRoot.appending(path: "library", directoryHint: .isDirectory) }
+    /// The append-only operation journal — the authoritative library state
+    /// (replaces the Automerge change store).
+    public var journalRoot: URL { changesRoot.appending(path: "journal", directoryHint: .isDirectory) }
+    /// Periodic full-state snapshot for fast rebuilds (atomic writes).
+    public var snapshotURL: URL { changesRoot.appending(path: "snapshot.json") }
     public var transactionsRoot: URL { controlRoot.appending(path: "transactions", directoryHint: .isDirectory) }
     public var trashRoot: URL { controlRoot.appending(path: "trash", directoryHint: .isDirectory) }
     public var recoveryRoot: URL { controlRoot.appending(path: "recovery", directoryHint: .isDirectory) }
