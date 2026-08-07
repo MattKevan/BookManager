@@ -272,6 +272,44 @@ public actor LibraryRepository: LibraryRepositoryImporting {
         await journal.currentSeq
     }
 
+    // MARK: - Network surface (Plan 2)
+
+    /// Appends a client command (server-assigned seq; dedupes by the client's
+    /// id) and applies it with folder materialization — the sync protocol's
+    /// push path. `addBook`/`setCover` payloads must have their staged files
+    /// pre-placed at `staging/<commandID>/` via `stageUploadedFile`.
+    public func ingest(_ command: JournalCommand) async throws {
+        guard try await journal.append(op: command.op, id: command.id) != nil else {
+            return  // duplicate id — already applied
+        }
+        let stagedDir = layout.stagingRoot
+            .appending(path: command.id.uuidString, directoryHint: .isDirectory)
+        do {
+            try await apply(command, materializeFolders: true)
+            try? FileManager.default.removeItem(at: stagedDir)
+            try await maybeSnapshot()
+        } catch {
+            try? FileManager.default.removeItem(at: stagedDir)
+            throw error
+        }
+    }
+
+    /// Journal records after a cursor, in order — the sync protocol's pull
+    /// surface. The client stores the last `seq` it saw and re-pulls
+    /// incrementally.
+    public func journalRecords(after seq: Int64) async throws -> [JournalCommand] {
+        try await journal.records(after: seq)
+    }
+
+    /// Writes an uploaded file into the command's staging directory — network
+    /// uploads land here before the command that references them is ingested.
+    public func stageUploadedFile(_ data: Data, commandID: UUID, stagedName: String) throws {
+        let directory = layout.stagingRoot
+            .appending(path: commandID.uuidString, directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try data.write(to: directory.appending(path: stagedName))
+    }
+
     // MARK: - Files
 
     public func formatFileURL(id: UUID) async throws -> URL? {
