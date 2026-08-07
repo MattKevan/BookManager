@@ -15,9 +15,13 @@ so a plain `swift build` works on macOS, Linux arm64 (Raspberry Pi 4/5,
 - **Swift 6.x toolchain** from [swift.org](https://www.swift.org/install/linux/)
   (`swift-tools-version: 6.0` requires Swift 6.0 or newer). Verify:
   `swift --version`.
-- No other system packages to build: GRDB bundles SQLite, swift-crypto
-  vendors BoringSSL, Hummingbird/NIO and swift-argument-parser are pure
-  Swift.
+- **SQLite headers** — GRDB compiles against the system SQLite:
+  `sudo apt install libsqlite3-dev` (Ubuntu/Debian). The runtime library
+  (`libsqlite3-0`) is usually already installed; the C header (`sqlite3.h`)
+  is not — without it the `GRDBSQLite` C module fails with
+  `'sqlite3.h' file not found`.
+- No other system packages to build: swift-crypto vendors BoringSSL,
+  Hummingbird/NIO and swift-argument-parser are pure Swift.
 - To advertise the library over the LAN: `sudo apt install avahi-daemon
   avahi-utils` (avahi-daemon usually runs by default on desktop distros;
   headless servers: `sudo systemctl enable --now avahi-daemon`). Without it

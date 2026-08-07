@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 import Hummingbird
 import Testing
 @testable import StacksCore
@@ -37,48 +40,13 @@ struct ProtocolTests {
         )
     }
 
-    /// Binds a loopback socket to port 0 to find a free port, then closes it.
-    private func freePort() throws -> Int {
-        let socket = Darwin.socket(AF_INET, SOCK_STREAM, 0)
-        var addr = sockaddr_in()
-        addr.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
-        addr.sin_family = sa_family_t(AF_INET)
-        addr.sin_port = 0
-        addr.sin_addr.s_addr = INADDR_LOOPBACK.bigEndian
-        _ = withUnsafePointer(to: &addr) { pointer in
-            Darwin.bind(socket, UnsafeRawPointer(pointer).assumingMemoryBound(to: sockaddr.self), socklen_t(MemoryLayout<sockaddr_in>.size))
-        }
-        var length = socklen_t(MemoryLayout<sockaddr_in>.size)
-        _ = withUnsafeMutablePointer(to: &addr) { pointer in
-            Darwin.getsockname(socket, UnsafeMutableRawPointer(pointer).assumingMemoryBound(to: sockaddr.self), &length)
-        }
-        let port = Int(addr.sin_port.bigEndian)
-        Darwin.close(socket)
-        return port
-    }
-
     /// Starts the server on the given port in a background task, waiting until
     /// it accepts connections.
     private func startServer(port: Int) async throws {
         let server = try await LibraryServer(configuration: try await makeConfiguration(port: port))
         let app = try await server.makeApplication()
         Task { try await app.run() }
-        for _ in 0..<50 {
-            if await portResponds(port) { return }
-            try await Task.sleep(for: .milliseconds(50))
-        }
-        throw ProtocolError.serverDidNotStart
-    }
-
-    private enum ProtocolError: Error {
-        case serverDidNotStart
-    }
-
-    private func portResponds(_ port: Int) async -> Bool {
-        var request = URLRequest(url: URL(string: "http://127.0.0.1:\(port)/api/sync?after=0")!)
-        request.timeoutInterval = 1
-        guard let (_, response) = try? await URLSession.shared.data(for: request) else { return false }
-        return (response as? HTTPURLResponse)?.statusCode == 200
+        try await ServerTestHarness.waitForServer(port: port)
     }
 
     private func send(
@@ -97,7 +65,7 @@ struct ProtocolTests {
 
     @Test
     func pushAndPullRoundTrip() async throws {
-        let port = try freePort()
+        let port = try ServerTestHarness.freePort()
         try await startServer(port: port)
 
         let bookID = UUID()
@@ -132,7 +100,7 @@ struct ProtocolTests {
 
     @Test
     func identityEndpointExposesLibraryAndIsAuthGated() async throws {
-        let port = try freePort()
+        let port = try ServerTestHarness.freePort()
         try await startServer(port: port)
 
         // Anonymous server: identity returns the library id + display name.
@@ -144,7 +112,7 @@ struct ProtocolTests {
 
         // The identity endpoint rides the same auth gate as everything else.
         // Start a second server with basic auth on a fresh port.
-        let authedPort = try freePort()
+        let authedPort = try ServerTestHarness.freePort()
         let root = FileManager.default.temporaryDirectory
             .appending(path: UUID().uuidString, directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -163,10 +131,7 @@ struct ProtocolTests {
         ))
         let app = try await server.makeApplication()
         Task { try await app.run() }
-        for _ in 0..<50 {
-            if await portResponds(authedPort) { break }
-            try await Task.sleep(for: .milliseconds(50))
-        }
+        try await ServerTestHarness.waitForServer(port: authedPort)
 
         let anonymous = try await send(authedPort, method: "GET", path: "/api/identity")
         #expect(anonymous.status == 401)
@@ -181,7 +146,7 @@ struct ProtocolTests {
 
     @Test
     func deleteOfUnknownBookIsNoOp() async throws {
-        let port = try freePort()
+        let port = try ServerTestHarness.freePort()
         try await startServer(port: port)
 
         // A stale client racing another client's delete pushes a delete for a
@@ -221,7 +186,7 @@ struct ProtocolTests {
 
     @Test
     func updateOfUnknownBookIsRejected() async throws {
-        let port = try freePort()
+        let port = try ServerTestHarness.freePort()
         try await startServer(port: port)
 
         // A command that cannot apply must never enter the journal — it would
@@ -250,7 +215,7 @@ struct ProtocolTests {
 
     @Test
     func duplicateCommandIdAppliesOnce() async throws {
-        let port = try freePort()
+        let port = try ServerTestHarness.freePort()
         try await startServer(port: port)
 
         let command = ClientCommand(id: UUID(), op: .addBook(.init(
@@ -274,7 +239,7 @@ struct ProtocolTests {
 
     @Test
     func stageUploadThenAddBookMaterializes() async throws {
-        let port = try freePort()
+        let port = try ServerTestHarness.freePort()
         try await startServer(port: port)
 
         let bookID = UUID()
@@ -309,7 +274,7 @@ struct ProtocolTests {
 
     @Test
     func unknownBookReturns404() async throws {
-        let port = try freePort()
+        let port = try ServerTestHarness.freePort()
         try await startServer(port: port)
         let response = try await send(port, method: "GET", path: "/api/books/\(UUID().uuidString)/download")
         #expect(response.status == 404)

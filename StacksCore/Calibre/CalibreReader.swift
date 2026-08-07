@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationXML)
+import FoundationXML
+#endif
 import GRDB
 
 /// Per-book lookup tables shared across one `books()` pass.

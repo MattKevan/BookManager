@@ -75,6 +75,7 @@ let package = Package(
                 "Selection",
                 "Library/LibraryRepositoryTests.swift",
                 "Library/CoverThumbnailerTests.swift",
+                "Library/BookFolderTests.swift",
                 "Server/BonjourTests.swift",
             ]
         ),

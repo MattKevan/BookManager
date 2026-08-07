@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 /// The client half of the sync protocol: connects to a `LibraryServer`,
 /// pulls journal commands, replays them into a browsable state with the same

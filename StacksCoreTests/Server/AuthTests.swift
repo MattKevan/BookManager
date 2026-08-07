@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 import Hummingbird
 import Testing
 @testable import StacksCore
@@ -35,30 +38,11 @@ struct AuthTests {
         )
     }
 
-    private func freePort() throws -> Int {
-        let socket = Darwin.socket(AF_INET, SOCK_STREAM, 0)
-        var addr = sockaddr_in()
-        addr.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
-        addr.sin_family = sa_family_t(AF_INET)
-        addr.sin_port = 0
-        addr.sin_addr.s_addr = INADDR_LOOPBACK.bigEndian
-        _ = withUnsafePointer(to: &addr) { pointer in
-            Darwin.bind(socket, UnsafeRawPointer(pointer).assumingMemoryBound(to: sockaddr.self), socklen_t(MemoryLayout<sockaddr_in>.size))
-        }
-        var length = socklen_t(MemoryLayout<sockaddr_in>.size)
-        _ = withUnsafeMutablePointer(to: &addr) { pointer in
-            Darwin.getsockname(socket, UnsafeMutableRawPointer(pointer).assumingMemoryBound(to: sockaddr.self), &length)
-        }
-        let port = Int(addr.sin_port.bigEndian)
-        Darwin.close(socket)
-        return port
-    }
-
     private func startServer(port: Int, auth: Bool) async throws {
         let server = try await LibraryServer(configuration: try await makeConfiguration(port: port, auth: auth))
         let app = try await server.makeApplication()
         Task { try await app.run() }
-        try await Task.sleep(for: .milliseconds(200))
+        try await ServerTestHarness.waitForServer(port: port)
     }
 
     private func send(_ port: Int, path: String, headers: [String: String] = [:]) async throws -> Int {
@@ -78,7 +62,7 @@ struct AuthTests {
 
     @Test
     func anonymousWhenNoCredentialsConfigured() async throws {
-        let port = try freePort()
+        let port = try ServerTestHarness.freePort()
         try await startServer(port: port, auth: false)
         let status = try await send(port, path: "/api/sync?after=0")
         #expect(status == 200)
@@ -86,7 +70,7 @@ struct AuthTests {
 
     @Test
     func requiresCredentialsWhenConfigured() async throws {
-        let port = try freePort()
+        let port = try ServerTestHarness.freePort()
         try await startServer(port: port, auth: true)
         let syncPath = "/api/sync?after=0"
 
