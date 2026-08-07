@@ -87,6 +87,16 @@ final class LibrarySession {
     /// Throttle timestamp for live library refreshes during a Calibre import.
     var lastCalibreLiveRefresh: Date?
     var calibreSourcePath: String?
+    /// The library the Calibre import will land in — the library that was
+    /// active when the source folder was chosen. Captured at scan start
+    /// because the scan runs while the window is still interactive (only the
+    /// wizard that follows is modal), so the user could switch libraries
+    /// mid-scan.
+    var calibreImportTargetID: UUID?
+    /// The in-flight Calibre import (started by the wizard's Import button).
+    /// Held so `cancelCalibreImport` can actually stop the import instead of
+    /// just dismissing the wizard while books keep being written.
+    var calibreImportTask: Task<Void, Never>?
 
     let deviceID: UUID
     let bookmarks: LibraryBookmarkStore
@@ -343,6 +353,7 @@ final class LibrarySession {
         calibreImportReport = nil
         calibreImportInProgress = false
         calibreSourcePath = nil
+        calibreImportTargetID = nil
         pickerAction = nil
         isPickerPresented = false
         recentLibraries = Self.resolveRecents(bookmarks)

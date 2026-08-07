@@ -166,6 +166,10 @@ public actor CalibreImportService {
             if let selectedIDs, !selectedIDs.contains(record.calibreID) {
                 continue
             }
+            // Cancellation is checked per record (and per book inside
+            // importOne): a cancelled import stops writing books at the next
+            // boundary instead of draining the whole selection.
+            try Task.checkCancellation()
             // Report before processing so the UI shows "Importing <title>…"
             // while a book's files are copied (large files take seconds).
             progress(CalibreImportUpdate(
@@ -244,6 +248,10 @@ public actor CalibreImportService {
         if let missing = record.formats.first(where: { $0.isMissing }) {
             throw CalibreImportError.missingFormatFile(missing.name)
         }
+        // Between-books cancellation lands here too (the check at the loop
+        // top only fires when a cancelled task resumes there): never start
+        // staging a new book under cancellation.
+        try Task.checkCancellation()
 
         var staged: [BookFolder.StagedFile] = []
         var stagedCover: BookFolder.StagedFile?

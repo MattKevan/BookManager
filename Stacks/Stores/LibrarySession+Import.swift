@@ -43,6 +43,12 @@ extension LibrarySession {
     /// state. Called when the wizard disappears (Cancel, Done, or Escape);
     /// idempotent.
     func cancelCalibreImport() {
+        // Cancel the in-flight import FIRST: the task must stop writing books
+        // before the reader is closed (the service checks cancellation per
+        // book, so a cancelled import settles at the next boundary and never
+        // needs the reader again).
+        calibreImportTask?.cancel()
+        calibreImportTask = nil
         stopCalibreAccess()
         try? calibreReader?.close()
         calibreReader = nil
@@ -55,6 +61,7 @@ extension LibrarySession {
         calibreActivity = nil
         lastCalibreLiveRefresh = nil
         calibreSourcePath = nil
+        calibreImportTargetID = nil
     }
 
     func stopCalibreAccess() {
@@ -68,8 +75,13 @@ extension LibrarySession {
 extension LibrarySession {
     // MARK: - Import
 
+    /// File > Import Books and the toolbar Add Books button land in the
+    /// library that is currently active — home in device mode, since device
+    /// selection clears the browser context. Peer drag-drop and the library
+    /// browser drop handler use the explicit `into:` variant instead.
     func importFiles(urls: [URL]) async {
-        guard let repository = connection?.repository else { return }
+        guard let target = activeLibrary else { return }
+        let repository = target.repository
         let service = ImportService(layout: .init(root: repository.root))
         do {
             importReport = try await service.importFiles(urls, into: repository)
@@ -78,11 +90,13 @@ extension LibrarySession {
                 ImportItem(sourceURL: urls.first ?? URL(fileURLWithPath: "/"), kind: .epub, status: .failed(error.localizedDescription))
             ])
         }
-        await refreshAll()
+        await target.refreshAll()
         // Enrich freshly imported books that are missing authors/tags, when
         // the preference is on. Runs off the import's critical path so the
-        // report feedback is not delayed by network lookups.
-        if AppSettings.automaticallyFetchMissingMetadata() {
+        // report feedback is not delayed by network lookups. The enrichment
+        // chain is home-scoped, so it only runs for home imports (peer
+        // enrichment is not wired yet).
+        if target === home, AppSettings.automaticallyFetchMissingMetadata() {
             let importedIDs = (importReport?.imported ?? []).compactMap { item -> UUID? in
                 if case let .imported(id) = item.status { return id }
                 return nil
@@ -240,7 +254,27 @@ extension LibrarySession {
 
     // MARK: - Calibre import
 
+    /// The connection the Calibre import writes into: the library captured
+    /// when the source was chosen, or the active library when the capture is
+    /// missing (e.g. nothing was open when the wizard started).
+    private var calibreImportTarget: LibraryConnection? {
+        guard let id = calibreImportTargetID else { return activeLibrary }
+        return ([home] + peers).compactMap { $0 }.first { $0.id == id }
+    }
+
+    /// Display name for the wizard's Destination row (nil when nothing is
+    /// open, so the row hides).
+    var calibreImportTargetName: String? {
+        calibreImportTarget?.name
+    }
+
     func selectCalibreLibrary(at url: URL) async {
+        // Capture the landing library NOW: the scan below runs while the
+        // window stays interactive (the wizard that follows is modal), so the
+        // import should land in the library that was active when the user
+        // chose the source — not whatever happens to be active when Import is
+        // clicked.
+        calibreImportTargetID = activeLibrary?.id
         // The folder comes from SwiftUI's fileImporter and is security-scoped:
         // the sandbox denies every read of the source (including the
         // metadata.db snapshot copy inside CalibreReader.open) until the scope
@@ -281,6 +315,7 @@ extension LibrarySession {
             calibreSummary = nil
             calibreBooks = []
             calibreSourcePath = nil
+            calibreImportTargetID = nil
             calibreActivity = nil
             calibreReader = nil
             return
@@ -296,9 +331,31 @@ extension LibrarySession {
         calibreActivity = nil
     }
 
+    /// Starts the Calibre import on a task the session owns, so
+    /// `cancelCalibreImport` can cancel it (the old flow's unstructured Task
+    /// in the view kept writing books after the wizard was dismissed).
+    func startCalibreImport() {
+        guard calibreImportTask == nil else { return }
+        calibreImportTask = Task { @MainActor in
+            await self.importCalibre()
+        }
+    }
+
+    /// Imports the selected Calibre books into the library that was active
+    /// when the source was chosen (`calibreImportTargetID`) — with multiple
+    /// libraries open, the copy follows the user's context instead of always
+    /// landing in home. Falls back to the active library if the captured
+    /// target was closed mid-scan.
     func importCalibre() async {
-        guard let repository = connection?.repository, let summary = calibreSummary,
-              let sourcePath = calibreSourcePath else { return }
+        guard let target = calibreImportTarget, let summary = calibreSummary,
+              let sourcePath = calibreSourcePath else {
+            // Nothing to import (wizard dismissed before Import, or the
+            // target library closed): release the task slot so a later run
+            // can start.
+            calibreImportTask = nil
+            return
+        }
+        let repository = target.repository
         calibreImportInProgress = true
         calibreImportProgress = 0
         lastCalibreLiveRefresh = nil
@@ -306,6 +363,7 @@ extension LibrarySession {
             calibreImportInProgress = false
             calibreImportProgress = nil
             calibreActivity = nil
+            calibreImportTask = nil
         }
         let service = CalibreImportService(layout: .init(root: repository.root))
         // The scan deferred blob covers; the import fetches them per book from
@@ -313,7 +371,7 @@ extension LibrarySession {
         // background call does not touch the main actor).
         let reader = calibreReader
         do {
-            calibreImportReport = try await service.importBooks(
+            let report = try await service.importBooks(
                 calibreBooks,
                 from: sourcePath,
                 libraryID: summary.libraryID,
@@ -335,16 +393,25 @@ extension LibrarySession {
                     try reader?.coverData(for: calibreID)
                 }
             )
+            // The wizard may have been dismissed mid-import (cancelCalibreImport
+            // cleared the state): never clobber a NEW scan's state with the
+            // cancelled run's report.
+            guard !Task.isCancelled else { return }
+            calibreImportReport = report
             // The source is no longer read after the import completes; a
             // failed import keeps the scope and reader so the wizard's retry
             // can read it.
             stopCalibreAccess()
             try? calibreReader?.close()
             calibreReader = nil
+        } catch is CancellationError {
+            // Cancelled: the wizard's state is already cleared — nothing to
+            // surface, nothing to report.
         } catch {
+            guard !Task.isCancelled else { return }
             lastError = error.localizedDescription
         }
-        await refreshAll()
+        await target.refreshAll()
     }
 
     /// Live library updates during the import: refresh the visible books at
@@ -356,6 +423,6 @@ extension LibrarySession {
             return
         }
         lastCalibreLiveRefresh = now
-        Task { await connection?.refreshBooks() }
+        Task { await calibreImportTarget?.refreshBooks() }
     }
 }

@@ -38,6 +38,9 @@ struct CalibreImportView: View {
     private func header(_ summary: CalibreLibrarySummary) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             LabeledContent("Source", value: sourceName)
+            if let destination = session.calibreImportTargetName {
+                LabeledContent("Destination", value: destination)
+            }
             LabeledContent("Schema version", value: "\(summary.userVersion)")
             LabeledContent("Contents", value: "\(summary.bookCount) books · \(summary.formatCount) formats")
             Text("The source library is read-only — a copy is imported.")
@@ -60,7 +63,11 @@ struct CalibreImportView: View {
                     }
                 }
             } footer: {
-                Text("Select the books to copy into this library.")
+                if let destination = session.calibreImportTargetName {
+                    Text("Select the books to copy into \(destination).")
+                } else {
+                    Text("Select the books to copy into this library.")
+                }
             }
         }
     }
@@ -163,10 +170,12 @@ struct CalibreImportView: View {
                 Button("Done") { dismiss() }
                     .buttonStyle(.borderedProminent)
             } else {
+                // Cancel stays enabled while importing: it now actually stops
+                // the import (the session owns the task), instead of only
+                // dismissing the wizard while books keep being written.
                 Button("Cancel") { dismiss() }
-                    .disabled(session.calibreImportInProgress)
                 Button("Import") {
-                    Task { await session.importCalibre() }
+                    session.startCalibreImport()
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(session.calibreSelectedIDs.isEmpty || session.calibreImportInProgress)
