@@ -14,8 +14,7 @@ struct EnrichmentPolicyTests {
             authors: authors,
             tags: tags,
             modifiedMilliseconds: 1_000,
-            isDeleted: false,
-            snapshot: Data()
+            isDeleted: false
         )
     }
 

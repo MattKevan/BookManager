@@ -33,10 +33,6 @@ public actor BookFolder {
         self.layout = layout
     }
 
-    private var stagingRoot: URL {
-        layout.controlRoot.appending(path: "staging", directoryHint: .isDirectory)
-    }
-
     public func stage(from sourceURL: URL) throws -> StagedFile {
         let kind = sourceURL.pathExtension.uppercased()
         // Refuse oversized sources BEFORE copying: the staged copy is a full
@@ -47,7 +43,7 @@ public actor BookFolder {
         guard size <= Self.maxStagedFileSize else {
             throw BookFolderError.fileTooLarge(size)
         }
-        let stagingDir = stagingRoot.appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        let stagingDir = layout.stagingRoot.appending(path: UUID().uuidString, directoryHint: .isDirectory)
         try manager.createDirectory(at: stagingDir, withIntermediateDirectories: true)
         let destination = stagingDir.appending(path: sourceURL.lastPathComponent)
         try manager.copyItem(at: sourceURL, to: destination)

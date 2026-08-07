@@ -1,14 +1,14 @@
 import Foundation
 
-/// Builds an `IndexedBook` from a resolved Automerge document — the shared
-/// normalization used by the repository (edits, rebuilds) and the sync engine
-/// (ingest). Kept in one place so the two paths cannot drift.
+/// Builds an `IndexedBook` from a resolved book state — the shared
+/// normalization used by the repository's journal applies and the rebuild
+/// path. Kept in one place so the paths cannot drift.
 public enum IndexedBookFactory {
     public static func make(
         resolved book: ResolvedBook,
         bookID: UUID,
         path: String,
-        snapshot: Data
+        modifiedMilliseconds: Int64
     ) throws -> IndexedBook {
         let normalizeEmpty: (String?) -> String? = { value in
             guard let value, !value.isEmpty else { return nil }
@@ -23,7 +23,7 @@ public enum IndexedBookFactory {
             return value
         }
         // `.clear` edits write the epoch-0 sentinel; map it back to nil so the
-        // UI shows "no date" instead of 1970-01-01 (plan's clear-sentinel contract).
+        // UI shows "no date" instead of 1970-01-01.
         let epochZero = Date(timeIntervalSince1970: 0)
         let normalizeDate: (Date?) -> Date? = { value in
             guard let value, value != epochZero else { return nil }
@@ -52,9 +52,8 @@ public enum IndexedBookFactory {
             },
             coverHash: book.cover?.contentHash,
             relativePath: path,
-            modifiedMilliseconds: book.modifiedClock.physicalMilliseconds,
-            isDeleted: book.isDeleted,
-            snapshot: snapshot
+            modifiedMilliseconds: modifiedMilliseconds,
+            isDeleted: book.isDeleted
         )
     }
 }

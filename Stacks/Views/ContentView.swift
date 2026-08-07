@@ -27,6 +27,17 @@ struct ContentView: View {
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @FocusState private var searchFocused: Bool
 
+    /// Typed binding for the session error alert (extracted so the body's
+    /// modifier chain type-checks in reasonable time).
+    private var errorAlertBinding: Binding<Bool> {
+        Binding(
+            get: { session.lastError != nil },
+            set: { presented in
+                if !presented { session.lastError = nil }
+            }
+        )
+    }
+
     var body: some View {
         Group {
             switch session.state {
@@ -51,12 +62,9 @@ struct ContentView: View {
         }
         .frame(minWidth: 900, minHeight: 560)
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            // Reconnection hook (slice 4a): on app activation, refresh
-            // availability and sync (drain the outbox, ingest changes made by
-            // other Macs). The always-on monitor is 4b.
-            Task { await session.reconnectIfNeeded() }
             // Device support: rescan the USB bus on activation so a device
             // plugged in while the app was inactive appears in the sidebar.
+            // (The shared-FS reconnection hook left with the sync layer.)
             Task { await session.devices.scanForDevices() }
         }
         .onChange(of: session.selection) { _, newValue in
@@ -156,17 +164,15 @@ struct ContentView: View {
                 onSkip: { session.metadataReviewPresented = false }
             )
         }
+
+        .environment(\.librarySession, session)
         .alert(
             "Something went wrong",
-            isPresented: Binding(
-                get: { session.lastError != nil },
-                set: { if !$0 { session.lastError = nil } }
-            )
+            isPresented: errorAlertBinding
         ) {
         } message: {
             Text(session.lastError ?? "")
         }
-        .environment(\.librarySession, session)
     }
 
     private var loadedBody: some View {
@@ -354,47 +360,9 @@ extension ContentView {
         }
     }
 
-    /// Sync status: its own toolbar item so the spinner/text swap never
-    /// re-lays-out the search field or Inspector toggle. While syncing the
-    /// label is a bare spinner — no “Syncing…” text — so the item keeps its
-    /// icon width and the toolbar doesn't jump when syncing starts/ends.
-    private var syncToolbarItem: some ToolbarContent {
-        ToolbarItem(id: "sync") {
-            Button {
-                Task { await session.syncNow() }
-            } label: {
-                syncToolbarLabel
-            }
-            .help(
-                session.isLibraryUnavailable
-                    ? "Library unavailable — read-only until the library reconnects. Click to try again."
-                    : (session.isSyncing
-                        ? "Syncing — checking the library for changes from other Macs"
-                        : (session.pendingSyncCount > 0
-                            ? "\(session.pendingSyncCount) change(s) waiting to sync — click to sync now"
-                            : "Synced — click to check for changes from other Macs"))
-            )
-        }
-    }
-
-    @ViewBuilder
-    private var syncToolbarLabel: some View {
-        if session.isLibraryUnavailable {
-            Label("Library unavailable", systemImage: "exclamationmark.triangle")
-        } else if session.isSyncing {
-            ProgressView()
-                .controlSize(.small)
-        } else if session.pendingSyncCount > 0 {
-            Label("\(session.pendingSyncCount) pending", systemImage: "arrow.triangle.2.circlepath")
-        } else {
-            Label("Synced", systemImage: "checkmark.circle")
-        }
-    }
-
-    /// The search field in its own toolbar item, so the sync spinner swap
-    /// never re-lays-out it (or the Inspector toggle) and vice versa. Binds
-    /// the ACTIVE library's search text (home in device mode, the peer when
-    /// a peer is the browser context).
+    /// The search field in its own toolbar item, so layout stays stable when
+    /// the surrounding items change. Binds the ACTIVE library's search text
+    /// (home in device mode, the peer when a peer is the browser context).
     private var searchToolbarItem: some ToolbarContent {
         ToolbarItem(id: "search") {
             if session.activeLibrary != nil {
@@ -490,10 +458,9 @@ extension ContentView {
         // Right-to-left from the edge: Inspector toggle (home only), search
         // field, grid/list picker, library actions (home: Add Books / Open /
         // Edit Metadata; peer: Refresh / Copy to Home Library / Close),
-        // device management, then the sync status at the leading end.
+        // device management at the leading end.
         .toolbar {
             ToolbarSpacer(.flexible)
-            syncToolbarItem
             ToolbarSpacer(.fixed)
             deviceToolbarItems
             ToolbarSpacer(.fixed)

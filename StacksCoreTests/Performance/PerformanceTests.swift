@@ -27,8 +27,7 @@ struct PerformanceTests {
                 relativePath: CanonicalPathBuilder.relativeDirectory(
                     bookID: id, title: title, authors: authors
                 ),
-                modifiedMilliseconds: Int64(i), isDeleted: false,
-                snapshot: Data(repeating: 0x01, count: 256)
+                modifiedMilliseconds: Int64(i), isDeleted: false
             )
         }
         try await catalog.upsertBatch(books)
@@ -70,19 +69,31 @@ struct PerformanceTests {
     }
 
     @Test
-    func steadyStateReconcileCompletesAt10k() async throws {
-        // With no materialized folders every book is "missing" — this exercises
-        // the per-pass folder index (one root scan + 10k lookups), not O(N×dirs).
-        let catalog = try await seededCatalog()
+    func steadyStateRebuildCompletesAt10k() async throws {
+        // The journal-era hot path: a snapshotless rebuild replays every
+        // command. 10k addBook commands (no staged files) exercise journal
+        // read + per-command apply + folder materialization.
         let root = FileManager.default.temporaryDirectory
             .appending(path: UUID().uuidString, directoryHint: .isDirectory)
-        let layout = LibraryLayout(root: root)
-        try layout.create(manifest: LibraryManifest(id: UUID()))
-        let reconciler = FolderReconciler(layout: layout, catalog: catalog, deviceID: UUID())
+        let indexes = FileManager.default.temporaryDirectory
+            .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        let repo = try await LibraryRepository.create(at: root, indexesDirectory: indexes, deviceID: UUID())
+        let journal = Journal(layout: LibraryLayout(root: root))
+        try await journal.open()
+        for i in 0..<10_000 {
+            _ = try await journal.append(op: .addBook(.init(
+                bookID: UUID(), title: "Book \(i)", authors: ["Alice"],
+                series: nil, seriesIndex: nil, tags: [], rating: nil, publisher: nil,
+                publicationDate: nil, addedDate: .now, languages: [], identifiers: [:], comments: nil,
+                formats: [], cover: nil
+            )))
+        }
+
         let clock = ContinuousClock()
         let elapsed = try await clock.measure {
-            _ = try await reconciler.reconcile()
+            _ = try await repo.rebuildCatalog()
         }
         #expect(elapsed < .seconds(5))
+        #expect(try await repo.books().count == 10_000)
     }
 }

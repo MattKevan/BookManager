@@ -45,53 +45,12 @@ struct DiagnosticsView: View {
                 }
             }
             Section {
-                if let connection, connection.quarantinedChanges.isEmpty {
-                    Text("None").foregroundStyle(.secondary)
-                } else {
-                    ForEach(connection?.quarantinedChanges ?? [], id: \.path) { url in
-                        Text(url.lastPathComponent).foregroundStyle(.secondary)
-                    }
-                }
+                Text("\(connection?.journalSeq.description ?? "—")")
+                    .monospacedDigit()
             } header: {
-                Text("Quarantined Changes")
+                Text("Journal")
             } footer: {
-                Text("Undecodable change files, preserved instead of deleted.")
-            }
-            Section {
-                if let connection, let report = connection.reconciliationReport {
-                    if report.renamed.isEmpty && report.adopted.isEmpty
-                        && report.conflictCopies.isEmpty && report.restoredFromTrash.isEmpty
-                        && report.missingFolders.isEmpty && report.errors.isEmpty {
-                        Text("Last sync reconciled nothing out of place.")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        if !report.renamed.isEmpty {
-                            LabeledContent("Re-pointed folders", value: "\(report.renamed.count)")
-                        }
-                        if !report.adopted.isEmpty {
-                            LabeledContent("Adopted folders", value: "\(report.adopted.count)")
-                        }
-                        if !report.restoredFromTrash.isEmpty {
-                            LabeledContent("Restored from trash", value: "\(report.restoredFromTrash.count)")
-                        }
-                        if !report.missingFolders.isEmpty {
-                            LabeledContent("Missing folders", value: "\(report.missingFolders.count)")
-                        }
-                        ForEach(report.conflictCopies, id: \.path) { url in
-                            LabeledContent("Conflict copy", value: url.lastPathComponent)
-                        }
-                        ForEach(report.errors, id: \.self) { message in
-                            Text(message).foregroundStyle(.red)
-                        }
-                    }
-                } else {
-                    Text("No sync has run yet.")
-                        .foregroundStyle(.secondary)
-                }
-            } header: {
-                Text("Reconciliation")
-            } footer: {
-                Text("Folders re-pointed to canonical paths after merges; conflicts are forked, never overwritten.")
+                Text("The append-only operation log is authoritative; the catalog is rebuilt from it.")
             }
             Section("Trash") {
                 if let connection, connection.deletedBooks.isEmpty {

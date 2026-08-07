@@ -16,7 +16,7 @@ struct MetadataMergePlanTests {
             publisher: publisher,
             publicationMilliseconds: date.map { Int64($0.timeIntervalSince1970 * 1_000) },
             identifiers: identifiers,
-            modifiedMilliseconds: 1_000, isDeleted: false, snapshot: Data([1])
+            modifiedMilliseconds: 1_000, isDeleted: false
         )
     }
 

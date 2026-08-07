@@ -121,17 +121,8 @@ struct LibraryPeersSection: View {
     /// Per-peer status: offline marker, syncing spinner, or pending count.
     @ViewBuilder
     private func statusIcon(_ peer: LibraryConnection) -> some View {
-        if peer.isLibraryUnavailable {
-            Image(systemName: "exclamationmark.triangle")
-                .foregroundStyle(.orange)
-                .help("Library unavailable")
-        } else if peer.isSyncing {
-            ProgressView()
-                .controlSize(.small)
-        } else if peer.pendingSyncCount > 0 {
-            Text("\(peer.pendingSyncCount) pending")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
+        // The shared-FS sync status is gone with the sync layer; the network
+        // slice re-adds live connection status here.
+        EmptyView()
     }
 }

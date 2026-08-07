@@ -551,7 +551,7 @@ private actor CalibreMemoryRepository: LibraryRepositoryImporting {
         }
         let book = IndexedBook(
             id: id, title: metadata.title, authors: metadata.authors,
-            modifiedMilliseconds: 1, isDeleted: false, snapshot: Data()
+            modifiedMilliseconds: 1, isDeleted: false
         )
         books.append(book)
         created.append(CapturedCreate(metadata: metadata, stagedCount: staged.count, cover: cover))

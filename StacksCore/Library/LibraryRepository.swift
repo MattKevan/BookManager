@@ -1,28 +1,35 @@
 import Foundation
 
+/// The owning server of one library. `Journal` is authoritative (append-only
+/// operation log + periodic snapshot); `LocalCatalog` is a disposable index
+/// rebuilt from it; `BookFolder` owns the derived book folders. All
+/// mutations append a command and then apply it — apply is deterministic and
+/// replayable, so a crash between append and apply heals on the next rebuild.
 public actor LibraryRepository: LibraryRepositoryImporting {
     public nonisolated let manifest: LibraryManifest
     public nonisolated let root: URL
 
     private let layout: LibraryLayout
-    private let changeStore: ChangeStore
+    private let journal: Journal
     private let catalog: LocalCatalog
     private let folder: BookFolder
-    private let deviceID: UUID
+
+    /// Highest journal seq covered by the on-disk snapshot; a snapshot is
+    /// written when the journal advances this by `snapshotEveryCommands`.
+    private var lastSnapshotSeq: Int64 = 0
+    private static let snapshotEveryCommands: Int64 = 1000
 
     private init(
         manifest: LibraryManifest,
         layout: LibraryLayout,
-        catalog: LocalCatalog,
-        deviceID: UUID
+        catalog: LocalCatalog
     ) {
         self.manifest = manifest
         root = layout.root
         self.layout = layout
-        changeStore = ChangeStore(layout: layout)
+        journal = Journal(layout: layout)
         folder = BookFolder(layout: layout)
         self.catalog = catalog
-        self.deviceID = deviceID
     }
 
     public static func create(
@@ -32,22 +39,21 @@ public actor LibraryRepository: LibraryRepositoryImporting {
     ) async throws -> LibraryRepository {
         let layout = LibraryLayout(root: root)
         // Refuse to create over an existing library: writing a fresh manifest
-        // would change its identity and fork the library. Settings > Create
-        // New / Cmd+Shift+N over an existing folder surfaces this as an error
-        // instead of silently damaging it.
+        // would change its identity and fork the library.
         guard !FileManager.default.fileExists(atPath: layout.manifestURL.path) else {
             throw LibraryRepositoryError.libraryAlreadyExists
         }
         let manifest = LibraryManifest(id: UUID())
         try layout.create(manifest: manifest)
-        return try LibraryRepository(
+        let repository = try LibraryRepository(
             manifest: manifest,
             layout: layout,
             catalog: LocalCatalog(
                 databaseURL: indexesDirectory.appending(path: "\(manifest.id.uuidString).sqlite")
-            ),
-            deviceID: deviceID
+            )
         )
+        try await repository.journal.open()
+        return repository
     }
 
     public static func open(
@@ -57,7 +63,7 @@ public actor LibraryRepository: LibraryRepositoryImporting {
     ) async throws -> LibraryRepository {
         let layout = LibraryLayout(root: root)
         let manifest = try layout.readManifest()
-        guard manifest.formatVersion == 1 else {
+        guard manifest.formatVersion == 2 else {
             throw LibraryRepositoryError.unsupportedFormat(manifest.formatVersion)
         }
         let repository = try LibraryRepository(
@@ -66,8 +72,8 @@ public actor LibraryRepository: LibraryRepositoryImporting {
             catalog: LocalCatalog(
                 databaseURL: indexesDirectory.appending(path: "\(manifest.id.uuidString).sqlite")
             ),
-            deviceID: deviceID
         )
+        try await repository.journal.open()
         try await repository.rebuildCatalog()
         return repository
     }
@@ -87,30 +93,63 @@ public actor LibraryRepository: LibraryRepositoryImporting {
         cover: Data?
     ) async throws -> IndexedBook {
         let bookID = UUID()
-        let document = try AutomergeBookDocument.new(bookID: bookID, deviceID: deviceID)
-
-        var written: [URL] = []
+        let commandID = UUID()
+        // Move the incoming staged files under the command's staging
+        // directory so the journal record is self-contained (the rebuild
+        // path can re-materialize from it).
+        let stagedDir = layout.stagingRoot.appending(path: commandID.uuidString, directoryHint: .isDirectory)
         do {
-            written = try await writeChanges(
-                metadata: metadata, document: document, bookID: bookID, staged: staged, cover: cover
-            )
-            let resolved = try document.resolvedBook()
-            let materialized = try await folder.materialize(
+            try FileManager.default.createDirectory(at: stagedDir, withIntermediateDirectories: true)
+            var formats: [JournalCommand.StagedFormat] = []
+            for (index, file) in staged.enumerated() {
+                let stagedName = "\(index)-\(file.url.lastPathComponent)"
+                try FileManager.default.moveItem(
+                    at: file.url, to: stagedDir.appending(path: stagedName)
+                )
+                formats.append(JournalCommand.StagedFormat(
+                    kind: file.kind,
+                    filename: CanonicalPathBuilder.formatFileName(
+                        title: metadata.title, authors: metadata.authors, kind: file.kind
+                    ),
+                    contentHash: file.contentHash,
+                    size: file.size,
+                    stagedName: stagedName
+                ))
+            }
+            var stagedCover: JournalCommand.StagedCover?
+            if let cover {
+                let stagedName = "cover"
+                try cover.write(to: stagedDir.appending(path: stagedName))
+                stagedCover = JournalCommand.StagedCover(
+                    filename: "cover.jpg", contentHash: BookFolder.contentHash(cover), stagedName: stagedName
+                )
+            }
+            let payload = JournalCommand.AddBook(
                 bookID: bookID,
-                resolved: resolved,
-                staged: staged,
-                cover: cover
+                title: metadata.title,
+                authors: metadata.authors,
+                series: metadata.series,
+                seriesIndex: metadata.seriesIndex,
+                tags: metadata.tags,
+                rating: metadata.rating,
+                publisher: metadata.publisher,
+                publicationDate: metadata.publicationDate,
+                addedDate: metadata.addedDate ?? .now,
+                languages: metadata.languages,
+                identifiers: metadata.identifiers,
+                comments: metadata.comments,
+                formats: formats,
+                cover: stagedCover
             )
-            let indexed = try makeIndexedBook(document, relativePath: materialized.path)
-            try await catalog.upsert(indexed)
+            guard try await journal.append(op: .addBook(payload), id: commandID) != nil else {
+                throw LibraryRepositoryError.duplicateCommand
+            }
+            let indexed = try await applyAddBook(payload, commandID: commandID, materializeFolders: true)
+            try? FileManager.default.removeItem(at: stagedDir)
+            try await maybeSnapshot()
             return indexed
         } catch {
-            // A failed create must not leave half of the book's change files
-            // durable: the catalog has no row for them, so the next rebuild
-            // would resurrect a book the caller was told failed to create.
-            for url in written {
-                try? FileManager.default.removeItem(at: url)
-            }
+            try? FileManager.default.removeItem(at: stagedDir)
             throw error
         }
     }
@@ -122,104 +161,49 @@ public actor LibraryRepository: LibraryRepositoryImporting {
         authors: [String],
         at date: Date = .now
     ) async throws -> IndexedBook {
-        try await createBook(
-            metadata: NewBookMetadata(title: title, authors: authors),
-            staged: [],
-            cover: nil
-        )
+        var metadata = NewBookMetadata(title: title, authors: authors)
+        metadata.addedDate = date
+        return try await createBook(metadata: metadata, staged: [], cover: nil)
     }
 
     // MARK: - Editing
 
     public func updateBook(id: UUID, edit: BookEdit) async throws -> IndexedBook {
-        guard let indexed = try await catalog.book(id: id) else {
+        guard try await catalog.book(id: id) != nil else {
             throw LibraryRepositoryError.bookNotFound(id)
         }
-        let document = try AutomergeBookDocument(snapshot: indexed.snapshot, deviceID: deviceID)
-        // Seed the edit's clocks from the document's latest clock: a fresh
-        // (0, 0) clock would emit equal clocks for two same-millisecond edits,
-        // making the LWW tie-break arbitrary.
-        var clock = try document.latestClock() ?? HybridLogicalClock(nodeID: deviceID)
-        let changes = try document.apply(edit, clock: clock, date: .now)
-        var written: [URL] = []
-        do {
-            for change in changes {
-                let result = try await changeStore.writeBookChange(
-                    change, bookID: id, deviceID: deviceID, clock: clock.tick()
-                )
-                if result.created { written.append(result.url) }
-            }
-
-            let resolved = try document.resolvedBook()
-            let newPath = CanonicalPathBuilder.relativeDirectory(
-                bookID: id, title: resolved.title, authors: resolved.authors
-            )
-            if newPath != indexed.relativePath {
-                try await folder.rename(
-                    bookID: id,
-                    from: indexed.relativePath,
-                    to: newPath,
-                    oldFormats: indexed.formats.map {
-                        BookFormatValue(kind: $0.kind, filename: $0.filename, contentHash: $0.contentHash, size: $0.size)
-                    },
-                    newFormats: resolved.formats
-                )
-            }
-            // metadata.opf is a derived sidecar of the resolved metadata: keep it in
-            // sync on every successful edit, not only when the canonical path moves.
-            // Create the folder when it is absent (synced book not yet materialized)
-            // instead of failing the whole edit over a sidecar write.
-            let directory = await folder.bookDirectoryURL(relativePath: newPath)
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            try OpfGenerator.opfData(bookID: id, resolved: resolved)
-                .write(to: directory.appending(path: "metadata.opf"), options: .atomic)
-            let updated = try makeIndexedBook(document, relativePath: newPath)
-            try await catalog.upsert(updated)
-            return updated
-        } catch {
-            // The changes were persisted but a later step failed (rename, sidecar
-            // write, catalog upsert): roll the just-written change files back so the
-            // catalog snapshot never goes stale relative to the authoritative store
-            // (a stale snapshot makes the NEXT edit apply on an outdated base and
-            // silently revert this one).
-            for url in written {
-                try? FileManager.default.removeItem(at: url)
-            }
-            throw error
+        guard try await journal.append(op: .updateBook(.init(bookID: id, edit: edit))) != nil else {
+            throw LibraryRepositoryError.duplicateCommand
         }
+        let updated = try await applyUpdateBook(id: id, edit: edit, materializeFolders: true)
+        try await maybeSnapshot()
+        return updated
     }
 
-    /// Writes a cover for a book: a `setCover` Automerge change, a materialized
+    /// Writes a cover for a book: a `setCover` journal command, a materialized
     /// `cover.jpg` in the book folder (atomic write), and a catalog upsert.
-    /// Used by metadata enrichment's cover downloads. Mirrors `createBook`'s
-    /// cover handling and `updateBook`'s change/materialize/upsert shape.
     public func updateCover(coverData: Data, for bookID: UUID) async throws -> IndexedBook {
-        guard let indexed = try await catalog.book(id: bookID) else {
+        guard try await catalog.book(id: bookID) != nil else {
             throw LibraryRepositoryError.bookNotFound(bookID)
         }
-        let document = try AutomergeBookDocument(snapshot: indexed.snapshot, deviceID: deviceID)
-        var clock = try document.latestClock() ?? HybridLogicalClock(nodeID: deviceID)
-        let change = try document.setCover(
-            CoverValue(filename: "cover.jpg", contentHash: BookFolder.contentHash(coverData)),
-            clock: clock.tick()
-        )
-        var written: URL?
+        let commandID = UUID()
+        let stagedDir = layout.stagingRoot.appending(path: commandID.uuidString, directoryHint: .isDirectory)
         do {
-            let result = try await changeStore.writeBookChange(
-                change, bookID: bookID, deviceID: deviceID, clock: clock
+            try FileManager.default.createDirectory(at: stagedDir, withIntermediateDirectories: true)
+            let stagedName = "cover"
+            try coverData.write(to: stagedDir.appending(path: stagedName))
+            let cover = JournalCommand.StagedCover(
+                filename: "cover.jpg", contentHash: BookFolder.contentHash(coverData), stagedName: stagedName
             )
-            if result.created { written = result.url }
-
-            let directory = await folder.bookDirectoryURL(relativePath: indexed.relativePath)
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            try coverData.write(to: directory.appending(path: "cover.jpg"), options: .atomic)
-            let updated = try makeIndexedBook(document, relativePath: indexed.relativePath)
-            try await catalog.upsert(updated)
+            guard try await journal.append(op: .setCover(.init(bookID: bookID, cover: cover)), id: commandID) != nil else {
+                throw LibraryRepositoryError.duplicateCommand
+            }
+            let updated = try await applySetCover(bookID: bookID, cover: cover, commandID: commandID, materializeFolders: true)
+            try? FileManager.default.removeItem(at: stagedDir)
+            try await maybeSnapshot()
             return updated
         } catch {
-            if let written {
-                try? FileManager.default.removeItem(at: written)
-            }
+            try? FileManager.default.removeItem(at: stagedDir)
             throw error
         }
     }
@@ -227,56 +211,26 @@ public actor LibraryRepository: LibraryRepositoryImporting {
     // MARK: - Delete and restore
 
     public func deleteBook(id: UUID) async throws {
-        guard let indexed = try await catalog.book(id: id) else {
+        guard try await catalog.book(id: id) != nil else {
             throw LibraryRepositoryError.bookNotFound(id)
         }
-        let document = try AutomergeBookDocument(snapshot: indexed.snapshot, deviceID: deviceID)
-        var clock = try document.latestClock() ?? HybridLogicalClock(nodeID: deviceID)
-        let change = try document.setDeleted(true, clock: clock.tick())
-        var written: URL?
-        do {
-            let result = try await changeStore.writeBookChange(
-                change, bookID: id, deviceID: deviceID, clock: clock
-            )
-            if result.created { written = result.url }
-            try await folder.trash(bookID: id, relativePath: indexed.relativePath)
-            let deleted = try makeIndexedBook(document, relativePath: indexed.relativePath)
-            try await catalog.upsert(deleted)
-        } catch {
-            if let written {
-                try? FileManager.default.removeItem(at: written)
-            }
-            throw error
+        guard try await journal.append(op: .deleteBook(.init(bookID: id))) != nil else {
+            throw LibraryRepositoryError.duplicateCommand
         }
+        try await applyDeleteBook(id: id, materializeFolders: true)
+        try await maybeSnapshot()
     }
 
     public func restoreBook(id: UUID) async throws -> IndexedBook {
-        guard let indexed = try await catalog.book(id: id) else {
+        guard try await catalog.book(id: id) != nil else {
             throw LibraryRepositoryError.bookNotFound(id)
         }
-        let document = try AutomergeBookDocument(snapshot: indexed.snapshot, deviceID: deviceID)
-        var clock = try document.latestClock() ?? HybridLogicalClock(nodeID: deviceID)
-        let change = try document.setDeleted(false, clock: clock.tick())
-        var written: URL?
-        do {
-            let result = try await changeStore.writeBookChange(
-                change, bookID: id, deviceID: deviceID, clock: clock
-            )
-            if result.created { written = result.url }
-            let resolved = try document.resolvedBook()
-            let path = CanonicalPathBuilder.relativeDirectory(
-                bookID: id, title: resolved.title, authors: resolved.authors
-            )
-            _ = try await folder.restore(bookID: id, relativePath: path)
-            let restored = try makeIndexedBook(document, relativePath: path)
-            try await catalog.upsert(restored)
-            return restored
-        } catch {
-            if let written {
-                try? FileManager.default.removeItem(at: written)
-            }
-            throw error
+        guard try await journal.append(op: .restoreBook(.init(bookID: id))) != nil else {
+            throw LibraryRepositoryError.duplicateCommand
         }
+        let restored = try await applyRestoreBook(id: id, materializeFolders: true)
+        try await maybeSnapshot()
+        return restored
     }
 
     // MARK: - Queries
@@ -313,6 +267,11 @@ public actor LibraryRepository: LibraryRepositoryImporting {
         try await catalog.allBooks()
     }
 
+    /// The journal's current sequence number (diagnostics surface).
+    public func journalSeq() async -> Int64 {
+        await journal.currentSeq
+    }
+
     // MARK: - Files
 
     public func formatFileURL(id: UUID) async throws -> URL? {
@@ -345,152 +304,461 @@ public actor LibraryRepository: LibraryRepositoryImporting {
 
     // MARK: - Rebuild
 
-    /// Outcome of a catalog rebuild: what was built, which books were skipped
-    /// (valid changes whose dependencies have not synced), and which corrupt
-    /// change files were moved to quarantine. Surfaces in diagnostics.
+    /// Outcome of a catalog rebuild: how many books are in the catalog and
+    /// how many journal commands could not be applied (skipped — the journal
+    /// stays authoritative and a later rebuild retries them).
     public struct RebuildReport: Sendable, Equatable {
         public var booksBuilt: Int = 0
-        public var booksSkipped: [UUID] = []
-        public var quarantined: [URL] = []
+        public var commandsSkipped: Int = 0
 
         public init() {}
     }
 
-    /// Rebuilds the disposable catalog from the change store. Reports
-    /// `progress` (0...1, monotonic) between books and checks `cancelled`
-    /// before each book, throwing `LibraryRepositoryError.rebuildCancelled`
-    /// when a rebuild is cancelled. The defaulted closures keep existing
-    /// callers (`open()`, `rebuildIndex`) compiling unchanged.
-    ///
-    /// Mirrors `SyncEngine.ingest`'s tolerance: digest-corrupt change files
-    /// are quarantined (the store names every file
-    /// `<clock>-<SHA256(content)>.amchange`, so a mismatch means the file
-    /// never came from the change store), and valid changes whose
-    /// dependencies have not synced skip their book instead of failing the
-    /// whole rebuild — a single damaged book must not brick `open()` for the
-    /// entire library.
+    /// Rebuilds the disposable catalog from the journal: snapshot seed, then
+    /// replay every command after the snapshot point in seq order, applied as
+    /// PURE state transformations (no folder side effects), committed in ONE
+    /// catalog transaction. Reports `progress` (0...1, monotonic) and checks
+    /// `cancelled` between commands.
     public func rebuildCatalog(
         progress: @Sendable (Double) -> Void = { _ in },
         cancelled: @Sendable () -> Bool = { false }
     ) async throws -> RebuildReport {
-        try await catalog.clear()
-        let bookIDs = try await changeStore.bookIDs()
-        let total = max(bookIDs.count, 1)
         var report = RebuildReport()
-        var built: [IndexedBook] = []
-        for (index, bookID) in bookIDs.enumerated() {
+        var state: [UUID: IndexedBook] = [:]
+        let snapshot = try await journal.readSnapshot()
+        if let snapshot {
+            for book in snapshot.books {
+                state[book.bookID] = try IndexedBookFactory.make(
+                    resolved: resolved(from: book),
+                    bookID: book.bookID,
+                    path: book.relativePath,
+                    modifiedMilliseconds: 0
+                )
+            }
+            report.booksBuilt = state.count
+        }
+        let records = try await journal.records(after: snapshot?.lastSeq ?? 0)
+        let total = max(records.count, 1)
+        for (index, command) in records.enumerated() {
             if cancelled() {
                 throw LibraryRepositoryError.rebuildCancelled
             }
-            let files = try await changeStore.bookChangeFiles(bookID: bookID)
-            var pending: [Data] = []
-            for url in files {
-                if ChangeStore.hasCorruptDigest(url) {
-                    report.quarantined.append(try await changeStore.quarantine(url))
-                } else if let data = try? Data(contentsOf: url) {
-                    pending.append(data)
-                }
-            }
-            let document = try AutomergeBookDocument.empty(deviceID: deviceID)
-            var remaining = pending
-            var madeProgress = true
-
-            while !remaining.isEmpty && madeProgress {
-                madeProgress = false
-                var next: [Data] = []
-                for change in remaining {
-                    do {
-                        try document.apply(change)
-                        madeProgress = true
-                    } catch {
-                        next.append(change)
-                    }
-                }
-                remaining = next
-            }
-
-            // Valid changes waiting on a not-yet-synced dependency stay in the
-            // store and apply on a later rebuild/ingest. Skip the book (the
-            // catalog is disposable; the change store is authoritative) instead
-            // of throwing for the whole library.
-            guard remaining.isEmpty else {
-                report.booksSkipped.append(bookID)
-                progress(Double(index + 1) / Double(total))
-                continue
-            }
             do {
-                let resolved = try document.resolvedBook()
-                let path = CanonicalPathBuilder.relativeDirectory(
-                    bookID: bookID, title: resolved.title, authors: resolved.authors
-                )
-                built.append(try makeIndexedBook(document, relativePath: path))
-                report.booksBuilt += 1
+                try applyToState(command, state: &state)
+                report.booksBuilt = state.count
             } catch {
-                // Not buildable (e.g. creation change unreadable) — skip like a
-                // stuck book; the change store keeps everything for a later retry.
-                report.booksSkipped.append(bookID)
+                report.commandsSkipped += 1
             }
             progress(Double(index + 1) / Double(total))
         }
-        if !built.isEmpty {
-            try await catalog.upsertBatch(built)
+        try await catalog.clear()
+        if !state.isEmpty {
+            try await catalog.upsertBatch(Array(state.values))
         }
         progress(1)
         return report
     }
 
-    // MARK: - Sync integration
-
-    /// Builds the sync engine for this repository's layout and catalog.
-    public func syncEngine(state: SyncState) -> SyncEngine {
-        SyncEngine(layout: layout, catalog: catalog, state: state, deviceID: deviceID)
-    }
-
-    /// Builds the folder reconciler for this repository's layout and catalog.
-    public func reconciler() -> FolderReconciler {
-        FolderReconciler(layout: layout, catalog: catalog, deviceID: deviceID)
-    }
-
-    /// Upserts the catalog entry for an offline-applied edit (no filesystem
-    /// writes — the canonical folder is reconciled by the sync monitor in 4b).
-    /// The catalog's cached snapshot must reflect the applied state (a stale
-    /// snapshot would make the next edit apply on an outdated base), so the
-    /// document is rebuilt from the base snapshot plus the staged changes.
-    @discardableResult
-    public func upsertResolved(
-        _ resolved: ResolvedBook,
-        bookID: UUID,
-        baseSnapshot: Data,
-        changes: [Data]
-    ) async throws -> IndexedBook {
-        let document = try AutomergeBookDocument(snapshot: baseSnapshot, deviceID: deviceID)
-        for change in changes {
-            try document.apply(change)
+    /// Applies one command as a pure state transformation (rebuild path).
+    /// Deterministic given `state`; the folder side effects belong to the
+    /// live apply path only.
+    private func applyToState(
+        _ command: JournalCommand,
+        state: inout [UUID: IndexedBook]
+    ) throws {
+        switch command.op {
+        case .addBook(let payload):
+            let path = CanonicalPathBuilder.relativeDirectory(
+                bookID: payload.bookID, title: payload.title, authors: payload.authors
+            )
+            state[payload.bookID] = try IndexedBookFactory.make(
+                resolved: resolved(from: payload),
+                bookID: payload.bookID,
+                path: path,
+                modifiedMilliseconds: tsMilliseconds(payload.addedDate ?? .now)
+            )
+        case .updateBook(let payload):
+            guard let current = state[payload.bookID] else {
+                throw LibraryRepositoryError.bookNotFound(payload.bookID)
+            }
+            let resolved = resolved(byApplying: payload.edit, to: current)
+            let path = CanonicalPathBuilder.relativeDirectory(
+                bookID: payload.bookID, title: resolved.title, authors: resolved.authors
+            )
+            state[payload.bookID] = try IndexedBookFactory.make(
+                resolved: resolved,
+                bookID: payload.bookID,
+                path: path,
+                modifiedMilliseconds: Int64(Date().timeIntervalSince1970 * 1_000)
+            )
+        case .setCover(let payload):
+            guard let current = state[payload.bookID] else {
+                throw LibraryRepositoryError.bookNotFound(payload.bookID)
+            }
+            state[payload.bookID] = replacingCover(current, coverHash: payload.cover?.contentHash)
+        case .deleteBook(let payload):
+            guard let current = state[payload.bookID] else {
+                throw LibraryRepositoryError.bookNotFound(payload.bookID)
+            }
+            state[payload.bookID] = withDeleted(current, isDeleted: true)
+        case .restoreBook(let payload):
+            guard let current = state[payload.bookID] else {
+                throw LibraryRepositoryError.bookNotFound(payload.bookID)
+            }
+            let resolved = resolved(from: current, isDeleted: false)
+            let path = CanonicalPathBuilder.relativeDirectory(
+                bookID: payload.bookID, title: resolved.title, authors: resolved.authors
+            )
+            state[payload.bookID] = try IndexedBookFactory.make(
+                resolved: resolved,
+                bookID: payload.bookID,
+                path: path,
+                modifiedMilliseconds: current.modifiedMilliseconds
+            )
         }
+    }
+
+    // MARK: - Journal apply
+
+    /// Applies one journal command to the catalog (+ derived folders on the
+    /// live path). All applies are deterministic given the catalog's current
+    /// state. `materializeFolders: false` (the rebuild path) touches the
+    /// catalog only: folders are derived artifacts already materialized by
+    /// the live applies, and replaying folder moves would collide with them.
+    private func apply(_ command: JournalCommand, materializeFolders: Bool = true) async throws {
+        switch command.op {
+        case .addBook(let payload):
+            _ = try await applyAddBook(payload, commandID: command.id, materializeFolders: materializeFolders)
+        case .updateBook(let payload):
+            _ = try await applyUpdateBook(
+                id: payload.bookID, edit: payload.edit, materializeFolders: materializeFolders
+            )
+        case .setCover(let payload):
+            _ = try await applySetCover(
+                bookID: payload.bookID, cover: payload.cover, commandID: command.id,
+                materializeFolders: materializeFolders
+            )
+        case .deleteBook(let payload):
+            try await applyDeleteBook(id: payload.bookID, materializeFolders: materializeFolders)
+        case .restoreBook(let payload):
+            _ = try await applyRestoreBook(id: payload.bookID, materializeFolders: materializeFolders)
+        }
+    }
+
+    private func applyAddBook(
+        _ payload: JournalCommand.AddBook,
+        commandID: UUID,
+        materializeFolders: Bool
+    ) async throws -> IndexedBook {
+        let stagedDir = layout.stagingRoot.appending(path: commandID.uuidString, directoryHint: .isDirectory)
+        // Only files that actually exist are materialized (a crash between
+        // append and apply leaves missing staged files); the catalog row is
+        // built from the command payload either way.
+        var stagedFiles: [BookFolder.StagedFile] = []
+        for format in payload.formats {
+            let url = stagedDir.appending(path: format.stagedName)
+            if FileManager.default.fileExists(atPath: url.path) {
+                stagedFiles.append(BookFolder.StagedFile(
+                    kind: format.kind, contentHash: format.contentHash, size: format.size, url: url
+                ))
+            }
+        }
+        var coverData: Data?
+        if let cover = payload.cover {
+            let url = stagedDir.appending(path: cover.stagedName)
+            if FileManager.default.fileExists(atPath: url.path) {
+                coverData = try? Data(contentsOf: url)
+            }
+        }
+        let resolved = resolved(from: payload)
         let path = CanonicalPathBuilder.relativeDirectory(
-            bookID: bookID, title: resolved.title, authors: resolved.authors
+            bookID: payload.bookID, title: payload.title, authors: payload.authors
         )
+        if materializeFolders {
+            _ = try await folder.materialize(
+                bookID: payload.bookID,
+                resolved: resolved,
+                staged: stagedFiles,
+                cover: coverData
+            )
+        }
         let indexed = try IndexedBookFactory.make(
             resolved: resolved,
-            bookID: bookID,
+            bookID: payload.bookID,
             path: path,
-            snapshot: document.snapshot()
+            modifiedMilliseconds: tsMilliseconds(payload.addedDate ?? .now)
         )
         try await catalog.upsert(indexed)
         return indexed
     }
 
-    private func makeIndexedBook(
-        _ document: AutomergeBookDocument,
-        relativePath: String
-    ) throws -> IndexedBook {
-        let resolved = try document.resolvedBook()
-        return try IndexedBookFactory.make(
-            resolved: resolved,
-            bookID: resolved.id,
-            path: relativePath,
-            snapshot: document.snapshot()
+    private func applyUpdateBook(
+        id: UUID,
+        edit: BookEdit,
+        materializeFolders: Bool
+    ) async throws -> IndexedBook {
+        guard let current = try await catalog.book(id: id) else {
+            throw LibraryRepositoryError.bookNotFound(id)
+        }
+        let resolved = resolved(byApplying: edit, to: current)
+        let newPath = CanonicalPathBuilder.relativeDirectory(
+            bookID: id, title: resolved.title, authors: resolved.authors
         )
+        if materializeFolders {
+            if newPath != current.relativePath {
+                try await folder.rename(
+                    bookID: id,
+                    from: current.relativePath,
+                    to: newPath,
+                    oldFormats: current.formats.map {
+                        BookFormatValue(kind: $0.kind, filename: $0.filename, contentHash: $0.contentHash, size: $0.size)
+                    },
+                    newFormats: resolved.formats
+                )
+            }
+            // metadata.opf is a derived sidecar: keep it in sync on every edit,
+            // creating the folder when it is absent (synced book not materialized).
+            let directory = await folder.bookDirectoryURL(relativePath: newPath)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try OpfGenerator.opfData(bookID: id, resolved: resolved)
+                .write(to: directory.appending(path: "metadata.opf"), options: .atomic)
+        }
+        let updated = try IndexedBookFactory.make(
+            resolved: resolved,
+            bookID: id,
+            path: newPath,
+            modifiedMilliseconds: Int64(Date().timeIntervalSince1970 * 1_000)
+        )
+        try await catalog.upsert(updated)
+        return updated
+    }
+
+    private func applySetCover(
+        bookID: UUID,
+        cover: JournalCommand.StagedCover?,
+        commandID: UUID,
+        materializeFolders: Bool
+    ) async throws -> IndexedBook {
+        guard let current = try await catalog.book(id: bookID) else {
+            throw LibraryRepositoryError.bookNotFound(bookID)
+        }
+        if materializeFolders {
+            let directory = await folder.bookDirectoryURL(relativePath: current.relativePath)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let coverURL = directory.appending(path: "cover.jpg")
+            if let cover {
+                let staged = layout.stagingRoot
+                    .appending(path: commandID.uuidString)
+                    .appending(path: cover.stagedName)
+                if FileManager.default.fileExists(atPath: staged.path),
+                   let data = try? Data(contentsOf: staged) {
+                    try data.write(to: coverURL, options: .atomic)
+                }
+            } else {
+                try? FileManager.default.removeItem(at: coverURL)
+            }
+        }
+        let updated = replacingCover(current, coverHash: cover?.contentHash)
+        try await catalog.upsert(updated)
+        return updated
+    }
+
+    private func applyDeleteBook(id: UUID, materializeFolders: Bool) async throws {
+        guard let current = try await catalog.book(id: id) else {
+            throw LibraryRepositoryError.bookNotFound(id)
+        }
+        if materializeFolders {
+            try await folder.trash(bookID: id, relativePath: current.relativePath)
+        }
+        let deleted = withDeleted(current, isDeleted: true)
+        try await catalog.upsert(deleted)
+    }
+
+    private func applyRestoreBook(id: UUID, materializeFolders: Bool) async throws -> IndexedBook {
+        guard let current = try await catalog.book(id: id) else {
+            throw LibraryRepositoryError.bookNotFound(id)
+        }
+        let resolved = resolved(from: current, isDeleted: false)
+        let path = CanonicalPathBuilder.relativeDirectory(
+            bookID: id, title: resolved.title, authors: resolved.authors
+        )
+        if materializeFolders {
+            _ = try await folder.restore(bookID: id, relativePath: path)
+        }
+        let restored = try IndexedBookFactory.make(
+            resolved: resolved,
+            bookID: id,
+            path: path,
+            modifiedMilliseconds: current.modifiedMilliseconds
+        )
+        try await catalog.upsert(restored)
+        return restored
+    }
+
+    // MARK: - Snapshots
+
+    private func maybeSnapshot() async throws {
+        let current = await journal.currentSeq
+        guard current - lastSnapshotSeq >= Self.snapshotEveryCommands else { return }
+        try await writeSnapshot()
+        lastSnapshotSeq = current
+    }
+
+    private func writeSnapshot() async throws {
+        let books = (try await catalog.allBooks()) + (try await catalog.deletedBooks())
+        let snapshot = JournalSnapshot(
+            lastSeq: await journal.currentSeq,
+            books: books.map { JournalSnapshot.Book(book: $0) }
+        )
+        try await journal.writeSnapshot(snapshot)
+    }
+
+    // MARK: - Mapping helpers
+
+    /// Applies an edit's fields over the current catalog row — the same
+    /// semantics as the old Automerge apply: nil/`.keep` untouched, `.set`
+    /// assigns, `.clear` empties.
+    private func resolved(byApplying edit: BookEdit, to book: IndexedBook) -> ResolvedBook {
+        ResolvedBook(
+            id: book.id,
+            title: edit.title ?? book.title,
+            authors: edit.authors ?? book.authors,
+            series: edit.series.apply(to: book.series),
+            seriesIndex: edit.seriesIndex.apply(to: book.seriesIndex),
+            tags: edit.tags ?? book.tags,
+            rating: edit.rating.apply(to: book.rating),
+            publisher: edit.publisher.apply(to: book.publisher),
+            publicationDate: edit.publicationDate.apply(to: book.publicationDate),
+            addedDate: book.addedDate,
+            languages: edit.languages ?? book.languages,
+            identifiers: edit.identifiers ?? book.identifiers,
+            comments: edit.comments.apply(to: book.comments),
+            formats: book.formats.map {
+                BookFormatValue(kind: $0.kind, filename: $0.filename, contentHash: $0.contentHash, size: $0.size)
+            },
+            cover: book.coverHash.map { CoverValue(filename: "cover.jpg", contentHash: $0) },
+            rawMetadata: book.rawMetadata,
+            isDeleted: book.isDeleted
+        )
+    }
+
+    private func resolved(from book: IndexedBook) -> ResolvedBook {
+        resolved(from: book, isDeleted: book.isDeleted)
+    }
+
+    private func resolved(from book: IndexedBook, isDeleted: Bool) -> ResolvedBook {
+        ResolvedBook(
+            id: book.id,
+            title: book.title,
+            authors: book.authors,
+            series: book.series,
+            seriesIndex: book.seriesIndex,
+            tags: book.tags,
+            rating: book.rating,
+            publisher: book.publisher,
+            publicationDate: book.publicationDate,
+            addedDate: book.addedDate,
+            languages: book.languages,
+            identifiers: book.identifiers,
+            comments: book.comments,
+            formats: book.formats.map {
+                BookFormatValue(kind: $0.kind, filename: $0.filename, contentHash: $0.contentHash, size: $0.size)
+            },
+            cover: book.coverHash.map { CoverValue(filename: "cover.jpg", contentHash: $0) },
+            rawMetadata: book.rawMetadata,
+            isDeleted: isDeleted
+        )
+    }
+
+    private func resolved(from payload: JournalCommand.AddBook) -> ResolvedBook {
+        ResolvedBook(
+            id: payload.bookID,
+            title: payload.title,
+            authors: payload.authors,
+            series: payload.series,
+            seriesIndex: payload.seriesIndex,
+            tags: payload.tags,
+            rating: payload.rating,
+            publisher: payload.publisher,
+            publicationDate: payload.publicationDate,
+            addedDate: payload.addedDate,
+            languages: payload.languages,
+            identifiers: payload.identifiers,
+            comments: payload.comments,
+            formats: payload.formats.map {
+                BookFormatValue(kind: $0.kind, filename: $0.filename, contentHash: $0.contentHash, size: $0.size)
+            },
+            cover: payload.cover.map { CoverValue(filename: $0.filename, contentHash: $0.contentHash) },
+            rawMetadata: nil,
+            isDeleted: false
+        )
+    }
+
+    private func resolved(from snapshotBook: JournalSnapshot.Book) -> ResolvedBook {
+        ResolvedBook(
+            id: snapshotBook.bookID,
+            title: snapshotBook.title,
+            authors: snapshotBook.authors,
+            series: snapshotBook.series,
+            seriesIndex: snapshotBook.seriesIndex,
+            tags: snapshotBook.tags,
+            rating: snapshotBook.rating,
+            publisher: snapshotBook.publisher,
+            publicationDate: snapshotBook.publicationDate,
+            addedDate: snapshotBook.addedDate,
+            languages: snapshotBook.languages,
+            identifiers: snapshotBook.identifiers,
+            comments: snapshotBook.comments,
+            formats: snapshotBook.formats.map {
+                BookFormatValue(kind: $0.kind, filename: $0.filename, contentHash: $0.contentHash, size: $0.size)
+            },
+            cover: snapshotBook.cover.map { CoverValue(filename: $0.filename, contentHash: $0.contentHash) },
+            rawMetadata: nil,
+            isDeleted: snapshotBook.isDeleted
+        )
+    }
+
+    private func replacingCover(_ book: IndexedBook, coverHash: String?) -> IndexedBook {
+        IndexedBook(
+            id: book.id, title: book.title, authors: book.authors,
+            series: book.series, seriesIndex: book.seriesIndex, tags: book.tags,
+            rating: book.rating, publisher: book.publisher,
+            publicationMilliseconds: book.publicationMilliseconds,
+            addedMilliseconds: book.addedMilliseconds,
+            languages: book.languages, identifiers: book.identifiers, comments: book.comments,
+            rawMetadata: book.rawMetadata, formats: book.formats,
+            coverHash: coverHash, relativePath: book.relativePath,
+            modifiedMilliseconds: book.modifiedMilliseconds, isDeleted: book.isDeleted
+        )
+    }
+
+    private func withDeleted(_ book: IndexedBook, isDeleted: Bool) -> IndexedBook {
+        IndexedBook(
+            id: book.id, title: book.title, authors: book.authors,
+            series: book.series, seriesIndex: book.seriesIndex, tags: book.tags,
+            rating: book.rating, publisher: book.publisher,
+            publicationMilliseconds: book.publicationMilliseconds,
+            addedMilliseconds: book.addedMilliseconds,
+            languages: book.languages, identifiers: book.identifiers, comments: book.comments,
+            rawMetadata: book.rawMetadata, formats: book.formats,
+            coverHash: book.coverHash, relativePath: book.relativePath,
+            modifiedMilliseconds: book.modifiedMilliseconds, isDeleted: isDeleted
+        )
+    }
+
+    private func tsMilliseconds(_ date: Date) -> Int64 {
+        Int64(date.timeIntervalSince1970 * 1_000)
+    }
+}
+
+extension FieldEdit {
+    /// Applies the keep/set/clear instruction over a current value.
+    func apply(to current: T?) -> T? {
+        switch self {
+        case .keep: return current
+        case .set(let value): return value
+        case .clear: return nil
+        }
     }
 }
 
@@ -498,93 +766,9 @@ public enum LibraryRepositoryError: Error, Equatable {
     case unsupportedFormat(Int)
     case bookNotFound(UUID)
     case rebuildCancelled
+    /// The journal rejected a command id that was already applied.
+    case duplicateCommand
     /// The target folder already contains a library manifest; creating over it
     /// would clobber the existing library's identity.
     case libraryAlreadyExists
-}
-
-// MARK: - Private helpers
-
-/// Kept out of the actor body (type-body limit): the change-write path used
-/// by `createBook`. Members of a `private` extension in the same file reach
-/// the actor's private stored properties (`changeStore`, `deviceID`).
-private extension LibraryRepository {
-    func writeChanges(
-        metadata: NewBookMetadata,
-        document: AutomergeBookDocument,
-        bookID: UUID,
-        staged: [BookFolder.StagedFile],
-        cover: Data?
-    ) async throws -> [URL] {
-        var written: [URL] = []
-        // Returns the result instead of capturing `written` so the nested
-        // function stays nonisolated-safe under strict concurrency.
-        func write(_ change: Data, clock: HybridLogicalClock) async throws -> ChangeStore.WriteResult {
-            try await changeStore.writeBookChange(
-                change, bookID: bookID, deviceID: deviceID, clock: clock
-            )
-        }
-        func record(_ result: ChangeStore.WriteResult) {
-            if result.created { written.append(result.url) }
-        }
-        var current = HybridLogicalClock(nodeID: deviceID)
-
-        record(try await write(document.setTitle(metadata.title, clock: current.tick()), clock: current))
-        if !metadata.authors.isEmpty {
-            record(try await write(document.setAuthors(metadata.authors, clock: current.tick()), clock: current))
-        }
-        if let series = metadata.series, !series.isEmpty {
-            record(try await write(document.setSeries(series, clock: current.tick()), clock: current))
-        }
-        if let seriesIndex = metadata.seriesIndex {
-            record(try await write(document.setSeriesIndex(seriesIndex, clock: current.tick()), clock: current))
-        }
-        if !metadata.tags.isEmpty {
-            record(try await write(document.setTags(metadata.tags, clock: current.tick()), clock: current))
-        }
-        if let rating = metadata.rating {
-            record(try await write(document.setRating(rating, clock: current.tick()), clock: current))
-        }
-        if let publisher = metadata.publisher, !publisher.isEmpty {
-            record(try await write(document.setPublisher(publisher, clock: current.tick()), clock: current))
-        }
-        if let publicationDate = metadata.publicationDate {
-            record(try await write(document.setPublicationDate(publicationDate, clock: current.tick()), clock: current))
-        }
-        if let addedDate = metadata.addedDate {
-            record(try await write(document.setAddedDate(addedDate, clock: current.tick()), clock: current))
-        } else {
-            record(try await write(document.setAddedDate(.now, clock: current.tick()), clock: current))
-        }
-        if !metadata.languages.isEmpty {
-            record(try await write(document.setLanguages(metadata.languages, clock: current.tick()), clock: current))
-        }
-        if !metadata.identifiers.isEmpty {
-            record(try await write(document.setIdentifiers(metadata.identifiers, clock: current.tick()), clock: current))
-        }
-        if let comments = metadata.comments, !comments.isEmpty {
-            record(try await write(document.setComments(comments, clock: current.tick()), clock: current))
-        }
-        if let rawMetadata = metadata.rawMetadata, !rawMetadata.isEmpty {
-            record(try await write(document.setRawMetadata(rawMetadata, clock: current.tick()), clock: current))
-        }
-        for file in staged {
-            let filename = CanonicalPathBuilder.formatFileName(
-                title: metadata.title, authors: metadata.authors, kind: file.kind
-            )
-            let format = BookFormatValue(
-                kind: file.kind, filename: filename,
-                contentHash: file.contentHash, size: file.size
-            )
-            record(try await write(document.setFormat(format, clock: current.tick()), clock: current))
-        }
-        if let cover {
-            let hash = BookFolder.contentHash(cover)
-            record(try await write(
-                document.setCover(CoverValue(filename: "cover.jpg", contentHash: hash), clock: current.tick()),
-                clock: current
-            ))
-        }
-        return written
-    }
 }

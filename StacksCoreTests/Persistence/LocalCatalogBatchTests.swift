@@ -13,7 +13,7 @@ struct LocalCatalogBatchTests {
         IndexedBook(
             id: UUID(), title: title, authors: ["Alice"],
             tags: [tag],
-            modifiedMilliseconds: 1_000, isDeleted: false, snapshot: Data([1])
+            modifiedMilliseconds: 1_000, isDeleted: false
         )
     }
 

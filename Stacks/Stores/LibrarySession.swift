@@ -433,13 +433,12 @@ final class LibrarySession {
         get { connection?.searchText ?? "" }
         set { connection?.searchText = newValue }
     }
-    var isLibraryUnavailable: Bool { connection?.isLibraryUnavailable ?? false }
-    var isSyncing: Bool { connection?.isSyncing ?? false }
-    var pendingSyncCount: Int { connection?.pendingSyncCount ?? 0 }
-    var syncState: SyncState? { connection?.syncState }
-    var monitor: LibraryMonitor? { connection?.monitor }
-    var quarantinedChanges: [URL] { connection?.quarantinedChanges ?? [] }
-    var reconciliationReport: ReconciliationReport? { connection?.reconciliationReport }
+    // Status shims for the pre-network UI. The single-writer model removes
+    // shared-FS availability/sync state; the network slice re-adds live
+    // connection status.
+    var isLibraryUnavailable: Bool { false }
+    var isSyncing: Bool { false }
+    var pendingSyncCount: Int { 0 }
     var rebuildProgress: Double? { connection?.rebuildProgress }
     var isRebuilding: Bool { connection?.isRebuilding ?? false }
     var cancelFlag: RebuildCancelFlag { connection?.cancelFlag ?? RebuildCancelFlag() }
@@ -465,17 +464,9 @@ final class LibrarySession {
     func restore(id: UUID) async { await connection?.restore(id: id) }
     func open(id: UUID) async { await connection?.open(id: id) }
     func reveal(id: UUID) async { await connection?.reveal(id: id) }
-    func runSyncSequence(manual: Bool) async { await connection?.runSyncSequence(manual: manual) }
-    func syncNow() async { await connection?.syncNow() }
-    func startMonitor() async { await connection?.startMonitor() }
-    func stopMonitor() { connection?.stopMonitor() }
-    func refreshPendingSync() { connection?.refreshPendingSync() }
-    func refreshLibraryAvailability() { connection?.refreshLibraryAvailability() }
-    func reconnectIfNeeded() async { await connection?.reconnectIfNeeded() }
     func rebuildIndex() async { await connection?.rebuildIndex() }
     func cancelRebuild() { connection?.cancelRebuild() }
     func reloadDiagnostics() async { await connection?.reloadDiagnostics() }
-    static func syncRoot() throws -> URL { try LibraryConnection.syncRoot() }
 }
 
 /// Lock-protected boolean so the repository's synchronous `cancelled` closure

@@ -98,7 +98,7 @@ private actor MobiMemoryRepository: LibraryRepositoryImporting {
         }
         let book = IndexedBook(
             id: id, title: metadata.title, authors: metadata.authors,
-            modifiedMilliseconds: 1, isDeleted: false, snapshot: Data()
+            modifiedMilliseconds: 1, isDeleted: false
         )
         created.append((book, staged.map(\.kind)))
         return book

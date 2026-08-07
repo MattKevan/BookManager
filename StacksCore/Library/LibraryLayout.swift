@@ -17,6 +17,9 @@ public struct LibraryLayout: Sendable {
     public var journalRoot: URL { changesRoot.appending(path: "journal", directoryHint: .isDirectory) }
     /// Periodic full-state snapshot for fast rebuilds (atomic writes).
     public var snapshotURL: URL { changesRoot.appending(path: "snapshot.json") }
+    /// Per-import staging area; journal commands use `<commandID>/`
+    /// subdirectories so their staged files are self-contained.
+    public var stagingRoot: URL { controlRoot.appending(path: "staging", directoryHint: .isDirectory) }
     public var transactionsRoot: URL { controlRoot.appending(path: "transactions", directoryHint: .isDirectory) }
     public var trashRoot: URL { controlRoot.appending(path: "trash", directoryHint: .isDirectory) }
     public var recoveryRoot: URL { controlRoot.appending(path: "recovery", directoryHint: .isDirectory) }

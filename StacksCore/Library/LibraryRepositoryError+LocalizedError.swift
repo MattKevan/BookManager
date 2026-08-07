@@ -12,6 +12,8 @@ extension LibraryRepositoryError: LocalizedError {
             return "The requested book (\(bookID.uuidString)) was not found."
         case .rebuildCancelled:
             return "The index rebuild was cancelled."
+        case .duplicateCommand:
+            return "This change was already applied."
         case .libraryAlreadyExists:
             return "A library already exists in this folder. Choose a different folder or name."
         }

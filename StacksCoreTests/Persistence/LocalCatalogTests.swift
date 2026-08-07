@@ -14,15 +14,13 @@ struct LocalCatalogTests {
             title: "Range",
             authors: ["David Epstein"],
             modifiedMilliseconds: 1_000,
-            isDeleted: false,
-            snapshot: Data([1, 2, 3])
+            isDeleted: false
         )
 
         try await catalog.upsert(book)
 
         #expect(try await catalog.allBooks().map(\.title) == ["Range"])
         #expect(try await catalog.search("Epstein").map(\.id) == [book.id])
-        #expect(try await catalog.snapshot(bookID: book.id) == Data([1, 2, 3]))
     }
 
     @Test
@@ -35,8 +33,7 @@ struct LocalCatalogTests {
             title: "Deleted",
             authors: ["Author"],
             modifiedMilliseconds: 1_000,
-            isDeleted: true,
-            snapshot: Data()
+            isDeleted: true
         )
 
         try await catalog.upsert(book)
@@ -55,16 +52,14 @@ struct LocalCatalogTests {
             title: "Range",
             authors: ["David Epstein"],
             modifiedMilliseconds: 1_000,
-            isDeleted: false,
-            snapshot: Data([1])
+            isDeleted: false
         )
         let revised = IndexedBook(
             id: bookID,
             title: "Range: Revised",
             authors: ["David Epstein"],
             modifiedMilliseconds: 2_000,
-            isDeleted: false,
-            snapshot: Data([2])
+            isDeleted: false
         )
 
         try await catalog.upsert(original)
@@ -73,7 +68,6 @@ struct LocalCatalogTests {
         #expect(try await catalog.allBooks().map(\.title) == ["Range: Revised"])
         #expect(try await catalog.search("Epstein").count == 1)
         #expect(try await catalog.search("Range").count == 1)
-        #expect(try await catalog.snapshot(bookID: bookID) == Data([2]))
     }
 
     @Test
@@ -83,11 +77,11 @@ struct LocalCatalogTests {
         let catalog = try LocalCatalog(databaseURL: databaseURL)
         let live = IndexedBook(
             id: UUID(), title: "Range", authors: ["David Epstein"], tags: ["science"],
-            modifiedMilliseconds: 1_000, isDeleted: false, snapshot: Data()
+            modifiedMilliseconds: 1_000, isDeleted: false
         )
         let deleted = IndexedBook(
             id: UUID(), title: "Gone", authors: ["David Epstein"], tags: ["science"],
-            modifiedMilliseconds: 1_000, isDeleted: true, snapshot: Data()
+            modifiedMilliseconds: 1_000, isDeleted: true
         )
 
         try await catalog.upsert(live)
@@ -115,7 +109,7 @@ struct LocalCatalogTests {
         let catalog = try LocalCatalog(databaseURL: databaseURL)
         let book = IndexedBook(
             id: UUID(), title: "Don't Panic", authors: ["Adams"],
-            modifiedMilliseconds: 1_000, isDeleted: false, snapshot: Data()
+            modifiedMilliseconds: 1_000, isDeleted: false
         )
         try await catalog.upsert(book)
 

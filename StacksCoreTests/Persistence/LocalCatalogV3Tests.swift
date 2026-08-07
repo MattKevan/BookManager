@@ -19,7 +19,7 @@ struct LocalCatalogV3Tests {
         IndexedBook(
             id: id, title: title, authors: ["David Epstein"],
             rawMetadata: rawMetadata,
-            modifiedMilliseconds: 1_000, isDeleted: false, snapshot: Data([1, 2, 3])
+            modifiedMilliseconds: 1_000, isDeleted: false
         )
     }
 

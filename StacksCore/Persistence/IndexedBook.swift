@@ -15,22 +15,10 @@ public struct BookFormatRecord: Codable, Equatable, Sendable {
     }
 }
 
+/// The disposable catalog row for one book — a flat projection of the
+/// journal-derived resolved state. The journal is authoritative; this row is
+/// rebuilt from it and holds no CRDT snapshot.
 public struct IndexedBook: Identifiable, Equatable, Sendable {
-    // Snapshot bytes are deliberately excluded from equality: two replicas that
-    // converged on identical metadata have identical snapshots, but rebuilds from
-    // change files may serialize documents under a different actor identity.
-    public static func == (lhs: IndexedBook, rhs: IndexedBook) -> Bool {
-        lhs.id == rhs.id && lhs.title == rhs.title && lhs.authors == rhs.authors
-            && lhs.series == rhs.series && lhs.seriesIndex == rhs.seriesIndex
-            && lhs.tags == rhs.tags && lhs.rating == rhs.rating && lhs.publisher == rhs.publisher
-            && lhs.publicationMilliseconds == rhs.publicationMilliseconds
-            && lhs.addedMilliseconds == rhs.addedMilliseconds && lhs.languages == rhs.languages
-            && lhs.identifiers == rhs.identifiers && lhs.comments == rhs.comments
-            && lhs.rawMetadata == rhs.rawMetadata
-            && lhs.formats == rhs.formats && lhs.coverHash == rhs.coverHash
-            && lhs.relativePath == rhs.relativePath
-            && lhs.modifiedMilliseconds == rhs.modifiedMilliseconds && lhs.isDeleted == rhs.isDeleted
-    }
     public let id: UUID
     public let title: String
     public let authors: [String]
@@ -52,7 +40,6 @@ public struct IndexedBook: Identifiable, Equatable, Sendable {
     public let relativePath: String
     public let modifiedMilliseconds: Int64
     public let isDeleted: Bool
-    public let snapshot: Data
 
     public init(
         id: UUID,
@@ -73,8 +60,7 @@ public struct IndexedBook: Identifiable, Equatable, Sendable {
         coverHash: String? = nil,
         relativePath: String = "",
         modifiedMilliseconds: Int64,
-        isDeleted: Bool,
-        snapshot: Data
+        isDeleted: Bool
     ) {
         self.id = id
         self.title = title
@@ -95,7 +81,6 @@ public struct IndexedBook: Identifiable, Equatable, Sendable {
         self.relativePath = relativePath
         self.modifiedMilliseconds = modifiedMilliseconds
         self.isDeleted = isDeleted
-        self.snapshot = snapshot
     }
 
     public var publicationDate: Date? {
@@ -105,29 +90,11 @@ public struct IndexedBook: Identifiable, Equatable, Sendable {
     public var addedDate: Date? {
         addedMilliseconds.map { Date(timeIntervalSince1970: TimeInterval($0) / 1_000) }
     }
-
-    /// A copy with `relativePath` replaced (used by the reconciler after a
-    /// journaled folder move). All other fields, including the snapshot and the
-    /// raw metadata payload, are preserved.
-    public func repointing(to path: String) -> IndexedBook {
-        IndexedBook(
-            id: id, title: title, authors: authors, series: series,
-            seriesIndex: seriesIndex, tags: tags, rating: rating,
-            publisher: publisher,
-            publicationMilliseconds: publicationMilliseconds,
-            addedMilliseconds: addedMilliseconds, languages: languages,
-            identifiers: identifiers, comments: comments,
-            rawMetadata: rawMetadata, formats: formats,
-            coverHash: coverHash, relativePath: path,
-            modifiedMilliseconds: modifiedMilliseconds,
-            isDeleted: isDeleted, snapshot: snapshot
-        )
-    }
 }
 
 extension IndexedBook: FetchableRecord {
     public init(row: Row) {
-        // The catalogue is disposable and rebuildable from the change store, so a
+        // The catalogue is disposable and rebuildable from the journal, so a
         // corrupt row id is a broken build, not a recoverable condition. Fail
         // loudly rather than silently fabricating a random identity (which would
         // corrupt lookups and updates for the book).
@@ -153,6 +120,5 @@ extension IndexedBook: FetchableRecord {
         relativePath = row["relativePath"] as String
         modifiedMilliseconds = row["modifiedMilliseconds"] as Int64
         isDeleted = row["isDeleted"] as Bool
-        snapshot = row["snapshot"] as Data
     }
 }

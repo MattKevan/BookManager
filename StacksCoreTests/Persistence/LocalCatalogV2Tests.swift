@@ -29,8 +29,7 @@ struct LocalCatalogV2Tests {
             languages: ["eng"], identifiers: identifiers,
             comments: "A great book", formats: formats,
             coverHash: nil, relativePath: "David Epstein/Range (12345678)",
-            modifiedMilliseconds: 1_000, isDeleted: deleted,
-            snapshot: Data([1, 2, 3])
+            modifiedMilliseconds: 1_000, isDeleted: deleted
         )
     }
 

@@ -9,10 +9,6 @@ extension LibrarySession {
 
     func saveEdit(_ edit: BookEdit, coverData: Data?, for id: UUID) async {
         guard let repository else { return }
-        guard !isLibraryUnavailable else {
-            lastError = "Library unavailable — the library becomes editable again once it reconnects."
-            return
-        }
         do {
             let updated = try await repository.updateBook(id: id, edit: edit)
             // Best-effort cover: a failure must not undo the metadata save.
@@ -30,47 +26,11 @@ extension LibrarySession {
             }
         } catch {
             // The library folder may be unreachable (volume unmounted, cloud
-            // folder offline): queue the edit to the durable outbox and keep
-            // the catalog current so browsing reflects it. If even the offline
-            // path fails, surface the original error. Covers require the
-            // library, so the offline path never takes cover data.
-            await saveOffline(edit, for: id, originalError: error)
+            // folder offline). The offline command queue returns with the
+            // network slice; for now the edit fails visibly.
+            lastError = error.localizedDescription
         }
-        refreshPendingSync()
         await refreshAll()
-    }
-
-    private func saveOffline(_ edit: BookEdit, for id: UUID, originalError: Error) async {
-        guard let repository, let syncState else {
-            lastError = originalError.localizedDescription
-            return
-        }
-        var book = books.first { $0.id == id }
-        if book == nil {
-            book = try? await repository.book(id: id)
-        }
-        guard let book else {
-            lastError = originalError.localizedDescription
-            return
-        }
-        do {
-            let (changes, resolved) = try OfflineBookEdit.apply(
-                edit, to: book.snapshot, deviceID: deviceID
-            )
-            var clock = HybridLogicalClock(nodeID: deviceID)
-            for change in changes {
-                _ = try syncState.outbox.stage(
-                    change: change, bookID: id, deviceID: deviceID, clock: clock.tick()
-                )
-            }
-            let updated = try await repository.upsertResolved(
-                resolved, bookID: id, baseSnapshot: book.snapshot, changes: changes
-            )
-            // Same contract as `saveEdit`: do NOT reassign `metadataEditQueue`
-            // (it would re-present the dismissed editor sheet).
-        } catch {
-            lastError = originalError.localizedDescription
-        }
     }
 
     // MARK: - Metadata enrichment

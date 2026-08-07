@@ -9,7 +9,16 @@ public actor LocalCatalog {
             at: databaseURL.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
-        database = try DatabaseQueue(path: databaseURL.path)
+        // WAL + synchronous=NORMAL: per-write-transaction commits (the rebuild
+        // replays every journal command as its own upsert) skip the
+        // fsync-per-commit cost. The catalog is disposable — WAL durability
+        // tradeoffs are acceptable, and a rebuild recreates it from the journal.
+        var configuration = Configuration()
+        configuration.prepareDatabase { db in
+            try db.execute(sql: "PRAGMA journal_mode=WAL")
+            try db.execute(sql: "PRAGMA synchronous=NORMAL")
+        }
+        database = try DatabaseQueue(path: databaseURL.path, configuration: configuration)
         try Self.migrator.migrate(database)
     }
 
@@ -40,8 +49,8 @@ public actor LocalCatalog {
                 sql: """
                     INSERT INTO book(id, title, authors, series, seriesIndex, tags, rating, publisher,
                         publicationMilliseconds, addedMilliseconds, languages, identifiers, comments,
-                        rawMetadata, formats, coverHash, relativePath, modifiedMilliseconds, isDeleted, snapshot)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        rawMetadata, formats, coverHash, relativePath, modifiedMilliseconds, isDeleted)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(id) DO UPDATE SET
                         title = excluded.title, authors = excluded.authors, series = excluded.series,
                         seriesIndex = excluded.seriesIndex, tags = excluded.tags, rating = excluded.rating,
@@ -52,7 +61,7 @@ public actor LocalCatalog {
                         rawMetadata = excluded.rawMetadata,
                         formats = excluded.formats, coverHash = excluded.coverHash,
                         relativePath = excluded.relativePath, modifiedMilliseconds = excluded.modifiedMilliseconds,
-                        isDeleted = excluded.isDeleted, snapshot = excluded.snapshot
+                        isDeleted = excluded.isDeleted
                     """,
                 arguments: [
                     book.id.uuidString, book.title, authorsJSON, book.series,
@@ -60,14 +69,18 @@ public actor LocalCatalog {
                     book.publisher, book.publicationMilliseconds,
                     book.addedMilliseconds, languagesJSON, identifiersJSON,
                     book.comments, rawMetadataJSON, formatsJSON, book.coverHash, book.relativePath,
-                    book.modifiedMilliseconds, book.isDeleted, book.snapshot
+                    book.modifiedMilliseconds, book.isDeleted
                 ]
             )
-            try db.execute(sql: "DELETE FROM bookSearch WHERE bookID = ?", arguments: [book.id.uuidString])
+            // FTS5 upsert by a stable integer rowid: `DELETE FROM bookSearch
+            // WHERE bookID = ?` would scan the whole inverted index (bookID is
+            // a notIndexed column) — quadratic on rebuilds. A replace by rowid
+            // is O(1) and re-inserts the fresh searchable text.
             try db.execute(
-                sql: "INSERT INTO bookSearch(bookID, title, authors, series, tags, identifiers, comments) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                sql: "INSERT OR REPLACE INTO bookSearch(rowid, bookID, title, authors, series, tags, identifiers, comments) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 arguments: [
-                    book.id.uuidString, book.title, book.authors.joined(separator: " "),
+                    Self.searchRowID(book.id), book.id.uuidString, book.title,
+                    book.authors.joined(separator: " "),
                     book.series ?? "", book.tags.joined(separator: " "),
                     book.identifiers.values.joined(separator: " "), book.comments ?? ""
                 ]
@@ -202,22 +215,21 @@ public actor LocalCatalog {
         }
     }
 
-    public func snapshot(bookID: UUID) throws -> Data? {
-        try database.read { db in
-            try Data.fetchOne(
-                db,
-                sql: "SELECT snapshot FROM book WHERE id = ?",
-                arguments: [bookID.uuidString]
-            )
-        }
-    }
-
     public func clear() throws {
         try database.write { db in
             try db.execute(sql: "DELETE FROM book")
             try db.execute(sql: "DELETE FROM bookSearch")
             try db.execute(sql: "DELETE FROM bookFacet")
             try db.execute(sql: "DELETE FROM bookFormatHash")
+        }
+    }
+
+    /// A stable, collision-negligible integer rowid for a book's FTS5 search
+    /// row — lets the upsert REPLACE instead of DELETE (the delete path
+    /// scanned the whole inverted index, quadratic on rebuilds).
+    private static func searchRowID(_ bookID: UUID) -> Int64 {
+        withUnsafeBytes(of: bookID.uuid) { raw in
+            Int64(bitPattern: raw.load(as: UInt64.self))
         }
     }
 
@@ -241,6 +253,19 @@ public actor LocalCatalog {
         migrator.registerMigration("v3RawMetadata") { db in
             try db.drop(table: "book")
             try createBookTable(db, rawMetadata: true)
+        }
+        // v4 (journal era): the catalog no longer stores the CRDT snapshot
+        // blob — the journal is authoritative and the catalog is rebuilt from
+        // it. The disposable table is recreated.
+        migrator.registerMigration("v4Journal") { db in
+            try db.drop(table: "book")
+            try createBookTable(db, rawMetadata: true)
+        }
+        // v5: index the facet table's bookID so per-book deletes (upsert)
+        // don't scan the whole table — the facet PK is (type, value, bookID),
+        // so a bookID-only delete is quadratic without this.
+        migrator.registerMigration("v5FacetBookIDIndex") { db in
+            try db.create(index: "bookFacet_bookID", on: "bookFacet", columns: ["bookID"])
         }
         return migrator
     }
@@ -311,7 +336,6 @@ public actor LocalCatalog {
             table.column("relativePath", .text).notNull()
             table.column("modifiedMilliseconds", .integer).notNull()
             table.column("isDeleted", .boolean).notNull()
-            table.column("snapshot", .blob).notNull()
         }
     }
 }

@@ -68,7 +68,7 @@ struct ImportServiceTests {
                 id: existingID,
                 title: "Range: Why Generalists Triumph in a Specialized World",
                 authors: ["David Epstein"],
-                modifiedMilliseconds: 1, isDeleted: false, snapshot: Data()
+                modifiedMilliseconds: 1, isDeleted: false
             )
         ])
         let epub = try Fixtures.makeEPUB(named: "import-3.epub")
@@ -168,7 +168,7 @@ actor MemoryRepository: LibraryRepositoryImporting {
         }
         let book = IndexedBook(
             id: id, title: metadata.title, authors: metadata.authors,
-            modifiedMilliseconds: 1, isDeleted: false, snapshot: Data()
+            modifiedMilliseconds: 1, isDeleted: false
         )
         books.append(book)
         return book

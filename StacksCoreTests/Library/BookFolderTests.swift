@@ -39,7 +39,7 @@ struct BookFolderTests {
             languages: [], identifiers: [:], comments: nil,
             formats: [], cover: nil,
             isDeleted: false,
-            modifiedClock: HybridLogicalClock(physicalMilliseconds: 1, nodeID: UUID())
+
         )
         let source = FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).epub")
         try Data("epub-bytes".utf8).write(to: source)
@@ -122,7 +122,7 @@ struct BookFolderTests {
             addedDate: Date(timeIntervalSince1970: 2_000), languages: ["eng"],
             identifiers: ["isbn": "123"], comments: "A book.",
             formats: [], cover: nil, isDeleted: false,
-            modifiedClock: HybridLogicalClock(physicalMilliseconds: 1, nodeID: UUID())
+
         )
         let coverBytes = try Self.jpegFixture()
 
@@ -151,7 +151,7 @@ struct BookFolderTests {
             comments: nil, formats: [], cover: nil,
             rawMetadata: ["calibre.custom.genre": #"["science"]"#, "calibre.pages": "320"],
             isDeleted: false,
-            modifiedClock: HybridLogicalClock(physicalMilliseconds: 1, nodeID: UUID())
+
         )
 
         let result = try await folder.materialize(bookID: bookID, resolved: resolved, staged: [], cover: nil)
@@ -176,7 +176,7 @@ struct BookFolderTests {
             series: nil, seriesIndex: nil, tags: [], rating: nil, publisher: nil,
             publicationDate: nil, addedDate: nil, languages: [], identifiers: [:],
             comments: nil, formats: [], cover: nil, isDeleted: false,
-            modifiedClock: HybridLogicalClock(physicalMilliseconds: 1, nodeID: UUID())
+
         )
 
         let result = try await folder.materialize(bookID: bookID, resolved: resolved, staged: [], cover: nil)
@@ -195,7 +195,7 @@ struct BookFolderTests {
             series: nil, seriesIndex: nil, tags: [], rating: nil, publisher: nil,
             publicationDate: nil, addedDate: nil, languages: [], identifiers: [:],
             comments: nil, formats: [], cover: nil, isDeleted: false,
-            modifiedClock: HybridLogicalClock(physicalMilliseconds: 1, nodeID: UUID())
+
         )
         let old = try await folder.materialize(bookID: bookID, resolved: resolved, staged: [], cover: nil)
 
@@ -204,7 +204,7 @@ struct BookFolderTests {
             series: nil, seriesIndex: nil, tags: [], rating: nil, publisher: nil,
             publicationDate: nil, addedDate: nil, languages: [], identifiers: [:],
             comments: nil, formats: [], cover: nil, isDeleted: false,
-            modifiedClock: HybridLogicalClock(physicalMilliseconds: 2, nodeID: UUID())
+
         )
         let newPath = CanonicalPathBuilder.relativeDirectory(
             bookID: bookID, title: "Range: Revised", authors: ["David Epstein"]
@@ -228,7 +228,7 @@ struct BookFolderTests {
             series: nil, seriesIndex: nil, tags: [], rating: nil, publisher: nil,
             publicationDate: nil, addedDate: nil, languages: [], identifiers: [:],
             comments: nil, formats: [], cover: nil, isDeleted: false,
-            modifiedClock: HybridLogicalClock(physicalMilliseconds: 1, nodeID: UUID())
+
         )
         let materialized = try await folder.materialize(bookID: bookID, resolved: resolved, staged: [], cover: nil)
 
@@ -253,7 +253,7 @@ struct BookFolderTests {
             series: nil, seriesIndex: nil, tags: [], rating: nil, publisher: nil,
             publicationDate: nil, addedDate: nil, languages: [], identifiers: [:],
             comments: nil, formats: [], cover: nil, isDeleted: false,
-            modifiedClock: HybridLogicalClock(physicalMilliseconds: 1, nodeID: UUID())
+
         )
         let source = FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).epub")
         try Data("rename-me".utf8).write(to: source)
@@ -268,7 +268,7 @@ struct BookFolderTests {
             series: nil, seriesIndex: nil, tags: [], rating: nil, publisher: nil,
             publicationDate: nil, addedDate: nil, languages: [], identifiers: [:],
             comments: nil, formats: [], cover: nil, isDeleted: false,
-            modifiedClock: HybridLogicalClock(physicalMilliseconds: 2, nodeID: UUID())
+
         )
         let newFormat = BookFormatValue(
             kind: "EPUB",
@@ -312,7 +312,7 @@ struct BookFolderTests {
             series: nil, seriesIndex: nil, tags: [], rating: nil, publisher: nil,
             publicationDate: nil, addedDate: nil, languages: [], identifiers: [:],
             comments: nil, formats: [], cover: nil, isDeleted: false,
-            modifiedClock: HybridLogicalClock(physicalMilliseconds: 1, nodeID: UUID())
+
         )
         let materialized = try await folder.materialize(bookID: bookID, resolved: resolved, staged: [], cover: nil)
         let target = await folder.bookDirectoryURL(relativePath: materialized.path)
