@@ -215,6 +215,37 @@ public final class AutomergeBookDocument: @unchecked Sendable {
         document.heads()
     }
 
+    /// The highest HybridLogicalClock across every field of the document. The
+    /// next local edit must tick from this: seeding from a fresh `(0, 0)`
+    /// clock makes two operations in the same millisecond emit equal clocks,
+    /// which makes the LWW tie-break in `newest()` arbitrary.
+    public func latestClock() throws -> HybridLogicalClock? {
+        try Self.maxClock(in: decode())
+    }
+
+    private static func maxClock(in schema: BookDocumentSchema) -> HybridLogicalClock? {
+        let fieldClocks = [
+            schema.titles.values.map(\.clock),
+            schema.authors.values.map(\.clock),
+            schema.series.values.map(\.clock),
+            schema.seriesIndexes.values.map(\.clock),
+            schema.ratings.values.map(\.clock),
+            schema.publishers.values.map(\.clock),
+            schema.publicationDates.values.map(\.clock),
+            schema.addedDates.values.map(\.clock),
+            schema.languages.values.map(\.clock),
+            schema.comments.values.map(\.clock),
+            schema.covers.values.map(\.clock),
+            schema.rawMetadata.values.map(\.clock),
+            schema.deletions.values.map(\.clock),
+            // Tags and identifiers keep per-entry clocks.
+            schema.tags.values.flatMap { $0.values }.map(\.clock),
+            schema.identifiers.values.flatMap { $0.values }.map(\.clock),
+            schema.formats.values.flatMap { $0.values }.map(\.clock)
+        ]
+        return fieldClocks.flatMap { $0 }.max()
+    }
+
     public func resolvedBook() throws -> ResolvedBook {
         let schema = try decode()
         guard let id = schema.bookID else {
@@ -237,27 +268,8 @@ public final class AutomergeBookDocument: @unchecked Sendable {
         let cover = newest(schema.covers)?.value
         let rawMetadata = resolvedRawMetadata(schema.rawMetadata)
         let deletion = newest(schema.deletions)
-        let clocks = [
-            newest(schema.titles)?.clock,
-            newest(schema.authors)?.clock,
-            newest(schema.series)?.clock,
-            newest(schema.seriesIndexes)?.clock,
-            newest(schema.ratings)?.clock,
-            newest(schema.publishers)?.clock,
-            newest(schema.publicationDates)?.clock,
-            newest(schema.addedDates)?.clock,
-            newest(schema.languages)?.clock,
-            newest(schema.comments)?.clock,
-            newest(schema.covers)?.clock,
-            newest(schema.rawMetadata)?.clock,
-            deletion?.clock
-        ].compactMap { $0 }
-        // Tags and identifiers participate in the modified clock through their own newest entries.
-        let tagClocks = schema.tags.values.flatMap { $0.values }.map(\.clock)
-        let identifierClocks = schema.identifiers.values.flatMap { $0.values }.map(\.clock)
-        let formatClocks = schema.formats.values.flatMap { $0.values }.map(\.clock)
 
-        guard let modifiedClock = (clocks + tagClocks + identifierClocks + formatClocks).max() else {
+        guard let modifiedClock = Self.maxClock(in: schema) else {
             throw BookDocumentError.missingClock
         }
 

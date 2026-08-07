@@ -43,20 +43,22 @@ struct LibraryStorageTests {
         let clock = HybridLogicalClock(physicalMilliseconds: 1_000, nodeID: deviceID)
         let data = Data("encoded-change".utf8)
 
-        let firstURL = try await store.writeBookChange(
+        let first = try await store.writeBookChange(
             data,
             bookID: bookID,
             deviceID: deviceID,
             clock: clock
         )
-        let secondURL = try await store.writeBookChange(
+        let second = try await store.writeBookChange(
             data,
             bookID: bookID,
             deviceID: deviceID,
             clock: clock
         )
 
-        #expect(firstURL == secondURL)
+        #expect(first.url == second.url)
+        #expect(first.created)
+        #expect(!second.created)
         #expect(try await store.bookChanges(bookID: bookID) == [data])
     }
 }

@@ -246,7 +246,7 @@ final class LibraryConnection {
             cancelFlag.requested = false
         }
         do {
-            try await repository.rebuildCatalog(
+            let report = try await repository.rebuildCatalog(
                 progress: { [weak self] value in
                     Task { @MainActor in
                         self?.rebuildProgress = value
@@ -254,6 +254,7 @@ final class LibraryConnection {
                 },
                 cancelled: { [cancelFlag] in cancelFlag.requested }
             )
+            quarantinedChanges = report.quarantined
         } catch LibraryRepositoryError.rebuildCancelled {
             onError?("Rebuild cancelled.")
         } catch {

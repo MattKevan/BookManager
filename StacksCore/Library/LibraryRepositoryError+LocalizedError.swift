@@ -8,8 +8,6 @@ extension LibraryRepositoryError: LocalizedError {
         switch self {
         case .unsupportedFormat(let version):
             return "This library uses an unsupported format version (\(version))."
-        case .missingDependencies(let bookID):
-            return "The library is missing changes for a book (\(bookID.uuidString))."
         case .bookNotFound(let bookID):
             return "The requested book (\(bookID.uuidString)) was not found."
         case .rebuildCancelled:

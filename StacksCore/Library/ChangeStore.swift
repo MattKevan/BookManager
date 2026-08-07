@@ -2,6 +2,20 @@ import CryptoKit
 import Foundation
 
 public actor ChangeStore {
+    /// Result of a change write: the destination URL plus whether this call
+    /// created the file (vs. deduplicating onto an identical existing change).
+    /// Callers that roll back a failed multi-step edit must only delete files
+    /// they actually created.
+    public struct WriteResult: Sendable {
+        public let url: URL
+        public let created: Bool
+
+        public init(url: URL, created: Bool) {
+            self.url = url
+            self.created = created
+        }
+    }
+
     private let layout: LibraryLayout
 
     public init(layout: LibraryLayout) {
@@ -13,7 +27,7 @@ public actor ChangeStore {
         bookID: UUID,
         deviceID: UUID,
         clock: HybridLogicalClock
-    ) throws -> URL {
+    ) throws -> WriteResult {
         let directory = layout.bookChangesRoot
             .appending(path: bookID.uuidString, directoryHint: .isDirectory)
             .appending(path: deviceID.uuidString, directoryHint: .isDirectory)
@@ -24,11 +38,11 @@ public actor ChangeStore {
         let destination = directory.appending(path: "\(clockPart)-\(digest).amchange")
 
         if FileManager.default.fileExists(atPath: destination.path) {
-            return destination
+            return WriteResult(url: destination, created: false)
         }
 
         try data.write(to: destination, options: .atomic)
-        return destination
+        return WriteResult(url: destination, created: true)
     }
 
     public func bookChanges(bookID: UUID) throws -> [Data] {
@@ -72,5 +86,37 @@ public actor ChangeStore {
         )?.compactMap { $0 as? URL }
             .filter { $0.pathExtension == "amchange" }
             .sorted { $0.path < $1.path }) ?? []
+    }
+
+    /// True when a change file's name digest (which this store derives from
+    /// the file's content) does not match the content — i.e. the file was
+    /// never written by the change store. Shared by ingest and rebuild so the
+    /// quarantine policy is defined in exactly one place.
+    public static func hasCorruptDigest(_ url: URL) -> Bool {
+        guard let data = try? Data(contentsOf: url) else { return false }
+        let expected = sha256Hex(data)
+        let name = url.lastPathComponent
+        guard name.hasSuffix(".amchange") else { return false }
+        let base = name.dropLast(".amchange".count)
+        guard let dash = base.lastIndex(of: "-") else { return false }
+        let digest = base[dash...].dropFirst()
+        return digest != expected
+    }
+
+    /// Moves a corrupt change file out of the change store into quarantine.
+    /// Quarantine is one-way (nothing re-imports it) — only call for files
+    /// whose name digest mismatches content, never for valid-but-stuck
+    /// changes.
+    public func quarantine(_ url: URL) throws -> URL {
+        let dir = layout.quarantineRoot
+            .appending(path: Date().timeIntervalSince1970.description, directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let destination = dir.appending(path: "\(UUID().uuidString)-\(url.lastPathComponent)")
+        try FileManager.default.moveItem(at: url, to: destination)
+        return destination
+    }
+
+    private static func sha256Hex(_ data: Data) -> String {
+        SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 }
