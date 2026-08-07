@@ -277,10 +277,12 @@ public actor LibraryRepository: LibraryRepositoryImporting {
     /// Appends a client command (server-assigned seq; dedupes by the client's
     /// id) and applies it with folder materialization — the sync protocol's
     /// push path. `addBook`/`setCover` payloads must have their staged files
-    /// pre-placed at `staging/<commandID>/` via `stageUploadedFile`.
-    public func ingest(_ command: JournalCommand) async throws {
-        guard try await journal.append(op: command.op, id: command.id) != nil else {
-            return  // duplicate id — already applied
+    /// pre-placed at `staging/<commandID>/` via `stageUploadedFile`. Returns
+    /// the assigned seq, or nil when the id was a duplicate.
+    @discardableResult
+    public func ingest(_ command: JournalCommand) async throws -> Int64? {
+        guard let appended = try await journal.append(op: command.op, id: command.id) else {
+            return nil  // duplicate id — already applied
         }
         let stagedDir = layout.stagingRoot
             .appending(path: command.id.uuidString, directoryHint: .isDirectory)
@@ -288,6 +290,7 @@ public actor LibraryRepository: LibraryRepositoryImporting {
             try await apply(command, materializeFolders: true)
             try? FileManager.default.removeItem(at: stagedDir)
             try await maybeSnapshot()
+            return appended.seq
         } catch {
             try? FileManager.default.removeItem(at: stagedDir)
             throw error
