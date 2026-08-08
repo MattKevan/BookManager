@@ -538,18 +538,18 @@ extension ContentView {
     private var sortToolbarItem: some ToolbarContent {
         ToolbarItem(id: "sort") {
             if session.browser != nil {
-                Menu {
-                    // A Picker inside a Menu renders native checkmarks on the
-                    // selected option (Apple-documented pattern; toggles are
-                    // for multi-select). The label must be EMPTY — a labeled
-                    // Picker renders as a submenu instead of flat options.
-                    Picker("", selection: sortBinding) {
-                        Text("Name").tag(BrowserSortOrder.name)
-                        Text("Date Added").tag(BrowserSortOrder.dateAdded)
-                    }
-                } label: {
-                    Label("Sort", systemImage: "square.grid.3x1.below.line.grid.1x2")
+                // A .menu-style Picker IS the toolbar button: its label is the
+                // icon, and clicking opens the options directly with native
+                // checkmarks (wrapping a Picker in a Menu always nests it as a
+                // submenu on macOS).
+                Picker(
+                    selection: sortBinding,
+                    label: Label("Sort", systemImage: "square.grid.3x1.below.line.grid.1x2")
+                ) {
+                    Text("Name").tag(BrowserSortOrder.name)
+                    Text("Date Added").tag(BrowserSortOrder.dateAdded)
                 }
+                .pickerStyle(.menu)
                 .help("Sort order")
             }
         }
