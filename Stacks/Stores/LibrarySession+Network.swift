@@ -172,7 +172,12 @@ extension LibrarySession {
             completed: books.count, total: books.count, currentTitle: nil, failures: failures
         )
         await importFiles(urls: urls)
-        presentImportReport()
+        // Downloads never present the report overlay — a standard system
+        // notification is the only completion feedback (the app requests
+        // notification authorization on first use).
+        if let report = importReport {
+            _ = await SystemNotifier.postImportCompletion(report: report)
+        }
     }
 }
 
