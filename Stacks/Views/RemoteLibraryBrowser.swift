@@ -26,6 +26,7 @@ final class RemoteLibraryBrowser: LibraryBrowser, Identifiable {
     var facetNavigation = FacetNavigation()
     var searchText = ""
     var viewMode: BrowserViewMode = .grid
+    var sortOrder: BrowserSortOrder = .name
     var metadataEditQueue: [IndexedBook]? = nil
 
     /// Commands waiting in the durable offline queue (badge in the Shared
@@ -138,8 +139,9 @@ final class RemoteLibraryBrowser: LibraryBrowser, Identifiable {
     /// (the home library filters in SQL; the remote has only the pulled
     /// snapshot, so the same UX is a local filter).
     var books: [IndexedBook] {
+        let filtered: [IndexedBook]
         if let facet = facetNavigation.activeFacet {
-            return remoteBooks.filter { book in
+            filtered = remoteBooks.filter { book in
                 switch facet.type {
                 case .author: return book.authors.contains(facet.value)
                 case .series: return book.series == facet.value
@@ -147,14 +149,20 @@ final class RemoteLibraryBrowser: LibraryBrowser, Identifiable {
                 case .format: return book.formats.contains { $0.kind.lowercased() == facet.value.lowercased() }
                 }
             }
+        } else {
+            let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            filtered = query.isEmpty ? remoteBooks : remoteBooks.filter {
+                $0.title.lowercased().contains(query)
+                    || $0.authors.contains { $0.lowercased().contains(query) }
+                    || $0.tags.contains { $0.lowercased().contains(query) }
+                    || ($0.series?.lowercased().contains(query) ?? false)
+            }
         }
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !query.isEmpty else { return remoteBooks }
-        return remoteBooks.filter {
-            $0.title.lowercased().contains(query)
-                || $0.authors.contains { $0.lowercased().contains(query) }
-                || $0.tags.contains { $0.lowercased().contains(query) }
-                || ($0.series?.lowercased().contains(query) ?? false)
+        switch sortOrder {
+        case .name:
+            return filtered.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+        case .dateAdded:
+            return filtered.sorted { ($0.addedMilliseconds ?? 0) > ($1.addedMilliseconds ?? 0) }
         }
     }
     var selectionBooks: [IndexedBook] { books.filter { selection.contains($0.id) } }

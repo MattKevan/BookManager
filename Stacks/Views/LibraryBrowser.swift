@@ -2,6 +2,12 @@ import AppKit
 import Foundation
 import StacksCore
 
+/// Toolbar sort order for the library browser (Finder-style).
+enum BrowserSortOrder: String, CaseIterable {
+    case name
+    case dateAdded
+}
+
 /// The browser-facing surface of an open library OR a connected remote
 /// library. `LibraryConnection` (home) and `RemoteLibraryBrowser` conform;
 /// grid/table/facet views are generic over it.
@@ -27,6 +33,8 @@ protocol LibraryBrowser: AnyObject {
     var metadataEditQueue: [IndexedBook]? { get set }
     var searchText: String { get set }
     var viewMode: BrowserViewMode { get set }
+    /// Toolbar sort order (Name or Date added); applies in grid and table.
+    var sortOrder: BrowserSortOrder { get set }
     /// Book ids awaiting delete confirmation (the grid's confirmation alert).
     var pendingDelete: Set<UUID>? { get set }
     func open(id: UUID) async

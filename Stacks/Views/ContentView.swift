@@ -467,6 +467,8 @@ extension ContentView {
             ToolbarSpacer(.fixed)
             viewPickerToolbarItem
             ToolbarSpacer(.fixed)
+            sortToolbarItem
+            ToolbarSpacer(.fixed)
             searchToolbarItem
             ToolbarSpacer(.fixed)
             if isHomeContext || session.isRemoteContext {
@@ -529,6 +531,32 @@ extension ContentView {
             preconditionFailure("Browser shown without an open library")
         }
         return browser
+    }
+
+    /// Finder-style sort menu: Name or Date added, applied to the current
+    /// browser context (home or remote) in both grid and table views.
+    private var sortToolbarItem: some ToolbarContent {
+        ToolbarItem(id: "sort") {
+            if session.browser != nil {
+                Menu {
+                    Picker("Sort by", selection: sortBinding) {
+                        Text("Name").tag(BrowserSortOrder.name)
+                        Text("Date Added").tag(BrowserSortOrder.dateAdded)
+                    }
+                } label: {
+                    Label("Sort", systemImage: "arrow.up.arrow.down")
+                }
+                .help("Sort order")
+            }
+        }
+    }
+
+    /// Binds the sort menu to the current browser's sort order.
+    private var sortBinding: Binding<BrowserSortOrder> {
+        Binding(
+            get: { session.browser?.sortOrder ?? .name },
+            set: { session.browser?.sortOrder = $0 }
+        )
     }
 
     /// Binds the grid/list picker to the active connection's view mode.

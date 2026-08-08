@@ -36,6 +36,13 @@ final class LibraryConnection {
     var deletedBooks: [IndexedBook] = []
     var missingFiles: [(book: IndexedBook, filename: String)] = []
     var facetNavigation = FacetNavigation()
+    /// Toolbar sort order; re-sorts the loaded books immediately on change.
+    var sortOrder: BrowserSortOrder = .name {
+        didSet {
+            guard oldValue != sortOrder else { return }
+            sortBooks()
+        }
+    }
     var searchText = "" {
         didSet {
             searchTask?.cancel()
@@ -169,6 +176,18 @@ final class LibraryConnection {
             }
         } catch {
             onLoadFailure?(error.localizedDescription)
+        }
+        sortBooks()
+    }
+
+    /// Applies the toolbar sort order to the loaded books (SQL orders by
+    /// title; client-side re-sort keeps one code path for all branches).
+    private func sortBooks() {
+        switch sortOrder {
+        case .name:
+            books.sort { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+        case .dateAdded:
+            books.sort { ($0.addedMilliseconds ?? 0) > ($1.addedMilliseconds ?? 0) }
         }
     }
 
