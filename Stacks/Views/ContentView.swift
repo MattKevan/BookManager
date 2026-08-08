@@ -543,7 +543,7 @@ extension ContentView {
                     // selected option (Apple-documented pattern; toggles are
                     // for multi-select). The label must be EMPTY — a labeled
                     // Picker renders as a submenu instead of flat options.
-                    Picker(selection: sortBinding) {
+                    Picker("", selection: sortBinding) {
                         Text("Name").tag(BrowserSortOrder.name)
                         Text("Date Added").tag(BrowserSortOrder.dateAdded)
                     }
