@@ -42,6 +42,19 @@ repository's name (`git clone <url>` without a target would use the repo
 name). The first build resolves and fetches dependencies (needs network). The
 executable lands at `.build/release/stacks`.
 
+### Run it from anywhere (optional)
+
+Copy the binary onto your PATH so `stacks` works from any directory:
+
+```bash
+mkdir -p ~/.local/bin
+install -m 755 .build/release/stacks ~/.local/bin/stacks
+```
+
+`~/.local/bin` is usually on PATH already (Ubuntu adds it when the directory
+exists); otherwise add it once to your shell profile and reload. Re-run the
+`install` line after every rebuild.
+
 ## Create a library
 
 ```bash
