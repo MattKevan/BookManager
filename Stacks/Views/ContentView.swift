@@ -539,15 +539,31 @@ extension ContentView {
         ToolbarItem(id: "sort") {
             if session.browser != nil {
                 Menu {
-                    Picker("Sort by", selection: sortBinding) {
-                        Text("Name").tag(BrowserSortOrder.name)
-                        Text("Date Added").tag(BrowserSortOrder.dateAdded)
+                    Button {
+                        session.browser?.sortOrder = .name
+                    } label: {
+                        sortOptionLabel("Name", isSelected: sortBinding.wrappedValue == .name)
+                    }
+                    Button {
+                        session.browser?.sortOrder = .dateAdded
+                    } label: {
+                        sortOptionLabel("Date Added", isSelected: sortBinding.wrappedValue == .dateAdded)
                     }
                 } label: {
-                    Label("Sort", systemImage: "arrow.up.arrow.down")
+                    Label("Sort", systemImage: "square.grid.3x1.below.line.grid.1x2")
                 }
                 .help("Sort order")
             }
+        }
+    }
+
+    /// Menu option with a checkmark on the active sort.
+    @ViewBuilder
+    private func sortOptionLabel(_ title: String, isSelected: Bool) -> some View {
+        if isSelected {
+            Label(title, systemImage: "checkmark")
+        } else {
+            Text(title)
         }
     }
 
