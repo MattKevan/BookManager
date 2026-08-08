@@ -2,7 +2,7 @@ import StacksCore
 import SwiftUI
 
 /// Result sheet for a send-to-device run: what was copied, what had no
-/// compatible format on the device, and what failed. Mirrors ImportReportView.
+/// compatible format on the device, and what failed.
 struct SendReportView: View {
     let report: SendReport
     let onDone: () -> Void

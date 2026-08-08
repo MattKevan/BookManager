@@ -121,14 +121,6 @@ struct ContentView: View {
             },
             onCancellation: { session.pickerAction = nil }
         )
-        .sheet(isPresented: Binding(
-            get: { session.importReportPresented },
-            set: { session.importReportPresented = $0 }
-        )) {
-            if let report = session.importReport {
-                ImportReportView(report: report) { session.importReportPresented = false }
-            }
-        }
         .sheet(isPresented: $showSendReport) {
             if let report = session.devices.sendReport {
                 SendReportView(report: report) { showSendReport = false }

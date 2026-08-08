@@ -103,15 +103,13 @@ extension LibrarySession {
         }
     }
 
-    /// Posts a system notification for the completed import; falls back to the
-    /// import-report sheet (`importReportPresented`) when notifications are
-    /// not authorized. Moved from ContentView so any view can trigger it.
+    /// Posts the import-completion system notification. The report sheet was
+    /// removed (it blocked the flow); the notification is the only feedback,
+    /// regardless of authorization state.
     func presentImportReport() {
         guard let report = importReport else { return }
         Task {
-            if await !SystemNotifier.postImportCompletion(report: report) {
-                importReportPresented = true
-            }
+            _ = await SystemNotifier.postImportCompletion(report: report)
         }
     }
 

@@ -58,7 +58,6 @@ final class LibrarySession {
     /// Set by `presentImportReport()` when the system notification is not
     /// authorized; the import-report sheet binds to this so any view (peer
     /// toolbar, context menu) can present the transfer report.
-    var importReportPresented = false
     var inspectorPresented = false
 
     // Metadata enrichment state (home library)
@@ -376,7 +375,6 @@ final class LibrarySession {
         state = .welcome
         inspectorPresented = false
         importReport = nil
-        importReportPresented = false
         metadataCandidates = []
         metadataReviewPresented = false
         metadataLookupError = nil
