@@ -181,9 +181,37 @@ final class RemoteLibraryBrowser: LibraryBrowser, Identifiable {
             .sorted { $0.value.localizedCaseInsensitiveCompare($1.value) == .orderedAscending }
     }
 
+    /// Whether the server last answered a request. False once something
+    /// fails unreachably — the sidebar shows the drop and edits queue
+    /// offline until a successful refresh.
+    var isConnected = true
+
     func refreshBooks() async {
-        try? await remote.pull()
-        remoteBooks = await remote.books()
+        try? await refreshBooksThrowing()
+    }
+
+    /// The throwing variant: the connect flow needs the failure (401 →
+    /// credential prompt, unreachable → error) instead of a silent empty
+    /// library.
+    func refreshBooksThrowing() async throws {
+        do {
+            try await remote.pull()
+            isConnected = true
+            remoteBooks = await remote.books()
+        } catch {
+            noteUnreachable(error)
+            throw error
+        }
+    }
+
+    /// Marks the connection dropped when the error is a network failure
+    /// (server unreachable). HTTP errors mean the server is up — those are
+    /// not a connection drop.
+    func noteUnreachable(_ error: Error) {
+        if let remoteError = error as? RemoteLibrary.RemoteError,
+           case .unreachable = remoteError {
+            isConnected = false
+        }
     }
 
     func open(id: UUID) async {

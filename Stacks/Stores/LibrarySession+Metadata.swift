@@ -61,7 +61,7 @@ extension LibrarySession {
             _ = try await remote.remote.push(
                 ClientCommand(id: UUID(), op: .updateBook(.init(bookID: id, edit: edit)))
             )
-            await remote.refreshBooks()
+            try? await remote.refreshBooks()
         } catch {
             lastError = "Couldn't save edit on '\(remote.name)': \(error.localizedDescription)"
         }

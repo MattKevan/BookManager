@@ -55,6 +55,11 @@ struct SidebarView: View {
                 case let .remote(id, subsection):
                     session.selectRemote(id)
                     if let remote = session.activeRemote, remote.id == id {
+                        // Selecting a dropped server attempts a reconnect; a
+                        // successful pull flips the sidebar state back.
+                        if !remote.isConnected {
+                            Task { try? await remote.refreshBooksThrowing() }
+                        }
                         switch subsection {
                         case .allBooks:
                             remote.facetNavigation.clear()
@@ -130,7 +135,19 @@ struct SidebarView: View {
                         }
                     } label: {
                         HStack(spacing: 6) {
-                            Label(browser.name, systemImage: "network")
+                            Label {
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(browser.name)
+                                    if !browser.isConnected {
+                                        Text("Disconnected")
+                                            .font(.caption2)
+                                            .foregroundStyle(.orange)
+                                    }
+                                }
+                            } icon: {
+                                Image(systemName: browser.isConnected ? "network" : "network.slash")
+                                    .foregroundStyle(browser.isConnected ? Color.primary : Color.orange)
+                            }
                             Spacer()
                             PendingBadge(browser: browser)
                             Button {

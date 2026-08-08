@@ -163,11 +163,16 @@ extension LibrarySession {
                 direction: .download, serverName: remote.name,
                 completed: index, total: books.count, currentTitle: book.title, failures: failures
             )
-            if let format = book.formats.first,
-               let url = try? await remote.remote.downloadFormat(id: book.id, format: format.kind) {
-                urls.append(url)
+            if let format = book.formats.first {
+                do {
+                    let url = try await remote.remote.downloadFormat(id: book.id, format: format.kind)
+                    urls.append(url)
+                } catch {
+                    remote.noteUnreachable(error)
+                    failures.append("\(book.title): \(error.localizedDescription)")
+                }
             } else {
-                failures.append("\(book.title): download failed")
+                failures.append("\(book.title): no formats to download")
             }
         }
         serverTransferActivity = ServerTransferActivity(
@@ -178,8 +183,19 @@ extension LibrarySession {
         // Downloads never present the report overlay — a standard system
         // notification is the only completion feedback (the app requests
         // notification authorization on first use).
-        if let report = importReport {
+        // Downloads never present the report overlay — a standard system
+        // notification is the only completion feedback. Failures are NOT
+        // silent: a failed download names the failed books instead of a
+        // misleading 'Import complete'.
+        if failures.isEmpty, let report = importReport {
             _ = await SystemNotifier.postImportCompletion(report: report)
+        } else if !failures.isEmpty {
+            let names = failures.prefix(4).joined(separator: ", ")
+            let more = failures.count > 4 ? "… and \(failures.count - 4) more" : ""
+            _ = await SystemNotifier.post(
+                title: "Download incomplete",
+                body: "\(importReport?.imported.count ?? 0) of \(books.count) books imported. Failed: \(names)\(more)"
+            )
         }
         // The operation is complete: back to the idle check state.
         serverTransferActivity = nil
