@@ -10,7 +10,15 @@ struct BookInspectorView: View {
 
     private var book: IndexedBook? {
         guard let id = session.selection.first else { return nil }
-        return session.books.first { $0.id == id }
+        // The browser context (home or a connected remote) owns the
+        // selection; its books list is the source.
+        return session.browser?.books.first { $0.id == id }
+    }
+
+    /// Enrichment lookups are home-scoped (the network lookup + apply write
+    /// through the home repository), so the Fetch button hides for remotes.
+    private var isRemoteContext: Bool {
+        session.browser is RemoteLibraryBrowser
     }
 
     private var rawRows: [CalibreRawRow] {
@@ -34,7 +42,9 @@ struct BookInspectorView: View {
                 coverImage = nil
                 return
             }
-            let image = await ThumbnailCache.shared.thumbnail(for: book, repository: session.repository)
+            // Browser-routed: the thumbnail cache for home, a server fetch
+            // for remotes.
+            let image = await session.browser?.coverImage(for: book)
             guard !Task.isCancelled else { return }
             coverImage = image
         }
@@ -95,10 +105,12 @@ struct BookInspectorView: View {
                 }
                 .disabled(session.metadataEditQueue != nil)
 
-                Button("Fetch Metadata…") {
-                    Task { await session.fetchMetadata(for: book.id) }
+                if !isRemoteContext {
+                    Button("Fetch Metadata…") {
+                        Task { await session.fetchMetadata(for: book.id) }
+                    }
+                    .disabled(session.isFetchingMetadata)
                 }
-                .disabled(session.isFetchingMetadata)
                 if let error = session.metadataLookupError {
                     Text(error)
                         .font(.caption)

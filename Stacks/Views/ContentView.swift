@@ -195,10 +195,10 @@ struct ContentView: View {
         // toolbar item makes the item order deterministic and prevents one
         // item's state change from re-laying-out the others.
         .focusedValue(\.searchFocus, $searchFocused)
-        // The inspector shows HOME library book metadata (peers are browse +
-        // transfer only in this slice): suppress it for devices and peers.
+        // The inspector shows the current browser context's selection —
+        // home or a connected remote (device mode has no browser).
         .inspector(isPresented: Binding(
-            get: { session.inspectorPresented && session.selectedDeviceID == nil && isHomeContext },
+            get: { session.inspectorPresented && session.browser != nil },
             set: { session.inspectorPresented = $0 }
         )) {
             BookInspectorView(session: session)
@@ -471,7 +471,7 @@ extension ContentView {
             ToolbarSpacer(.fixed)
             searchToolbarItem
             ToolbarSpacer(.fixed)
-            if isHomeContext {
+            if isHomeContext || session.isRemoteContext {
                 inspectorToolbarItem
             }
         }
