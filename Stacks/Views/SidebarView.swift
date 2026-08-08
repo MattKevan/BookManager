@@ -169,15 +169,6 @@ struct SidebarView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                // Servers that can't advertise (Linux without Avahi, other
-                // subnets, containers) connect by typed host:port.
-                Button {
-                    session.connectToServerPresented = true
-                } label: {
-                    Label("Connect to Server…", systemImage: "plus.circle")
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.tint)
             }
         }
     }

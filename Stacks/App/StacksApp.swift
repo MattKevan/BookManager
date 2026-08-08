@@ -73,6 +73,9 @@ private struct AppCommands: Commands {
                 }
             }
             Divider()
+            Button("Connect to Server…") { session.connectToServerPresented = true }
+                .help("Connect to a server by host:port (e.g. a Linux box that can't advertise)")
+            Divider()
             Button("Import Books…") { session.present(.addBooks) }
                 .keyboardShortcut("i", modifiers: .command)
             Button("Import Calibre Library…") { session.present(.calibre) }
