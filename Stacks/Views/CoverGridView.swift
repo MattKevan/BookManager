@@ -370,13 +370,56 @@ private struct CoverTile: View {
                 .resizable()
                 .scaledToFit()
         } else {
-            // Placeholder only: real covers scale naturally to the column
-            // width (variable height), so give the missing-cover glyph a
-            // sensible fixed footprint instead of its tiny intrinsic size.
-            Image(systemName: "book.closed")
-                .font(.system(size: 60))
-                .frame(height: 160)
-                .foregroundStyle(.secondary)
+            // A real cover fills the column width at its own aspect ratio;
+            // the missing-cover placeholder mirrors that footprint — a muted
+            // portrait tile (deterministic per-book hue) with the title and
+            // author overlaid, so cover-less books don't read as tiny
+            // floating icons.
+            placeholderCover
         }
+    }
+
+    /// The portrait placeholder for a book without a cover.
+    private var placeholderCover: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 4)
+                .fill(placeholderGradient)
+            VStack(spacing: 6) {
+                Image(systemName: "book.closed")
+                    .font(.system(size: 26, weight: .light))
+                    .foregroundStyle(.secondary)
+                Text(book.title)
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(3)
+                    .padding(.horizontal, 8)
+                if let firstAuthor = book.authors.first {
+                    Text(firstAuthor)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                        .padding(.horizontal, 8)
+                }
+            }
+        }
+        .aspectRatio(2.0 / 3.0, contentMode: .fit)
+    }
+
+    /// A muted, deterministic per-book tint (from the id's first byte — not
+    /// `hashValue`, which is per-launch seeded) so the grid reads varied but
+    /// calm, and the tint doesn't shuffle between launches.
+    private var placeholderGradient: LinearGradient {
+        let hue = withUnsafeBytes(of: book.id.uuid) { bytes in
+            Double(bytes[0]) / 256.0
+        }
+        let light = NSColor(calibratedHue: hue, saturation: 0.10, brightness: 0.93, alpha: 1)
+        let dark = NSColor(calibratedHue: hue, saturation: 0.28, brightness: 0.45, alpha: 1)
+        return LinearGradient(
+            colors: [Color(light), Color(dark)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
     }
 }
