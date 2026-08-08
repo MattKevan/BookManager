@@ -538,18 +538,17 @@ extension ContentView {
     private var sortToolbarItem: some ToolbarContent {
         ToolbarItem(id: "sort") {
             if session.browser != nil {
-                // A .menu-style Picker IS the toolbar button: its label is the
-                // icon, and clicking opens the options directly with native
-                // checkmarks (wrapping a Picker in a Menu always nests it as a
-                // submenu on macOS).
-                Picker(
-                    selection: sortBinding,
-                    label: Label("Sort", systemImage: "square.grid.3x1.below.line.grid.1x2")
-                ) {
-                    Text("Name").tag(BrowserSortOrder.name)
-                    Text("Date Added").tag(BrowserSortOrder.dateAdded)
+                // Icon-button Menu (the toolbar styling the user wants) with
+                // Toggle items: Toggles are the only control that renders as
+                // flat checked menu items on macOS (a Picker inside a Menu is
+                // always nested as a submenu). The bindings enforce single
+                // selection — radio behavior.
+                Menu {
+                    Toggle("Name", isOn: sortToggle(.name))
+                    Toggle("Date Added", isOn: sortToggle(.dateAdded))
+                } label: {
+                    Label("Sort", systemImage: "square.grid.3x1.below.line.grid.1x2")
                 }
-                .pickerStyle(.menu)
                 .help("Sort order")
             }
         }
@@ -560,6 +559,15 @@ extension ContentView {
         Binding(
             get: { session.browser?.sortOrder ?? .name },
             set: { session.browser?.sortOrder = $0 }
+        )
+    }
+
+    /// A Toggle checked exactly when the browser's sort order matches;
+    /// switching on one switches the other off (set only acts on true).
+    private func sortToggle(_ order: BrowserSortOrder) -> Binding<Bool> {
+        Binding(
+            get: { session.browser?.sortOrder == order },
+            set: { if $0 { session.browser?.sortOrder = order } }
         )
     }
 
