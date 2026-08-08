@@ -127,6 +127,11 @@ Notes:
 
 ### systemd (optional)
 
+systemd **does not use your shell PATH**, so `ExecStart` needs the absolute
+binary path (wherever you installed it) and the absolute library path —
+`$HOME`/`~` are not expanded. Pick a port that is free on your box (if
+something already owns 8080, like a Docker proxy, use another).
+
 ```
 # /etc/systemd/system/stacks-server.service
 [Unit]
@@ -134,8 +139,8 @@ Description=Stacks library server
 After=network.target
 
 [Service]
-User=stacks
-ExecStart=/opt/stacks/stacks serve /srv/stacks/library
+User=matt
+ExecStart=/home/matt/.local/bin/stacks serve "/home/matt/Stacks library" --port 8090
 Restart=on-failure
 
 [Install]
@@ -144,7 +149,11 @@ WantedBy=multi-user.target
 
 ```bash
 sudo systemctl daemon-reload && sudo systemctl enable --now stacks-server
+sudo ufw allow 8090
 ```
+
+After re-installing a rebuilt binary (`install … ~/.local/bin/stacks`),
+restart the service to pick it up: `sudo systemctl restart stacks-server`.
 
 ## Verify
 
