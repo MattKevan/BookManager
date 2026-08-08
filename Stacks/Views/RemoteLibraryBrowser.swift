@@ -58,6 +58,19 @@ final class RemoteLibraryBrowser: LibraryBrowser, Identifiable {
                 size: Int64(data.count),
                 stagedName: filename
             )
+            // The embedded cover rides along (staged like the format), so
+            // uploaded books show a real cover instead of the placeholder.
+            var stagedFiles = [filename: data]
+            var cover: JournalCommand.StagedCover?
+            if let coverData = try? MetadataExtractor.extractCover(from: url, kind: kind) {
+                let coverName = "cover.jpg"
+                cover = JournalCommand.StagedCover(
+                    filename: coverName,
+                    contentHash: BookFolder.contentHash(coverData),
+                    stagedName: coverName
+                )
+                stagedFiles[coverName] = coverData
+            }
             let addBook = JournalCommand.AddBook(
                 bookID: UUID(),
                 title: title,
@@ -73,12 +86,12 @@ final class RemoteLibraryBrowser: LibraryBrowser, Identifiable {
                 identifiers: extracted?.identifiers ?? [:],
                 comments: extracted?.comments,
                 formats: [staged],
-                cover: nil
+                cover: cover
             )
             progress(completed, total, title)
             let outcome = try? await remote.push(
                 ClientCommand(id: UUID(), op: .addBook(addBook)),
-                stagedFiles: [filename: data]
+                stagedFiles: stagedFiles
             )
             switch outcome {
             case .applied, .queued:

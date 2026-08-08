@@ -145,6 +145,46 @@ struct ProtocolTests {
     }
 
     @Test
+    func uploadedBookDownloadsByCanonicalFilename() async throws {
+        let port = try ServerTestHarness.freePort()
+        try await startServer(port: port)
+
+        // The app's upload carries the original file name in the payload;
+        // the server materializes a canonical name (title - author.kind).
+        // The catalog must record the canonical name or the download route
+        // computes a path that does not exist (404).
+        let bookID = UUID()
+        let payload = JournalCommand.AddBook(
+            bookID: bookID, title: "Odd Name", authors: ["Ada"],
+            series: nil, seriesIndex: nil, tags: [], rating: nil, publisher: nil,
+            publicationDate: nil, addedDate: .now, languages: [], identifiers: [:],
+            comments: nil,
+            formats: [JournalCommand.StagedFormat(
+                kind: "EPUB", filename: "oddly-named-file.epub",
+                contentHash: "abc", size: 5, stagedName: "oddly-named-file.epub"
+            )],
+            cover: nil
+        )
+        // Stage the bytes first, exactly like the app's upload push.
+        let commandID = UUID()
+        let staged = try await send(
+            port, method: "POST", path: "/api/stage?command=\(commandID.uuidString)&name=oddly-named-file.epub",
+            body: Data("bytes".utf8)
+        )
+        #expect(staged.status == 200)
+        let pushed = try await send(port, method: "POST", path: "/api/commands",
+                                    body: try ProtocolTests.isoEncoder.encode(
+                                        SyncPushRequest(commands: [ClientCommand(id: commandID, op: .addBook(payload))])
+                                    ))
+        #expect(pushed.status == 200)
+
+        let download = try await send(
+            port, method: "GET", path: "/api/books/\(bookID.uuidString)/download?format=EPUB"
+        )
+        #expect(download.status == 200)
+    }
+
+    @Test
     func deleteOfUnknownBookIsNoOp() async throws {
         let port = try ServerTestHarness.freePort()
         try await startServer(port: port)

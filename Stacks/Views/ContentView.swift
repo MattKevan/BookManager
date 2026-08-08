@@ -282,7 +282,8 @@ extension ContentView {
             }
         }
         ToolbarItem(id: "device-activity") {
-            if !session.devices.devices.isEmpty || session.calibreActivity != nil {
+            if !session.devices.devices.isEmpty || session.calibreActivity != nil
+                || session.serverTransferActivity != nil {
                 Button {
                     showActivityPopover.toggle()
                 } label: {

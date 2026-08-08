@@ -159,7 +159,19 @@ public enum CommandReplay {
             identifiers: payload.identifiers,
             comments: payload.comments,
             formats: payload.formats.map {
-                BookFormatValue(kind: $0.kind, filename: $0.filename, contentHash: $0.contentHash, size: $0.size)
+                // The on-disk name is the canonical one materialize writes
+                // (title - author.kind); the catalog must agree with the
+                // disk or downloads 404. The payload's filename is only the
+                // client's label — canonicalize here so the live apply and
+                // the replay produce identical records.
+                BookFormatValue(
+                    kind: $0.kind,
+                    filename: CanonicalPathBuilder.formatFileName(
+                        title: payload.title, authors: payload.authors, kind: $0.kind
+                    ),
+                    contentHash: $0.contentHash,
+                    size: $0.size
+                )
             },
             cover: payload.cover.map { CoverValue(filename: $0.filename, contentHash: $0.contentHash) },
             rawMetadata: nil,
