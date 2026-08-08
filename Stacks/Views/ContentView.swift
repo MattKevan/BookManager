@@ -577,7 +577,7 @@ extension ContentView {
                             urls.append(url)
                         }
                     }
-                    await remote.importFiles(urls: urls)
+                    await session.uploadFiles(urls: urls, to: remote)
                 }
                 return true
             }
@@ -805,6 +805,10 @@ private struct ActivityPopover: View {
                 calibreActivityRow(activity)
                 Divider()
             }
+            if let activity = session.serverTransferActivity {
+                serverTransferRow(activity)
+                Divider()
+            }
             HStack(spacing: 6) {
                 Image(systemName: session.devices.deviceError != nil
                     ? "exclamationmark.triangle"
@@ -867,6 +871,39 @@ private struct ActivityPopover: View {
                     Text(detail)
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    /// Live server upload/download: direction icon, progress, the book
+    /// being transferred, and any per-book failures.
+    private func serverTransferRow(_ activity: ServerTransferActivity) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: activity.headlineSymbol)
+                .foregroundStyle(activity.failures.isEmpty ? Color.secondary : Color.orange)
+            if let progress = activity.progress {
+                ProgressView(value: progress)
+                    .frame(width: 90)
+            } else {
+                ProgressView()
+                    .controlSize(.small)
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(activity.title)
+                if let currentTitle = activity.currentTitle {
+                    Text(currentTitle)
+                        .font(.caption)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                if !activity.failures.isEmpty {
+                    ForEach(Array(activity.failures.prefix(3).enumerated()), id: \.offset) { _, failure in
+                        Text(failure)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                            .lineLimit(1)
+                    }
                 }
             }
         }

@@ -38,8 +38,13 @@ final class RemoteLibraryBrowser: LibraryBrowser, Identifiable {
     /// file (title/authors/series/tags/…), the bytes staged, and an addBook
     /// command pushed — the server materializes the book. Unreachable pushes
     /// queue durably and land on reconnect.
-    func importFiles(urls: [URL]) async {
-        var pushed = 0
+    func importFiles(
+        urls: [URL],
+        progress: @escaping (Int, Int, String?) -> Void = { _, _, _ in },
+        onFailure: @escaping (String) -> Void = { _ in }
+    ) async {
+        let total = urls.count
+        var completed = 0
         for url in urls {
             guard let kind = MetadataExtractor.kind(for: url),
                   let data = try? Data(contentsOf: url) else { continue }
@@ -70,14 +75,22 @@ final class RemoteLibraryBrowser: LibraryBrowser, Identifiable {
                 formats: [staged],
                 cover: nil
             )
-            if case .applied = (try? await remote.push(
+            progress(completed, total, title)
+            let outcome = try? await remote.push(
                 ClientCommand(id: UUID(), op: .addBook(addBook)),
                 stagedFiles: [filename: data]
-            )) {
-                pushed += 1
+            )
+            switch outcome {
+            case .applied, .queued:
+                // Applied now, or durably queued for reconnect — either way
+                // the book is on its way; the Shared-row badge tracks queued.
+                completed += 1
+            case nil:
+                onFailure("\(title): server rejected the upload")
             }
+            progress(completed, total, title)
         }
-        if pushed > 0 {
+        if completed > 0 {
             await refreshBooks()
         }
     }

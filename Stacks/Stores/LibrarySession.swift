@@ -143,6 +143,8 @@ final class LibrarySession {
         set { _connectToServerPresented = newValue }
     }
     private var _connectToServerPresented = false
+    /// Live upload/download progress for the toolbar activity popover.
+    var serverTransferActivity: ServerTransferActivity?
 
     /// The current browser surface: the remote when connected, else the
     /// active library. Grid/table/facet views are generic over it.

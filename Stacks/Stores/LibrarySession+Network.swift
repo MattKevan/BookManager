@@ -75,6 +75,107 @@ extension LibrarySession {
     }
 }
 
+
+// MARK: - Server transfer activity (toolbar popover)
+
+/// Live upload/download progress shown in the toolbar activity popover —
+/// same Safari-Downloads style as device and Calibre activity.
+struct ServerTransferActivity: Equatable {
+    enum Direction: Equatable {
+        case upload, download
+    }
+
+    let direction: Direction
+    let serverName: String
+    let completed: Int
+    let total: Int
+    let currentTitle: String?
+    /// Per-book failures (title + message); empty when everything landed.
+    var failures: [String] = []
+
+    var progress: Double? {
+        total > 0 ? Double(completed) / Double(total) : nil
+    }
+
+    var title: String {
+        switch direction {
+        case .upload: "Uploading to \(serverName)"
+        case .download: "Downloading from \(serverName)"
+        }
+    }
+
+    var headlineSymbol: String {
+        switch direction {
+        case .upload: "arrow.up.doc"
+        case .download: "arrow.down.doc"
+        }
+    }
+}
+
+extension LibrarySession {
+    /// Uploads book files to a connected server with per-book progress in
+    /// the toolbar popover. Unreachable pushes queue durably (counted as
+    /// delivered — the offline queue lands them) and hard failures are
+    /// collected for the popover.
+    func uploadFiles(urls: [URL], to remote: RemoteLibraryBrowser) async {
+        guard !urls.isEmpty else { return }
+        var failures: [String] = []
+        serverTransferActivity = ServerTransferActivity(
+            direction: .upload, serverName: remote.name, completed: 0, total: urls.count, currentTitle: nil
+        )
+        await remote.importFiles(
+            urls: urls,
+            progress: { [weak self] completed, total, title in
+                self?.serverTransferActivity = ServerTransferActivity(
+                    direction: .upload, serverName: remote.name,
+                    completed: completed, total: total, currentTitle: title, failures: failures
+                )
+            },
+            onFailure: { [weak self] message in
+                failures.append(message)
+                if var activity = self?.serverTransferActivity {
+                    activity.failures = failures
+                    self?.serverTransferActivity = activity
+                }
+            }
+        )
+    }
+
+    /// Downloads the selected remote books into the home library: each
+    /// book's best format is fetched from the server and imported through
+    /// the standard pipeline (metadata extraction + content-hash dedupe).
+    /// Per-book progress in the toolbar popover; the import report sheet
+    /// covers the home-side results.
+    func importSelectionFromRemote(_ remote: RemoteLibraryBrowser) async {
+        guard let home else { return }
+        let books = remote.selectionBooks
+        guard !books.isEmpty else { return }
+        var failures: [String] = []
+        var urls: [URL] = []
+        serverTransferActivity = ServerTransferActivity(
+            direction: .download, serverName: remote.name, completed: 0, total: books.count, currentTitle: nil
+        )
+        for (index, book) in books.enumerated() {
+            serverTransferActivity = ServerTransferActivity(
+                direction: .download, serverName: remote.name,
+                completed: index, total: books.count, currentTitle: book.title, failures: failures
+            )
+            if let format = book.formats.first,
+               let url = try? await remote.remote.downloadFormat(id: book.id, format: format.kind) {
+                urls.append(url)
+            } else {
+                failures.append("\(book.title): download failed")
+            }
+        }
+        serverTransferActivity = ServerTransferActivity(
+            direction: .download, serverName: remote.name,
+            completed: books.count, total: books.count, currentTitle: nil, failures: failures
+        )
+        await importFiles(urls: urls)
+        presentImportReport()
+    }
+}
+
 // MARK: - Book transfers between home and remote servers
 
 extension LibrarySession {
@@ -90,24 +191,6 @@ extension LibrarySession {
                 urls.append(url)
             }
         }
-        guard !urls.isEmpty else { return }
-        await remote.importFiles(urls: urls)
-    }
-
-    /// Downloads the selected remote books into the home library: each
-    /// book's best format is fetched from the server and imported through
-    /// the standard pipeline (metadata extraction + content-hash dedupe).
-    func importSelectionFromRemote(_ remote: RemoteLibraryBrowser) async {
-        guard let home else { return }
-        var urls: [URL] = []
-        for book in remote.selectionBooks {
-            if let format = book.formats.first,
-               let url = try? await remote.remote.downloadFormat(id: book.id, format: format.kind) {
-                urls.append(url)
-            }
-        }
-        guard !urls.isEmpty else { return }
-        await importFiles(urls: urls)
-        presentImportReport()
+        await uploadFiles(urls: urls, to: remote)
     }
 }
