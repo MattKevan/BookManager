@@ -139,6 +139,9 @@ extension LibrarySession {
                 }
             }
         )
+        // Finished (delivered, durably queued, or with failures): the toolbar
+        // button returns to the idle check state.
+        serverTransferActivity = nil
     }
 
     /// Downloads the selected remote books into the home library: each
@@ -178,6 +181,8 @@ extension LibrarySession {
         if let report = importReport {
             _ = await SystemNotifier.postImportCompletion(report: report)
         }
+        // The operation is complete: back to the idle check state.
+        serverTransferActivity = nil
     }
 }
 

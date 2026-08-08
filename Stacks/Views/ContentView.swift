@@ -274,18 +274,16 @@ extension ContentView {
             }
         }
         ToolbarItem(id: "device-activity") {
-            if !session.devices.devices.isEmpty || session.calibreActivity != nil
-                || session.serverTransferActivity != nil {
-                Button {
-                    showActivityPopover.toggle()
-                } label: {
-                    activityToolbarLabel
-                        .frame(width: 22, height: 22)
-                }
-                .help("Activity")
-                .popover(isPresented: $showActivityPopover, arrowEdge: .bottom) {
-                    ActivityPopover(session: session)
-                }
+            Button {
+                showActivityPopover.toggle()
+            } label: {
+                activityToolbarLabel
+                    .frame(width: 22, height: 22)
+            }
+            .disabled(!hasActivity)
+            .help(hasActivity ? "Activity" : "All caught up")
+            .popover(isPresented: $showActivityPopover, arrowEdge: .bottom) {
+                ActivityPopover(session: session)
             }
         }
     }
@@ -483,31 +481,42 @@ extension ContentView {
     /// the plain drive icon when idle. Fixed 22x22 frame (applied at the call
     /// site) keeps the toolbar from jumping between states.
     @ViewBuilder
+    /// Whether anything is running or queued (calibre import, server
+    /// transfer, device send). Idle → the button is a disabled checkmark.
+    private var hasActivity: Bool {
+        session.calibreActivity != nil
+            || session.serverTransferActivity != nil
+            || session.devices.currentActivity != nil
+            || session.devices.pendingCount > 0
+    }
+
+    /// The toolbar activity glyph: a determinate ring when the current
+    /// activity reports progress, a spinner otherwise, and a checkmark when
+    /// everything is complete.
+    @ViewBuilder
     private var activityToolbarLabel: some View {
         if let activity = session.calibreActivity {
-            if let progress = activity.progress {
-                Circle()
-                    .trim(from: 0, to: max(0.02, progress))
-                    .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-            } else {
-                ProgressView()
-                    .controlSize(.small)
-            }
+            progressGlyph(activity.progress)
+        } else if let activity = session.serverTransferActivity {
+            progressGlyph(activity.progress)
         } else if let activity = session.devices.currentActivity {
-            if let progress = activity.progress {
-                Circle()
-                    .trim(from: 0, to: max(0.02, progress))
-                    .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-            } else {
-                ProgressView()
-                    .controlSize(.small)
-            }
-        } else if session.devices.deviceError != nil {
-            Image(systemName: "externaldrive.badge.exclamationmark")
+            progressGlyph(activity.progress)
         } else {
-            Image(systemName: "externaldrive")
+            Image(systemName: "checkmark.circle")
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private func progressGlyph(_ progress: Double?) -> some View {
+        if let progress {
+            Circle()
+                .trim(from: 0, to: max(0.02, progress))
+                .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+        } else {
+            ProgressView()
+                .controlSize(.small)
         }
     }
 
@@ -802,15 +811,8 @@ private struct ActivityPopover: View {
                 serverTransferRow(activity)
                 Divider()
             }
-            HStack(spacing: 6) {
-                Image(systemName: session.devices.deviceError != nil
-                    ? "exclamationmark.triangle"
-                    : "externaldrive")
-                    .foregroundStyle(session.devices.deviceError != nil ? .orange : .secondary)
-                Text(session.devices.connectionStatus)
-                    .lineLimit(1)
-            }
-            .font(.headline)
+            // Device connection state lives in the sidebar; the popover only
+            // shows live activity.
             if let activity = session.devices.currentActivity {
                 activityRow(activity)
             }
