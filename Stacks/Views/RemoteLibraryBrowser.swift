@@ -10,7 +10,7 @@ import StacksCore
 /// books is a follow-up; browse, open, and delete are live.
 @MainActor
 @Observable
-final class RemoteLibraryBrowser: LibraryBrowser {
+final class RemoteLibraryBrowser: LibraryBrowser, Identifiable {
     let id: UUID
     var name: String
     let remote: RemoteLibrary
@@ -32,6 +32,54 @@ final class RemoteLibraryBrowser: LibraryBrowser {
     /// sidebar row).
     func pendingCount() async -> Int {
         await remote.pendingOfflineCount()
+    }
+
+    /// Uploads book files to the server: metadata is extracted from each
+    /// file (title/authors/series/tags/…), the bytes staged, and an addBook
+    /// command pushed — the server materializes the book. Unreachable pushes
+    /// queue durably and land on reconnect.
+    func importFiles(urls: [URL]) async {
+        var pushed = 0
+        for url in urls {
+            guard let kind = MetadataExtractor.kind(for: url),
+                  let data = try? Data(contentsOf: url) else { continue }
+            let extracted = try? MetadataExtractor.extract(from: url, kind: kind)
+            let title = extracted?.title ?? url.deletingPathExtension().lastPathComponent
+            let filename = url.lastPathComponent
+            let staged = JournalCommand.StagedFormat(
+                kind: kind.rawValue,
+                filename: filename,
+                contentHash: BookFolder.contentHash(data),
+                size: Int64(data.count),
+                stagedName: filename
+            )
+            let addBook = JournalCommand.AddBook(
+                bookID: UUID(),
+                title: title,
+                authors: extracted?.authors ?? [],
+                series: extracted?.series,
+                seriesIndex: extracted?.seriesIndex,
+                tags: extracted?.tags ?? [],
+                rating: nil,
+                publisher: extracted?.publisher,
+                publicationDate: extracted?.publicationDate,
+                addedDate: .now,
+                languages: extracted?.languages ?? [],
+                identifiers: extracted?.identifiers ?? [:],
+                comments: extracted?.comments,
+                formats: [staged],
+                cover: nil
+            )
+            if case .applied = (try? await remote.push(
+                ClientCommand(id: UUID(), op: .addBook(addBook)),
+                stagedFiles: [filename: data]
+            )) {
+                pushed += 1
+            }
+        }
+        if pushed > 0 {
+            await refreshBooks()
+        }
     }
 
     private var coverCache: NSCache<NSString, NSImage> = {

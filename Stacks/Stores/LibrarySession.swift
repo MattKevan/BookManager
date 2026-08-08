@@ -111,13 +111,25 @@ final class LibrarySession {
     /// active library.
     var connection: LibraryConnection? { home }
 
-    /// The connected remote library (Plan 4): when non-nil, the browser
-    /// context shows it instead of the home library. One remote at a time.
-    var remoteBrowser: RemoteLibraryBrowser? {
-        get { _remoteBrowser }
-        set { _remoteBrowser = newValue }
+    /// Connected remote libraries — several can be connected at once and
+    /// the browser context selects between them (like the old peers).
+    var remotes: [RemoteLibraryBrowser] = []
+    /// The id of the remote whose browser is the current context, if any.
+    var activeRemoteID: UUID? {
+        get { _activeRemoteID }
+        set { _activeRemoteID = newValue }
     }
-    private var _remoteBrowser: RemoteLibraryBrowser?
+    private var _activeRemoteID: UUID?
+    /// The remote currently selected as the browser context.
+    var activeRemote: RemoteLibraryBrowser? {
+        remotes.first { $0.id == activeRemoteID }
+    }
+    /// Whether the browser context is a connected remote (vs home/device).
+    var isRemoteContext: Bool { activeRemoteID != nil }
+    /// Selects a remote as the browser context (or nil to return to home).
+    func selectRemote(_ id: UUID?) {
+        activeRemoteID = (id != nil && remotes.contains { $0.id == id }) ? id : nil
+    }
     /// The library awaiting credentials: non-nil while the credential prompt
     /// sheet is presented (ContentView binds `.sheet(item:)` to it).
     var credentialPrompt: DiscoveredLibrary? {
@@ -138,14 +150,8 @@ final class LibrarySession {
     /// in the sidebar, else the open library. A remote never replaces home —
     /// it coexists (like the pre-network peers) and home stays primary.
     var browser: LibraryBrowser? {
-        isRemoteContext ? remoteBrowser : activeLibrary
+        activeRemote ?? activeLibrary
     }
-    /// Whether the sidebar selection is the connected remote.
-    var isRemoteContext: Bool {
-        get { _remoteContextActive }
-        set { _remoteContextActive = newValue }
-    }
-    private var _remoteContextActive = false
 
     // The open library (single-library model) and the browser-context
     // selection. Stored here (not in the `+Connection` extension) because
@@ -206,10 +212,10 @@ final class LibrarySession {
             // activeLibraryID makes `activeLibrary` resolve to home while a
             // device is selected, so the home toolbar cluster (Add Books),
             // search, and sync bindings stay correct over the device listing.
-            // Deselecting returns to home; the remote's facet state is
-            // preserved on its browser, just not auto-restored.
+            // Deselecting returns to home; the remotes' facet state is
+            // preserved on their browsers, just not auto-restored.
             activeLibraryID = nil
-            isRemoteContext = false
+            activeRemoteID = nil
             activeLibrary?.facetNavigation.clear()
         }
         Task { await devices.select(id) }
@@ -477,7 +483,7 @@ final class LibrarySession {
         // click on a Library-section row switches back from a remote or
         // device — same rule the pre-network peers followed).
         activeLibraryID = home?.id
-        isRemoteContext = false
+        activeRemoteID = nil
         connection?.selectCategory(type)
     }
     func restore(id: UUID) async { await connection?.restore(id: id) }

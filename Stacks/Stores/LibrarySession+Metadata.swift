@@ -11,7 +11,7 @@ extension LibrarySession {
         // The editor sheet runs for the current browser context: a connected
         // remote library edits by pushing commands to the server (covers are
         // staged first), the home library edits its journal directly.
-        if let remote = remoteBrowser {
+        if let remote = activeRemote {
             await saveRemoteEdit(edit, coverData: coverData, for: id, remote: remote)
             return
         }

@@ -29,7 +29,7 @@ struct SidebarView: View {
                 // The connected remote is a selectable context, like the
                 // pre-network peers: clicking it shows its books while home
                 // stays open underneath.
-                if session.isRemoteContext, let remote = session.remoteBrowser {
+                if let remote = session.activeRemote {
                     if let category = remote.facetNavigation.category {
                         return .remote(remote.id, .category(category))
                     }
@@ -53,8 +53,8 @@ struct SidebarView: View {
                 case let .category(category):
                     session.selectCategory(category)
                 case let .remote(id, subsection):
-                    session.isRemoteContext = true
-                    if let remote = session.remoteBrowser, remote.id == id {
+                    session.selectRemote(id)
+                    if let remote = session.activeRemote, remote.id == id {
                         switch subsection {
                         case .allBooks:
                             remote.facetNavigation.clear()
@@ -118,14 +118,12 @@ struct SidebarView: View {
                 // The connected remote is a selectable browser context —
                 // home stays open underneath, exactly like the pre-network
                 // peers.
-                if let browser = session.remoteBrowser {
+                ForEach(session.remotes) { browser in
                     // A disclosure group, like the pre-network peers: the
                     // header selects the remote (All Books) and toggles the
                     // facet subsections; eject disconnects but the server
                     // stays listed (reconnectable) while it advertises.
                     DisclosureGroup {
-                        Label("All Books", systemImage: "books.vertical")
-                            .tag(SidebarItem.remote(browser.id, .allBooks))
                         ForEach(SidebarView.libraryCategories, id: \.self) { category in
                             Label(category.displayName, systemImage: category.sidebarSymbol)
                                 .tag(SidebarItem.remote(browser.id, .category(category)))
@@ -136,7 +134,7 @@ struct SidebarView: View {
                             Spacer()
                             PendingBadge(browser: browser)
                             Button {
-                                session.disconnectRemote()
+                                session.disconnectRemote(browser.id)
                             } label: {
                                 Image(systemName: "eject.fill")
                             }
@@ -146,25 +144,25 @@ struct SidebarView: View {
                     }
                     .tag(SidebarItem.remote(browser.id, .allBooks))
                 }
-                if libraries.isEmpty && session.remoteBrowser == nil {
+                if libraries.isEmpty && session.remotes.isEmpty {
                     Text(session.discovery.browseError == nil
                         ? "Browsing for libraries on this network…"
                         : "Local Network access is off")
                         .foregroundStyle(.secondary)
                 }
-                ForEach(libraries.filter { session.remoteBrowser?.id != $0.id }) { library in
-                    HStack(spacing: 6) {
-                        Label(library.name, systemImage: "network")
-                        Spacer()
-                        Button {
-                            Task { await session.connect(to: library) }
-                        } label: {
-                            Image(systemName: "arrow.down.circle")
+                ForEach(libraries.filter { library in
+                    !session.remotes.contains { $0.id == library.id }
+                }) { library in
+                    Button {
+                        Task { await session.connect(to: library) }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Label(library.name, systemImage: "network")
+                            Spacer()
                         }
-                        .buttonStyle(.borderless)
-                        .help("Connect to \(library.name)")
+                        .contentShape(Rectangle())
                     }
-                    .contentShape(Rectangle())
+                    .buttonStyle(.plain)
                 }
                 if let error = session.discovery.browseError {
                     Text(error)

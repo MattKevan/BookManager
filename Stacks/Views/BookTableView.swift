@@ -7,10 +7,13 @@ struct BookTableView: View {
     /// Home-only chrome: the Edit Metadata context-menu item is available only
     /// for the home library (peers are browse + transfer in this slice).
     let isHome: Bool
+    /// Session for the server-transfer context-menu items (nil disables them).
+    let session: LibrarySession?
 
-    init(browser: any LibraryBrowser, isHome: Bool = true) {
+    init(browser: any LibraryBrowser, isHome: Bool = true, session: LibrarySession? = nil) {
         self.browser = browser
         self.isHome = isHome
+        self.session = session
     }
 
     var body: some View {
@@ -51,7 +54,24 @@ struct BookTableView: View {
                 if let id = ids.first { Task { await browser.reveal(id: id) } }
             }
             .disabled(browser.isLibraryUnavailable)
-            Divider()
+            if let session {
+                if let remote = browser as? RemoteLibraryBrowser {
+                    Button("Import to Home Library") {
+                        Task { await session.importSelectionFromRemote(remote) }
+                    }
+                    .disabled(session.home == nil || ids.isEmpty)
+                } else if !session.remotes.isEmpty {
+                    Menu("Send to Server…") {
+                        ForEach(session.remotes) { remote in
+                            Button(remote.name) {
+                                Task { await session.sendSelectionToServer(remote) }
+                            }
+                        }
+                    }
+                    .disabled(ids.isEmpty)
+                }
+                Divider()
+            }
             Button("Delete Book", role: .destructive) {
                 browser.requestDelete(ids: ids)
             }

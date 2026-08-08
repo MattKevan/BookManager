@@ -18,8 +18,13 @@ extension LibrarySession {
         do {
             let remote = try RemoteLibraryBrowser(discovered: discovered, credential: effective)
             try await remote.refreshBooks()
-            remoteBrowser = remote
-            isRemoteContext = true
+            // Dedupe: an already-connected server is just re-selected.
+            if let existing = remotes.first(where: { $0.id == remote.id }) {
+                selectRemote(existing.id)
+            } else {
+                remotes.append(remote)
+                selectRemote(remote.id)
+            }
         } catch {
             if let remoteError = error as? RemoteLibrary.RemoteError,
                remoteError == .serverError(401) {
@@ -59,10 +64,50 @@ extension LibrarySession {
         await connect(to: discovered, credential: credential)
     }
 
-    /// Disconnects the remote and returns the browser context to the home
-    /// library.
-    func disconnectRemote() {
-        remoteBrowser = nil
-        isRemoteContext = false
+    /// Disconnects a remote (default: the active one) and returns the
+    /// browser context to the home library. The server stays listed in the
+    /// sidebar while it advertises.
+    func disconnectRemote(_ id: UUID? = nil) {
+        let target = id ?? activeRemoteID
+        guard let target else { return }
+        if activeRemoteID == target { activeRemoteID = nil }
+        remotes.removeAll { $0.id == target }
+    }
+}
+
+// MARK: - Book transfers between home and remote servers
+
+extension LibrarySession {
+    /// Uploads the home library's selected books to a connected server
+    /// (Kindle-style "send to server"): each book's first stored format is
+    /// pushed as an addBook command with staged bytes; the server becomes
+    /// the writer. The remote browser refreshes to show the arrivals.
+    func sendSelectionToServer(_ remote: RemoteLibraryBrowser) async {
+        guard let home else { return }
+        var urls: [URL] = []
+        for book in home.selectionBooks {
+            if let url = home.formatFileURL(for: book) {
+                urls.append(url)
+            }
+        }
+        guard !urls.isEmpty else { return }
+        await remote.importFiles(urls: urls)
+    }
+
+    /// Downloads the selected remote books into the home library: each
+    /// book's best format is fetched from the server and imported through
+    /// the standard pipeline (metadata extraction + content-hash dedupe).
+    func importSelectionFromRemote(_ remote: RemoteLibraryBrowser) async {
+        guard let home else { return }
+        var urls: [URL] = []
+        for book in remote.selectionBooks {
+            if let format = book.formats.first,
+               let url = try? await remote.remote.downloadFormat(id: book.id, format: format.kind) {
+                urls.append(url)
+            }
+        }
+        guard !urls.isEmpty else { return }
+        await importFiles(urls: urls)
+        presentImportReport()
     }
 }

@@ -320,6 +320,31 @@ extension ContentView {
                 .disabled(session.selection.isEmpty)
             }
         }
+        ToolbarItem(id: "send-to-server") {
+            if !session.remotes.isEmpty {
+                Group {
+                    if session.remotes.count == 1 {
+                        Button {
+                            Task { await session.sendSelectionToServer(session.remotes[0]) }
+                        } label: {
+                            Label("Send to \(session.remotes[0].name)", systemImage: "arrow.up.doc")
+                        }
+                    } else {
+                        Menu {
+                            ForEach(session.remotes) { remote in
+                                Button(remote.name) {
+                                    Task { await session.sendSelectionToServer(remote) }
+                                }
+                            }
+                        } label: {
+                            Label("Send to Server…", systemImage: "arrow.up.doc")
+                        }
+                    }
+                }
+                .disabled(session.selection.isEmpty)
+                .help("Upload the selected books to a connected server")
+            }
+        }
         ToolbarItem(id: "edit-metadata") {
             if session.selectedDeviceID == nil {
                 Button {
@@ -537,13 +562,25 @@ extension ContentView {
         Group {
             switch library.viewMode {
             case .table:
-                BookTableView(browser: library)
+                BookTableView(browser: library, session: session)
             case .grid:
-                CoverGridView(browser: library)
+                CoverGridView(browser: library, session: session)
             }
         }
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in
-            guard library is LibraryConnection else { return false }
+            // Remote browsers: dropping files uploads them to the server.
+            if let remote = library as? RemoteLibraryBrowser {
+                Task {
+                    var urls: [URL] = []
+                    for provider in providers {
+                        if let url = await LibrarySession.loadURL(from: provider) {
+                            urls.append(url)
+                        }
+                    }
+                    await remote.importFiles(urls: urls)
+                }
+                return true
+            }
             return handleDrop(providers)
         }
     }
@@ -556,12 +593,24 @@ extension ContentView {
         session.activeLibrary === session.home && !session.isRemoteContext
     }
 
-    /// Remote-context toolbar cluster: Refresh (re-sync) and Disconnect.
+    /// Remote-context toolbar cluster: Import to Home Library (download),
+    /// Refresh (re-sync), and Disconnect.
     @ToolbarContentBuilder
     private var remoteActionItems: some ToolbarContent {
+        ToolbarItem(id: "import-from-server") {
+            Button {
+                if let remote = session.activeRemote {
+                    Task { await session.importSelectionFromRemote(remote) }
+                }
+            } label: {
+                Label("Import to Home Library", systemImage: "arrow.down.doc")
+            }
+            .disabled(session.activeRemote?.selection.isEmpty ?? true || session.home == nil)
+            .help("Download the selected books into your home library")
+        }
         ToolbarItem(id: "refresh-remote") {
             Button {
-                Task { await session.remoteBrowser?.refreshBooks() }
+                Task { await session.activeRemote?.refreshBooks() }
             } label: {
                 Label("Refresh", systemImage: "arrow.clockwise")
             }

@@ -110,6 +110,24 @@ private struct AppCommands: Commands {
                 }
             }
             .disabled(session.selection.isEmpty || session.isLibraryUnavailable || session.selectedDeviceID != nil || !isHomeContext)
+            Divider()
+            // Server transfers: upload home selection to a connected server
+            // (one item per server — "send to a, send to b"), or download
+            // the active remote's selection into home.
+            Menu("Send to Server") {
+                ForEach(session.remotes) { remote in
+                    Button(remote.name) {
+                        Task { await session.sendSelectionToServer(remote) }
+                    }
+                }
+            }
+            .disabled(session.remotes.isEmpty || session.selection.isEmpty || session.selectedDeviceID != nil || !isHomeContext)
+            Button("Import from Server") {
+                if let remote = session.activeRemote {
+                    Task { await session.importSelectionFromRemote(remote) }
+                }
+            }
+            .disabled(session.activeRemote?.selection.isEmpty ?? true || session.home == nil || !session.isRemoteContext)
         }
         // Edit menu: deletion of the ACTIVE library's selection (Cmd+Delete;
         // the bare Delete/Backspace key is handled in the grid/table views).

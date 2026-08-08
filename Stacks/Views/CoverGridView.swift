@@ -16,10 +16,13 @@ struct CoverGridView: View {
     /// Home-only chrome: the Edit Metadata context-menu item is available only
     /// for the home library (peers are browse + transfer in this slice).
     let isHome: Bool
+    /// Session for the server-transfer context-menu items (nil disables them).
+    let session: LibrarySession?
 
-    init(browser: any LibraryBrowser, isHome: Bool = true) {
+    init(browser: any LibraryBrowser, isHome: Bool = true, session: LibrarySession? = nil) {
         self.browser = browser
         self.isHome = isHome
+        self.session = session
     }
 
     private let columns = [
@@ -105,7 +108,7 @@ struct CoverGridView: View {
     }
 
     private func tile(_ book: IndexedBook) -> some View {
-        CoverTile(book: book, browser: browser, isHome: isHome)
+        CoverTile(book: book, browser: browser, isHome: isHome, session: session)
             .focusable()
             .focused($focusedID, equals: book.id)
             // No focus ring around the whole item: selection is shown only by
@@ -221,11 +224,13 @@ private struct CoverTile: View {
     let book: IndexedBook
     let browser: any LibraryBrowser
     let isHome: Bool
+    let session: LibrarySession?
 
-    init(book: IndexedBook, browser: any LibraryBrowser, isHome: Bool = true) {
+    init(book: IndexedBook, browser: any LibraryBrowser, isHome: Bool = true, session: LibrarySession? = nil) {
         self.book = book
         self.browser = browser
         self.isHome = isHome
+        self.session = session
     }
 
     @State private var image: NSImage?
@@ -271,7 +276,26 @@ private struct CoverTile: View {
                 }
             }
             .disabled(browser.isLibraryUnavailable)
-            Divider()
+            if let session {
+                if let remote = browser as? RemoteLibraryBrowser {
+                    Button("Import to Home Library") {
+                        selectForContextMenu()
+                        Task { await session.importSelectionFromRemote(remote) }
+                    }
+                    .disabled(session.home == nil || browser.selection.isEmpty)
+                } else if !session.remotes.isEmpty {
+                    Menu("Send to Server…") {
+                        ForEach(session.remotes) { remote in
+                            Button(remote.name) {
+                                selectForContextMenu()
+                                Task { await session.sendSelectionToServer(remote) }
+                            }
+                        }
+                    }
+                    .disabled(browser.selection.isEmpty)
+                }
+                Divider()
+            }
             Button("Delete Book", role: .destructive) {
                 selectForContextMenu()
                 if !browser.selection.isEmpty {
