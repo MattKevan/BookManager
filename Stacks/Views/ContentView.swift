@@ -539,33 +539,19 @@ extension ContentView {
         ToolbarItem(id: "sort") {
             if session.browser != nil {
                 Menu {
-                    Button {
-                        session.browser?.sortOrder = .name
-                    } label: {
-                        sortOptionLabel("Name", isSelected: sortBinding.wrappedValue == .name)
-                    }
-                    Button {
-                        session.browser?.sortOrder = .dateAdded
-                    } label: {
-                        sortOptionLabel("Date Added", isSelected: sortBinding.wrappedValue == .dateAdded)
+                    // A Picker inside a Menu renders native checkmarks on the
+                    // selected option (Apple-documented pattern; toggles are
+                    // for multi-select). The label must be EMPTY — a labeled
+                    // Picker renders as a submenu instead of flat options.
+                    Picker(selection: sortBinding) {
+                        Text("Name").tag(BrowserSortOrder.name)
+                        Text("Date Added").tag(BrowserSortOrder.dateAdded)
                     }
                 } label: {
                     Label("Sort", systemImage: "square.grid.3x1.below.line.grid.1x2")
                 }
                 .help("Sort order")
             }
-        }
-    }
-
-    /// Menu option with the checkmark in a fixed-width slot to the LEFT of
-    /// the title (macOS menu Labels don't reliably render their image
-    /// leading-aligned; an explicit slot does).
-    private func sortOptionLabel(_ title: String, isSelected: Bool) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: "checkmark")
-                .opacity(isSelected ? 1 : 0)
-                .frame(width: 16)
-            Text(title)
         }
     }
 
