@@ -557,12 +557,14 @@ extension ContentView {
         }
     }
 
-    /// Menu option with a checkmark on the active sort.
-    @ViewBuilder
+    /// Menu option with the checkmark in a fixed-width slot to the LEFT of
+    /// the title (macOS menu Labels don't reliably render their image
+    /// leading-aligned; an explicit slot does).
     private func sortOptionLabel(_ title: String, isSelected: Bool) -> some View {
-        if isSelected {
-            Label(title, systemImage: "checkmark")
-        } else {
+        HStack(spacing: 8) {
+            Image(systemName: "checkmark")
+                .opacity(isSelected ? 1 : 0)
+                .frame(width: 16)
             Text(title)
         }
     }
